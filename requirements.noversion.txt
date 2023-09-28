@@ -1,0 +1,13 @@
+flake8
+flake8-commas
+flake8-isort
+mypy
+pre-commit
+pycodestyle
+pylint
+pytest
+pytest-cov
+pytz
+redis
+types-pytz
+types-redis

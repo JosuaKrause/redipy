@@ -1,0 +1,190 @@
+name: Python Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+
+
+jobs:
+  lints_pipeline:
+    name: Lints CI Pipeline
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.11']
+    env:
+      ENV: CI
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Python ${{ matrix.python }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python }}
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        make install PYTHON=python
+
+    - name: Lint Code (use uppercase TODO, XXX, FIXME, NOTE and explain nopep8)
+      run: |
+        make lint-comment
+
+    - name: Lint Code (use empty main inits)
+      run: |
+        make lint-emptyinit
+
+    - name: Lint Code (sort requirements)
+      run: |
+        make lint-requirements
+
+    - name: Lint Code (requirements complete)
+      run: |
+        make requirements-complete
+
+    - name: Lint Code (use f"" style formating)
+      run: |
+        make lint-stringformat
+
+    - name: Lint Code (indent in fours)
+      run: |
+        make lint-indent
+
+    - name: Lint Code (no f"a", "{a}", or f'{a}')
+      run: |
+        make lint-forgottenformat PYTHON=python
+
+    - name: Lint Code (missing trailing comma)
+      run: |
+        make lint-flake8
+
+    - name: Lint Code (pycodestyle)
+      run: |
+        make lint-pycodestyle
+
+    - name: Lint Code (type-check)
+      run: |
+        make lint-type-check
+
+    - name: Lint Code (pylint)
+      run: |
+        make lint-pylint
+
+
+  tests_pipeline:
+    name: Tests CI Pipeline
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.11']
+        ci_node_total: [2]
+        ci_node_index: [0, 1]
+    env:
+      ENV: CI
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Python ${{ matrix.python }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python }}
+        cache: 'pip'
+
+    - name: Start Redis
+      uses: supercharge/redis-github-action@1.4.0
+      with:
+        redis-version: 6
+        redis-port: 6380
+
+    - name: Restore test-result Cache
+      uses: actions/cache@v3
+      with:
+        path: test-results/*
+        key:  test-results-v1-${{ matrix.python }}-${{ hashFiles('test/*.py') }}-${{ hashFiles('test/data/*') }}-${{ github.sha }}-${{ matrix.ci_node_index }}
+        restore-keys: |
+          test-results-v1-${{ matrix.python }}-${{ hashFiles('test/*.py') }}-${{ hashFiles('test/data/*') }}
+          test-results-v1-${{ matrix.python }}-
+
+    - name: Install dependencies
+      run: |
+        make install PYTHON=python
+
+    - name: Run test on Node ${{ matrix.ci_node_index }}
+      run: |
+        PYTHON_NAME="${{ matrix.python }}" CUR_NODE_IX="${{ matrix.ci_node_index }}" TOTAL_NODES="${{ matrix.ci_node_total }}" make split-test
+
+    - name: Upload Artifact(results)
+      uses: actions/upload-artifact@v3
+      with:
+        name: results-${{ matrix.python }}-${{ matrix.ci_node_index }}
+        path: test-results/results-${{ matrix.python }}-${{ matrix.ci_node_index }}.xml
+
+    - name: Upload Artifact(coverage reports)
+      uses: actions/upload-artifact@v3
+      with:
+        name: coverage-${{ matrix.python }}-${{ matrix.ci_node_index }}
+        path: .coverage
+
+    - name: Git Check (tests may not alter any git visible files)
+      run: |
+        git status -sb --porcelain
+        [ -z "$(git status --porcelain)" ]
+
+
+  coverage_pipeline:
+    name: Coverage CI Pipeline
+    needs: tests_pipeline
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.11']
+    env:
+      ENV: CI
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Python ${{ matrix.python }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python }}
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        make install PYTHON=python
+
+    - name: Restore test-result Cache
+      uses: actions/cache@v3
+      with:
+        path: test-results/*
+        key:  test-results-v1-${{ matrix.python }}-${{ hashFiles('test/*.py') }}-${{ hashFiles('test/data/*') }}
+
+    - name: Clean test-result Cache
+      run: |
+        rm -r test-results/ || true
+        mkdir -p test-results/parts/
+
+    - name: Download all results and coverage
+      uses: actions/download-artifact@v2
+
+    - name: Merge results
+      run: |
+        mv results-${{ matrix.python }}-*/results-${{ matrix.python }}-* test-results/parts/
+        python -m test merge --dir test-results --out-fname results.xml
+        tail -v -n +1 test-results/*.xml
+
+    - name: Merge coverage reports
+      run: |
+        coverage combine coverage*/.coverage
+        coverage xml -o coverage/reports/xml_report.xml
+        coverage html -d coverage/reports/html_report
+        coverage report

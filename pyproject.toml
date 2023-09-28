@@ -1,0 +1,205 @@
+[project]
+    name = "redipy"
+    description = "redipy is a uniform interface to Redis-like storage systems. It allows you to use the same Redis API with different backends that implement the same functionality."
+    readme = "README.md"
+    version = "0.1.0"
+    authors = [
+        {name = "Josua Krause", email = "josua.krause@gmail.com"},
+    ]
+    keywords = [
+        "redis",
+        "in-memory",
+        "uniform api",
+    ]
+    license = {file = "LICENSE"}
+    requires-python = ">=3.11"
+    classifiers = [
+        "Development Status :: 4 - Beta",
+        "License :: OSI Approved :: Apache Software License",
+        "Operating System :: OS Independent",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.11",
+    ]
+    dynamic = ["dependencies", "optional-dependencies"]
+
+[project.urls]
+    repository = "https://github.com/JosuaKrause/redipy"
+
+[build-system]
+    requires = ["setuptools>=61.2"]
+    build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+    where = ["src"]
+    exclude = ["test"]
+
+[tool.setuptools.dynamic]
+    dependencies = {file = ["requirements.txt"]}
+    optional-dependencies.test = { file = ["requirements.dev.txt"] }
+
+[tool.isort]
+    extend_skip = [".json", ".md"]
+    profile = "black"
+    include_trailing_comma = true
+    line_length = 79
+    force_alphabetical_sort_within_sections = true
+    skip_glob = []
+    multi_line_output = 3
+    lines_after_imports = 2
+
+[tool.darglint]
+    docstring_style = "google"
+    enable_disabled = "DAR104"
+    strictness = "short"
+
+[tool.pylint.main]
+    clear-cache-post-run = true
+    load-plugins = [
+        "pylint.extensions.typing",
+        "pylint.extensions.docparams",
+        "pylint.extensions.docstyle",
+    ]
+
+[tool.pylint.master]
+    init-hook = 'import sys; sys.path.append("src/")'
+
+[tool.pylint.basic]
+    good-names = [
+        "_",
+        "a",
+        "ax",
+        "b",
+        "c",
+        "ci",
+        "cm",
+        "db",
+        "df",
+        "e",
+        "el",
+        "f",
+        "fn",
+        "fn",
+        "fp",
+        "fs",
+        "ft",
+        "gc",
+        "io",
+        "ip",
+        "ix",
+        "jx",
+        "k",
+        "le",
+        "lr",
+        "m",
+        "ms",
+        "n",
+        "nl",
+        "op",
+        "p",
+        "pf",
+        "q",
+        "qa",
+        "r",
+        "s",
+        "t",
+        "th",
+        "tn",
+        "tp",
+        "tz",
+        "v",
+        "w",
+        "ws",
+        "x",
+        "x1",
+        "x2",
+        "y",
+        "y1",
+        "y2",
+    ]
+    bad-names = [
+        "i",
+        "j",
+    ]
+    no-docstring-rgx = '^_'
+
+[tool.pylint.messages_control]
+    disable = [
+        "docstring-first-line-empty",
+        "duplicate-code",
+        "fixme",
+        "global-statement",
+        "import-outside-toplevel",
+        "invalid-unary-operand-type",
+        "missing-docstring",
+        "not-an-iterable",
+        "not-callable",
+        "too-many-arguments",
+        "too-many-branches",
+        "too-many-instance-attributes",
+        "too-many-lines",
+        "too-many-locals",
+        "too-many-public-methods",
+        "too-many-return-statements",
+        "too-many-statements",
+        "unsubscriptable-object",
+    ]
+    const-rgx = '^[A-Z]'
+
+[tool.pylint.variables]
+    init-import = "yes"
+
+[tool.pylint.imports]
+    allow-wildcard-with-all = "yes"
+
+[tool.pylint.typecheck]
+    generated-members = ["torch.*"]
+
+[tool.pytest.ini_options]
+    pythonpath = [
+        "src/",
+    ]
+    filterwarnings = [
+        "error",
+        "error::pytest.PytestUnhandledThreadExceptionWarning",
+        "error::DeprecationWarning",
+        "error::RuntimeWarning",
+        "error::ImportWarning",
+    ]
+
+[tool.coverage.run]
+    branch = true
+    omit = [
+        "*/__init__*",
+        "*/sitecustomize*",
+        "*/test/*",
+    ]
+
+[tool.coverage.report]
+    exclude_lines = [
+        "if TYPE_CHECKING:",
+        "raise NotImplementedError\\(\\)",
+        "raise AssertionError\\(",
+        "\\.\\.\\.",
+        "pragma: no cover",
+    ]
+
+[tool.coverage.html]
+    directory = "coverage/html_report"
+
+[tool.mypy]
+    ignore_missing_imports = false
+    check_untyped_defs = true
+    disallow_incomplete_defs = true
+    disallow_untyped_defs = true
+    mypy_path = [
+        "src/",
+    ]
+    plugins = [
+    ]
+    warn_no_return = true
+    warn_unused_ignores = true
+    follow_imports = "normal"
+    exclude = [
+        "userdata",
+        "venv",
+    ]
