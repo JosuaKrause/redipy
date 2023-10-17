@@ -3,7 +3,7 @@ import threading
 import uuid
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import AbstractContextManager
-from typing import Any, overload, Protocol, TypedDict
+from typing import Any, NotRequired, overload, Protocol, TypedDict
 
 from redis import Redis
 from redis.commands.core import Script
@@ -18,8 +18,8 @@ RedisConfig = TypedDict('RedisConfig', {
     "host": str,
     "port": int,
     "passwd": str,
-    "prefix": str,
-    "path": str,
+    "prefix": NotRequired[str],
+    "path": NotRequired[str],
 })
 
 
@@ -113,7 +113,8 @@ class RedisConnection(Runtime[list[str]]):
             cfg=cfg,
             redis_factory=redis_factory,
             is_caching_enabled=is_caching_enabled)
-        prefix_str = f"{cfg['prefix']}:" if cfg["prefix"] else ""
+        prefix = cfg.get("prefix", "")
+        prefix_str = f"{prefix}:" if prefix else ""
         module = f"{prefix_str}{redis_module}".rstrip(":")
         self._module = f"{module}:" if module else ""
 
