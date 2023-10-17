@@ -1,3 +1,5 @@
+import contextlib
+from collections.abc import Iterator
 from typing import overload
 
 from redipy.backend.backend import ExecFunction
@@ -5,6 +7,13 @@ from redipy.symbolic.seq import FnContext
 
 
 class RedisAPI:
+    @contextlib.contextmanager
+    def pipeline(self) -> Iterator['RedisAPI']:
+        raise NotImplementedError()
+
+    def execute(self) -> list:  # FIXME properly move into own class
+        raise NotImplementedError()
+
     def register_script(self, ctx: FnContext) -> ExecFunction:
         raise NotImplementedError()
 

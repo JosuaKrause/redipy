@@ -2,13 +2,14 @@ import contextlib
 import threading
 import uuid
 from collections.abc import Callable, Iterable, Iterator
-from contextlib import AbstractContextManager
 from typing import Any, NotRequired, overload, Protocol, TypedDict
 
 from redis import Redis
+from redis.client import Pipeline
 from redis.commands.core import Script
 from redis.exceptions import ResponseError
 
+from redipy.api import RedisAPI
 from redipy.backend.runtime import Runtime
 from redipy.redis.lua import LuaBackend
 from redipy.util import is_test
@@ -105,25 +106,53 @@ class RedisConnection(Runtime[list[str]]):
             self,
             redis_module: str,
             *,
-            cfg: RedisConfig,
+            cfg: RedisConfig | None,
             redis_factory: RedisFactory | None = None,
-            is_caching_enabled: bool = True) -> None:
+            is_caching_enabled: bool = True,
+            pipe: Pipeline | None = None) -> None:
         super().__init__()
-        self._conn = RedisWrapper(
-            cfg=cfg,
-            redis_factory=redis_factory,
-            is_caching_enabled=is_caching_enabled)
-        prefix = cfg.get("prefix", "")
-        prefix_str = f"{prefix}:" if prefix else ""
-        module = f"{prefix_str}{redis_module}".rstrip(":")
+        self._pipe = pipe
+        if pipe is None:
+            assert cfg is not None
+            self._conn: RedisWrapper | None = RedisWrapper(
+                cfg=cfg,
+                redis_factory=redis_factory,
+                is_caching_enabled=is_caching_enabled)
+            prefix = cfg.get("prefix", "")
+            prefix_str = f"{prefix}:" if prefix else ""
+            module = f"{prefix_str}{redis_module}".rstrip(":")
+        else:
+            assert cfg is None
+            assert redis_factory is None
+            self._conn = None
+            module = redis_module
         self._module = f"{module}:" if module else ""
 
     @classmethod
     def create_backend(cls) -> LuaBackend:
         return LuaBackend()
 
-    def get_connection(self) -> AbstractContextManager[Redis]:
-        return self._conn.get_connection()
+    @contextlib.contextmanager
+    def pipeline(self) -> Iterator[RedisAPI]:
+        if self._conn is None:
+            yield self
+        else:
+            with self.get_connection() as conn:
+                with conn.pipeline() as pipe:
+                    yield RedisConnection(self._module, cfg=None, pipe=pipe)
+
+    def execute(self) -> list:  # FIXME properly move into own class
+        assert self._pipe is not None
+        return self._pipe.execute()
+
+    @contextlib.contextmanager
+    def get_connection(self) -> Iterator[Redis]:
+        if self._conn is None:
+            assert self._pipe is not None
+            yield self._pipe
+        else:
+            with self._conn.get_connection() as conn:
+                yield conn
 
     def get_dynamic_script(self, code: str) -> RedisFunctionBytes:
         if is_test():

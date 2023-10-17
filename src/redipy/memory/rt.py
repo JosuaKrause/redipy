@@ -1,10 +1,19 @@
 import collections
+import contextlib
 import json
-from typing import cast, overload
+from collections.abc import Callable, Iterator
+from typing import Any, cast, overload, TypeVar
 
+from redipy.api import RedisAPI
+from redipy.backend.backend import ExecFunction
 from redipy.backend.runtime import Runtime
 from redipy.memory.local import Cmd, LocalBackend
 from redipy.symbolic.expr import JSONType
+from redipy.symbolic.seq import FnContext
+
+
+T = TypeVar('T')
+C = TypeVar('C', bound=Callable)
 
 
 CONST: dict[str, JSONType] = {
@@ -13,6 +22,19 @@ CONST: dict[str, JSONType] = {
     "redis.LOG_NOTICE": "NOTICE",
     "redis.LOG_WARNING": "WARNING",
 }
+
+
+def pipey(fun: C) -> C:
+    # FIXME find a way that doesn't mess up the types
+
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        res = fun(*args, **kwargs)
+        pipeline = args[0]._pipeline  # pylint: disable=protected-access
+        if pipeline is not None:
+            pipeline.append(res)
+        return res
+
+    return wrapper  # type: ignore
 
 
 class LocalRuntime(Runtime[Cmd]):
@@ -26,10 +48,31 @@ class LocalRuntime(Runtime[Cmd]):
             collections.defaultdict(list)
         self._zscores: collections.defaultdict[str, dict[str, float]] = \
             collections.defaultdict(dict)
+        self._pipeline: list | None = None
 
     @classmethod
     def create_backend(cls) -> LocalBackend:
         return LocalBackend()
+
+    def register_script(self, ctx: FnContext) -> ExecFunction:
+        return pipey(super().register_script(ctx))
+
+    @contextlib.contextmanager
+    def pipeline(self) -> Iterator[RedisAPI]:
+        with self.lock():
+            # FIXME create snapshot to be able to rollback on error?
+            try:
+                self._pipeline = []
+                yield self
+            finally:
+                self._pipeline = None
+
+    def execute(self) -> list:  # FIXME properly move into own class
+        pres = self._pipeline
+        if pres is None:
+            raise ValueError("not in active pipeline!")
+        self._pipeline = []
+        return pres
 
     @staticmethod
     def require_argc(
@@ -138,22 +181,26 @@ class LocalRuntime(Runtime[Cmd]):
     def get_constant(self, raw: str) -> JSONType:
         return CONST[raw]
 
+    @pipey
     def set(self, key: str, value: str) -> str:
         with self.lock():
             # TODO implement rest of arguments https://redis.io/commands/set/
             self._vals[key] = value
             return "OK"
 
+    @pipey
     def get(self, key: str) -> str | None:
         with self.lock():
             return self._vals.get(key)
 
+    @pipey
     def lpush(self, key: str, *values: str) -> int:
         with self.lock():
             queue = self._queues[key]
             queue.extendleft(values)
             return len(queue)
 
+    @pipey
     def rpush(self, key: str, *values: str) -> int:
         with self.lock():
             queue = self._queues[key]
@@ -174,6 +221,7 @@ class LocalRuntime(Runtime[Cmd]):
             count: int) -> list[str] | None:
         ...
 
+    @pipey
     def lpop(
             self,
             key: str,
@@ -205,6 +253,7 @@ class LocalRuntime(Runtime[Cmd]):
             count: int) -> list[str] | None:
         ...
 
+    @pipey
     def rpop(
             self,
             key: str,
@@ -222,11 +271,13 @@ class LocalRuntime(Runtime[Cmd]):
                 popc -= 1
             return res if res else None
 
+    @pipey
     def llen(self, key: str) -> int:
         with self.lock():
             mqueue = self._queues.get(key)
             return 0 if mqueue is None else len(mqueue)
 
+    @pipey
     def zadd(self, key: str, mapping: dict[str, float]) -> int:
         with self.lock():
             count = 0
@@ -240,6 +291,7 @@ class LocalRuntime(Runtime[Cmd]):
             zorder.sort(key=lambda k: (zscores[k], k))
             return count
 
+    @pipey
     def zpop_max(
             self,
             key: str,
@@ -257,6 +309,7 @@ class LocalRuntime(Runtime[Cmd]):
                 remain -= 1
             return res
 
+    @pipey
     def zpop_min(
             self,
             key: str,
@@ -274,6 +327,7 @@ class LocalRuntime(Runtime[Cmd]):
                 remain -= 1
             return res
 
+    @pipey
     def zcard(self, key: str) -> int:
         with self.lock():
             return len(self._zorder[key])

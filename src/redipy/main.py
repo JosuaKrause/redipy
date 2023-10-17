@@ -1,3 +1,5 @@
+import contextlib
+from collections.abc import Iterator
 from typing import Literal, overload
 
 from redipy.api import RedisAPI
@@ -49,6 +51,11 @@ class Redis(RedisAPI):
 
     def register_script(self, ctx: FnContext) -> ExecFunction:
         return self._rt.register_script(ctx)
+
+    @contextlib.contextmanager
+    def pipeline(self) -> Iterator[RedisAPI]:
+        with self._rt.pipeline() as pipe:
+            yield pipe
 
     def set(self, key: str, value: str) -> str:
         return self._rt.set(key, value)
