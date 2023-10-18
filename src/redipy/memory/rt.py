@@ -1,9 +1,10 @@
 import contextlib
+import datetime
 import json
 from collections.abc import Callable, Iterator
-from typing import Any, cast, overload, TypeVar
+from typing import Any, cast, Literal, overload, TypeVar
 
-from redipy.api import PipelineAPI
+from redipy.api import PipelineAPI, RSetMode, RSM_ALWAYS
 from redipy.backend.runtime import Runtime
 from redipy.memory.local import Cmd, LocalBackend
 from redipy.memory.state import Machine, State
@@ -140,10 +141,64 @@ class LocalRuntime(Runtime[Cmd]):
     def get_constant(self, raw: str) -> JSONType:
         return CONST[raw]
 
-    def set(self, key: str, value: str) -> str:
+    @overload
+    def set(
+            self,
+            key: str,
+            value: str,
+            *,
+            mode: RSetMode,
+            return_previous: Literal[True],
+            expire_timestamp: datetime.datetime | None,
+            expire_in: float | None,
+            keep_ttl: bool) -> str | None:
+        ...
+
+    @overload
+    def set(
+            self,
+            key: str,
+            value: str,
+            *,
+            mode: RSetMode,
+            return_previous: Literal[False],
+            expire_timestamp: datetime.datetime | None,
+            expire_in: float | None,
+            keep_ttl: bool) -> bool | None:
+        ...
+
+    @overload
+    def set(
+            self,
+            key: str,
+            value: str,
+            *,
+            mode: RSetMode = RSM_ALWAYS,
+            return_previous: bool = False,
+            expire_timestamp: datetime.datetime | None = None,
+            expire_in: float | None = None,
+            keep_ttl: bool = False) -> str | bool | None:
+        ...
+
+    def set(
+            self,
+            key: str,
+            value: str,
+            *,
+            mode: RSetMode = RSM_ALWAYS,
+            return_previous: bool = False,
+            expire_timestamp: datetime.datetime | None = None,
+            expire_in: float | None = None,
+            keep_ttl: bool = False) -> str | bool | None:
         with self.lock():
-            # TODO implement rest of arguments https://redis.io/commands/set/
-            return self._sm.set(key, value)
+            return self._sm.set(
+                key,
+                value,
+                mode=mode,
+                return_previous=return_previous,
+                expire_timestamp=expire_timestamp,
+                expire_in=expire_in,
+                keep_ttl=keep_ttl)
 
     def get(self, key: str) -> str | None:
         with self.lock():
@@ -254,8 +309,24 @@ class LocalPipeline(PipelineAPI):
     def add_cmd(self, cb: Callable[[], Any]) -> None:
         self._cmd_queue.append(cb)
 
-    def set(self, key: str, value: str) -> None:
-        self.add_cmd(lambda: self._sm.set(key, value))
+    def set(
+            self,
+            key: str,
+            value: str,
+            *,
+            mode: RSetMode = RSM_ALWAYS,
+            return_previous: bool = False,
+            expire_timestamp: datetime.datetime | None = None,
+            expire_in: float | None = None,
+            keep_ttl: bool = False) -> None:
+        self.add_cmd(lambda: self._sm.set(
+            key,
+            value,
+            mode=mode,
+            return_previous=return_previous,
+            expire_timestamp=expire_timestamp,
+            expire_in=expire_in,
+            keep_ttl=keep_ttl))
 
     def get(self, key: str) -> None:
         self.add_cmd(lambda: self._sm.get(key))

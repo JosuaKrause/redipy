@@ -1,16 +1,36 @@
 import contextlib
+import datetime
 from collections.abc import Iterator
-from typing import overload
+from typing import Literal, overload
 
 from redipy.backend.backend import ExecFunction
 from redipy.symbolic.seq import FnContext
+
+
+RSetMode = Literal[
+    "always",
+    "if_missing",  # NX
+    "if_exists",  # XX
+]
+RSM_ALWAYS: RSetMode = "always"
+RSM_MISSING: RSetMode = "if_missing"
+RSM_EXISTS: RSetMode = "if_exists"
 
 
 class PipelineAPI:
     def execute(self) -> list:
         raise NotImplementedError()
 
-    def set(self, key: str, value: str) -> None:
+    def set(
+            self,
+            key: str,
+            value: str,
+            *,
+            mode: RSetMode = RSM_ALWAYS,
+            return_previous: bool = False,
+            expire_timestamp: datetime.datetime | None = None,
+            expire_in: float | None = None,
+            keep_ttl: bool = False) -> None:
         raise NotImplementedError()
 
     def get(self, key: str) -> None:
@@ -59,7 +79,55 @@ class PipelineAPI:
 
 
 class RedisAPI:
-    def set(self, key: str, value: str) -> str:
+    @overload
+    def set(
+            self,
+            key: str,
+            value: str,
+            *,
+            mode: RSetMode,
+            return_previous: Literal[True],
+            expire_timestamp: datetime.datetime | None,
+            expire_in: float | None,
+            keep_ttl: bool) -> str | None:
+        ...
+
+    @overload
+    def set(
+            self,
+            key: str,
+            value: str,
+            *,
+            mode: RSetMode,
+            return_previous: Literal[False],
+            expire_timestamp: datetime.datetime | None,
+            expire_in: float | None,
+            keep_ttl: bool) -> bool | None:
+        ...
+
+    @overload
+    def set(
+            self,
+            key: str,
+            value: str,
+            *,
+            mode: RSetMode = RSM_ALWAYS,
+            return_previous: bool = False,
+            expire_timestamp: datetime.datetime | None = None,
+            expire_in: float | None = None,
+            keep_ttl: bool = False) -> str | bool | None:
+        ...
+
+    def set(
+            self,
+            key: str,
+            value: str,
+            *,
+            mode: RSetMode = RSM_ALWAYS,
+            return_previous: bool = False,
+            expire_timestamp: datetime.datetime | None = None,
+            expire_in: float | None = None,
+            keep_ttl: bool = False) -> str | bool | None:
         raise NotImplementedError()
 
     def get(self, key: str) -> str | None:

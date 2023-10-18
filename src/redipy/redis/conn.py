@@ -1,15 +1,16 @@
 import contextlib
+import datetime
 import threading
 import uuid
 from collections.abc import Callable, Iterable, Iterator
-from typing import Any, NotRequired, overload, Protocol, TypedDict
+from typing import Any, Literal, NotRequired, overload, Protocol, TypedDict
 
 from redis import Redis
 from redis.client import Pipeline
 from redis.commands.core import Script
 from redis.exceptions import ResponseError
 
-from redipy.api import PipelineAPI
+from redipy.api import PipelineAPI, RSetMode, RSM_ALWAYS
 from redipy.backend.runtime import Runtime
 from redipy.redis.lua import LuaBackend
 from redipy.util import is_test
@@ -131,7 +132,17 @@ class PipelineConnection(PipelineAPI):
             for res in self._pipe.execute()
         ]
 
-    def set(self, key: str, value: str) -> None:
+    def set(
+            self,
+            key: str,
+            value: str,
+            *,
+            mode: RSetMode = RSM_ALWAYS,
+            return_previous: bool = False,
+            expire_timestamp: datetime.datetime | None = None,
+            expire_in: float | None = None,
+            keep_ttl: bool = False) -> None:
+        # FIXME pass arguments
         self._pipe.set(self.with_prefix(key), value)
 
     def get(self, key: str) -> None:
@@ -355,10 +366,59 @@ class RedisConnection(Runtime[list[str]]):
                 if count < 1000:
                     count = int(min(1000, count * 1.2))
 
-    def set(self, key: str, value: str) -> str:
+    @overload
+    def set(
+            self,
+            key: str,
+            value: str,
+            *,
+            mode: RSetMode,
+            return_previous: Literal[True],
+            expire_timestamp: datetime.datetime | None,
+            expire_in: float | None,
+            keep_ttl: bool) -> str | None:
+        ...
+
+    @overload
+    def set(
+            self,
+            key: str,
+            value: str,
+            *,
+            mode: RSetMode,
+            return_previous: Literal[False],
+            expire_timestamp: datetime.datetime | None,
+            expire_in: float | None,
+            keep_ttl: bool) -> bool | None:
+        ...
+
+    @overload
+    def set(
+            self,
+            key: str,
+            value: str,
+            *,
+            mode: RSetMode = RSM_ALWAYS,
+            return_previous: bool = False,
+            expire_timestamp: datetime.datetime | None = None,
+            expire_in: float | None = None,
+            keep_ttl: bool = False) -> str | bool | None:
+        ...
+
+    def set(
+            self,
+            key: str,
+            value: str,
+            *,
+            mode: RSetMode = RSM_ALWAYS,
+            return_previous: bool = False,
+            expire_timestamp: datetime.datetime | None = None,
+            expire_in: float | None = None,
+            keep_ttl: bool = False) -> str | bool | None:
         with self.get_connection() as conn:
+            # FIXME pass paramters
             conn.set(self.with_prefix(key), value)
-            return "OK"
+            return True
 
     def get(self, key: str) -> str | None:
         with self.get_connection() as conn:

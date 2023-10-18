@@ -143,6 +143,27 @@ def elapsed_time_string(elapsed: float) -> str:
     return cur
 
 
+def now() -> datetime.datetime:
+    return datetime.datetime.now(datetime.timezone.utc).astimezone()
+
+
+def fmt_time(when: datetime.datetime) -> str:
+    return when.isoformat()
+
+
+def get_time_str() -> str:
+    return fmt_time(now())
+
+
+def parse_time_str(time_str: str) -> datetime.datetime:
+    return datetime.datetime.fromisoformat(time_str)
+
+
+def time_diff(
+        from_time: datetime.datetime, to_time: datetime.datetime) -> float:
+    return (to_time - from_time).total_seconds()
+
+
 def to_bool(value: bool | float | int | str) -> bool:
     value = f"{value}".lower()
     if value == "true":

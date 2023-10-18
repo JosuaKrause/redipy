@@ -1,14 +1,32 @@
 import collections
-from typing import overload
+import datetime
+import time
+from typing import Literal, overload
 
-from redipy.api import RedisAPI
+from redipy.api import RedisAPI, RSetMode, RSM_ALWAYS, RSM_EXISTS, RSM_MISSING
+from redipy.util import now, time_diff
+
+
+def compute_expire(
+        *,
+        expire_timestamp: datetime.datetime | None,
+        expire_in: float | None) -> float | None:
+    if expire_timestamp is None:
+        if expire_in is None:
+            return None
+        return time.monotonic() + expire_in
+    if expire_in is not None:
+        raise ValueError(
+            f"cannot set timestamp {expire_timestamp} "
+            f"and duration {expire_in} at the same time")
+    return time.monotonic() + time_diff(now(), expire_timestamp)
 
 
 class State:
     def __init__(self, parent: 'State | None' = None) -> None:
         super().__init__()
         self._parent = parent
-        self._vals: dict[str, str] = {}
+        self._vals: dict[str, tuple[str, float | None]] = {}
         self._queues: dict[str, collections.deque[str]] = {}
         # TODO: to be replaced by something more efficient later
         self._zorder: dict[str, list[str]] = {}
@@ -19,8 +37,29 @@ class State:
         self._queues.update(other.raw_queues())
         self._zorder.update(other.raw_zorder())
         self._zscores.update(other.raw_zscores())
+        self._clean_vals()
 
-    def raw_vals(self) -> dict[str, str]:
+    def _is_alive(self, value: tuple[str, float | None]) -> bool:
+        _, expire = value
+        if expire is None:
+            return True
+        now_mono = time.monotonic()
+        if expire > now_mono:
+            return True
+        return False
+
+    def _clean_vals(self) -> None:
+        if self._parent is not None:
+            return
+        remove = []
+        for key, value in self._vals.items():
+            if self._is_alive(value):
+                continue
+            remove.append(key)
+        for key in remove:
+            self._vals.pop(key, None)
+
+    def raw_vals(self) -> dict[str, tuple[str, float | None]]:
         return self._vals
 
     def raw_queues(
@@ -33,14 +72,28 @@ class State:
     def raw_zscores(self) -> dict[str, dict[str, float]]:
         return self._zscores
 
-    def set_value(self, key: str, value: str) -> None:
-        self._vals[key] = value
+    def set_value(self, key: str, value: str, expire: float | None) -> None:
+        self._vals[key] = (value, expire)
 
-    def get_value(self, key: str) -> str | None:
+    def get_value(self, key: str) -> tuple[str, float | None] | None:
         res = self._vals.get(key)
+        if res is not None and not self._is_alive(res):
+            self._clean_vals()
+            return None
         if res is None and self._parent is not None:
             return self._parent.get_value(key)
         return res
+
+    def has_value(self, key: str) -> bool:
+        return self.get_value(key) is not None
+
+    def remove_value(self, key: str) -> bool:
+        value = self.get_value(key)
+        if value is None:
+            return False
+        elem, _ = value
+        self.set_value(key, elem, time.monotonic() - 1.0)
+        return True
 
     def get_queue(self, key: str) -> collections.deque[str]:
         res = self._queues.get(key)
@@ -108,13 +161,85 @@ class Machine(RedisAPI):
     def get_state(self) -> State:
         return self._state
 
-    def set(self, key: str, value: str) -> str:
-        # TODO implement rest of arguments https://redis.io/commands/set/
-        self._state.set_value(key, value)
-        return "OK"
+    @overload
+    def set(
+            self,
+            key: str,
+            value: str,
+            *,
+            mode: RSetMode,
+            return_previous: Literal[True],
+            expire_timestamp: datetime.datetime | None,
+            expire_in: float | None,
+            keep_ttl: bool) -> str | None:
+        ...
+
+    @overload
+    def set(
+            self,
+            key: str,
+            value: str,
+            *,
+            mode: RSetMode,
+            return_previous: Literal[False],
+            expire_timestamp: datetime.datetime | None,
+            expire_in: float | None,
+            keep_ttl: bool) -> bool | None:
+        ...
+
+    @overload
+    def set(
+            self,
+            key: str,
+            value: str,
+            *,
+            mode: RSetMode = RSM_ALWAYS,
+            return_previous: bool = False,
+            expire_timestamp: datetime.datetime | None = None,
+            expire_in: float | None = None,
+            keep_ttl: bool = False) -> str | bool | None:
+        ...
+
+    def set(
+            self,
+            key: str,
+            value: str,
+            *,
+            mode: RSetMode = RSM_ALWAYS,
+            return_previous: bool = False,
+            expire_timestamp: datetime.datetime | None = None,
+            expire_in: float | None = None,
+            keep_ttl: bool = False) -> str | bool | None:
+        expire = compute_expire(
+            expire_timestamp=expire_timestamp, expire_in=expire_in)
+        prev_value = None
+        prev_expire = None
+        prev = self._state.get_value(key)
+        if prev is not None:
+            prev_value, prev_expire = prev
+        if keep_ttl:
+            expire = prev_expire
+        do_set = False
+        if mode == RSM_ALWAYS:
+            do_set = True
+        elif mode == RSM_EXISTS:
+            do_set = prev is not None
+        elif mode == RSM_MISSING:
+            do_set = prev is None
+        else:
+            raise ValueError(f"unknown mode: {mode}")
+        if do_set:
+            self._state.set_value(key, value, expire)
+        if return_previous:
+            return prev_value
+        return do_set
 
     def get(self, key: str) -> str | None:
-        return self._state.get_value(key)
+        res = self._state.get_value(key)
+        if res is None:
+            return None
+        value, _ = res
+        return value
 
     def lpush(self, key: str, *values: str) -> int:
         queue = self._state.get_queue(key)
