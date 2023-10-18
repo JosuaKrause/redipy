@@ -111,7 +111,25 @@ class PipelineConnection(PipelineAPI):
         return f"{self._prefix}{key}"
 
     def execute(self) -> list:
-        return self._pipe.execute()
+
+        def normalize(res: Any) -> Any:
+            if res is None:
+                return None
+            if isinstance(res, bytes):
+                return res.decode("utf-8")
+            if isinstance(res, list):
+                return [normalize(val) for val in res]
+            if isinstance(res, dict):
+                return {
+                    normalize(key): normalize(value)
+                    for key, value in res.items()
+                }
+            return res
+
+        return [
+            normalize(res)
+            for res in self._pipe.execute()
+        ]
 
     def set(self, key: str, value: str) -> None:
         self._pipe.set(self.with_prefix(key), value)
