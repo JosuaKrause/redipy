@@ -4,7 +4,13 @@ import json
 from collections.abc import Callable, Iterator
 from typing import Any, cast, Literal, overload, TypeVar
 
-from redipy.api import PipelineAPI, RSetMode, RSM_ALWAYS
+from redipy.api import (
+    PipelineAPI,
+    RSetMode,
+    RSM_ALWAYS,
+    RSM_EXISTS,
+    RSM_MISSING,
+)
 from redipy.backend.runtime import Runtime
 from redipy.memory.local import Cmd, LocalBackend
 from redipy.memory.state import Machine, State
@@ -59,12 +65,40 @@ class LocalRuntime(Runtime[Cmd]):
             "incorrect number of arguments need "
             f"{'at least' if at_least else 'exactly'} {count} got {argc}")
 
+    def _set(self, key: str, value: str, args: list[JSONType]) -> JSONType:
+        mode: RSetMode = RSM_ALWAYS
+        return_previous = False
+        expire_in = None
+        keep_ttl = False
+        pos = 0
+        while pos < len(args):
+            arg = f"{args[pos]}".upper()
+            if arg == "XX":
+                mode = RSM_EXISTS
+            elif arg == "NX":
+                mode = RSM_MISSING
+            elif arg == "GET":
+                return_previous = True
+            elif arg == "PX":
+                pos += 1
+                expire_in = float(cast(float, args[pos])) / 1000.0
+            elif arg == "KEEPTTL":
+                keep_ttl = True
+            pos += 1
+        return self.set(
+            key,
+            value,
+            mode=mode,
+            return_previous=return_previous,
+            expire_in=expire_in,
+            keep_ttl=keep_ttl)
+
     def redis_fn(
             self, name: str, args: list[JSONType]) -> JSONType:
         key = f"{args[0]}"
         if name == "set":
-            self.require_argc(args, 2)
-            return self.set(key, f"{args[1]}")
+            self.require_argc(args, 2, at_least=True)
+            return self._set(key, f"{args[1]}", args[2:])
         if name == "get":
             self.require_argc(args, 1)
             return self.get(key)
@@ -132,6 +166,18 @@ class LocalRuntime(Runtime[Cmd]):
         if name == "tostring":
             self.require_argc(args, 1)
             return f"{args[0]}"
+        if name == "type":
+            self.require_argc(args, 1)
+            tmap: dict[type, str] = {
+                bool: "bool",
+                dict: "table",
+                float: "number",
+                int: "number",
+                list: "table",
+                str: "string",
+                type(None): "nil",
+            }
+            return tmap[type(args[0])]
         if name == "redis.log":
             self.require_argc(args, 2)
             print(f"{args[0]}: {args[1]}")

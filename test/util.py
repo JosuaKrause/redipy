@@ -33,16 +33,17 @@ def get_setup(
         test_name: str,
         rt_lua: bool,
         *,
-        lua_script: str,
+        lua_script: str | None,
         ) -> Runtime:
     if rt_lua:
         res: Runtime = RedisConnection(test_name, cfg=get_test_config())
+        if lua_script is not None:
 
-        def code_hook(code: list[str]) -> None:
-            code_str = code_fmt(code)
-            assert code_str == lua_script
+            def code_hook(code: list[str]) -> None:
+                code_str = code_fmt(code)
+                assert code_str == lua_script
 
-        res.set_code_hook(code_hook)
+            res.set_code_hook(code_hook)
     else:
         res = LocalRuntime()
 

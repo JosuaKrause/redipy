@@ -1,12 +1,15 @@
 import json
-from test.util import get_test_config
+from collections.abc import Callable
+from test.util import get_setup, get_test_config
+
+import pytest
 
 from redipy.memory.local import LocalBackend
 from redipy.memory.rt import LocalRuntime
 from redipy.redis.conn import RedisConnection
 from redipy.redis.lua import LuaBackend
-from redipy.symbolic.expr import JSONType
-from redipy.symbolic.fun import ToNum
+from redipy.symbolic.expr import Expr, JSONType
+from redipy.symbolic.fun import ToNum, ToStr, TypeStr
 from redipy.symbolic.rvar import RedisVar
 from redipy.symbolic.seq import FnContext
 from redipy.util import code_fmt, lua_fmt
@@ -22,7 +25,7 @@ a
 local arg_0 = cjson.decode(ARGV[1])  -- a
 local key_0 = (KEYS[1])  -- k
 if (tonumber((redis.call("get", key_0) or 0)) <= arg_0) then
-    redis.call("set", key_0, arg_0)
+    (redis.call("set", key_0, arg_0) ~= nil)
 end
 local var_0 = (redis.call("get", key_0) or nil)
 if (var_0 ~= nil) then
@@ -96,3 +99,58 @@ def test_rvar() -> None:
     assert rrt.get("bar") == "7"
     assert rrt.get("neg") == "1"
     assert rrt.get("pos") == "6"
+
+
+@pytest.mark.parametrize("rt_lua", [False, True])
+def test_complex_set(rt_lua: bool) -> None:
+    rt = get_setup("test_complex_set", rt_lua, lua_script=None)
+
+    def fun_check(
+            expr: Callable[[RedisVar, Expr], Expr],
+            type_str: str,
+            value_str: str,
+            lua_snippet: str) -> None:
+        lua_script = f"""
+            --[[ KEYV
+            in
+            ]]
+            --[[ ARGV
+            in
+            ]]
+            local arg_0 = cjson.decode(ARGV[1])  -- in
+            local key_0 = (KEYS[1])  -- in
+            local var_0 = {lua_snippet}
+            local var_1 = {{}}
+            var_1[#var_1 + 1] = type(var_0)
+            var_1[#var_1 + 1] = tostring(var_0)
+            return cjson.encode(var_1)
+        """
+
+        def code_hook(code: list[str]) -> None:
+            code_str = code_fmt(code)
+            assert code_str == lua_fmt(lua_script)
+
+        if rt_lua:
+            rt.set_code_hook(code_hook)
+
+        ctx = FnContext()
+        arg_in = ctx.add_arg("in")
+        rvar = RedisVar(ctx.add_key("in"))
+        res_val = ctx.add_local(expr(rvar, arg_in))
+        res_arr = ctx.add_local([])
+        res_arr.set_at(res_arr.len_(), TypeStr(res_val))
+        res_arr.set_at(res_arr.len_(), ToStr(res_val))
+        ctx.set_return_value(res_arr)
+
+        exec_fun = rt.register_script(ctx)
+        res = exec_fun(keys={"in": "foo"}, args={"in": "a"})
+        assert isinstance(res, list)
+        assert len(res) == 2
+        assert res[0] == type_str
+        assert res[1] == value_str
+
+    fun_check(
+        lambda rvar, name: rvar.set(name),
+        "bool",
+        "true",
+        "(redis.call(\"set\", key_0, arg_0) != nil)")

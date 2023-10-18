@@ -4,7 +4,7 @@ from typing import Literal, TYPE_CHECKING
 
 from redipy.backend.backend import Backend, ExecFunction
 from redipy.graph.cmd import CommandObj
-from redipy.graph.expr import BinOps, CallObj, ExprObj
+from redipy.graph.expr import BinOps, CallObj, ExprObj, ValueType
 from redipy.graph.seq import SequenceObj
 from redipy.symbolic.expr import JSONType
 from redipy.util import code_fmt, indent, json_compact, lua_fmt
@@ -60,15 +60,62 @@ class LuaFnHook:
             res.append("end")
         return res
 
+    @staticmethod
+    def _get_literal(obj: ExprObj, vtype: ValueType | None = None) -> JSONType:
+        if obj["kind"] != "val":
+            return None
+        if vtype is not None and obj["type"] != vtype:
+            return None
+        return obj["value"]
+
+    @staticmethod
+    def _is_none_literal(obj: ExprObj) -> bool:
+        if obj["kind"] != "val":
+            return False
+        if obj["type"] != "none":
+            return False
+        return True
+
+    @classmethod
+    def _find_literal(
+            cls,
+            objs: list[ExprObj],
+            value: JSONType,
+            *,
+            vtype: ValueType | None = None,
+            no_case: bool = False) -> tuple[int, JSONType] | None:
+        if vtype != "none" and value is not None:
+
+            def value_check(obj: ExprObj) -> tuple[bool, JSONType]:
+                res = cls._get_literal(obj, vtype)
+                if no_case and vtype == "str":
+                    return (f"{res}".upper() == f"{value}".upper(), res)
+                return (res == value, res)
+
+            check = value_check
+        else:
+
+            def none_check(obj: ExprObj) -> tuple[bool, JSONType]:
+                is_none = cls._is_none_literal(obj)
+                return (is_none, None)
+
+            check = none_check
+
+        for ix, obj in enumerate(objs):
+            is_hit, val = check(obj)
+            if is_hit:
+                return (ix, val)
+        return None
+
     def adjust_function(self, expr: CallObj) -> ExprObj:
         expr["no_adjust"] = True
         name = expr["name"]
         args = expr["args"]
         if name == "redis.call":
-            r_name_obj = args[0]
-            if r_name_obj["kind"] == "val" and r_name_obj["type"] == "str":
+            r_name = self._get_literal(args[0], "str")
+            if r_name is not None:
                 return self.adjust_redis_fn(
-                    expr, f"{r_name_obj['value']}", args[1:])
+                    expr, f"{r_name}", args[1:])
         if name == "string.find":
             return {
                 "kind": "call",
@@ -85,7 +132,21 @@ class LuaFnHook:
             self,
             expr: CallObj,
             name: str,
-            _args: list[ExprObj]) -> ExprObj:
+            args: list[ExprObj]) -> ExprObj:
+        if name == "set":
+            if self._find_literal(
+                    args[1:], "GET", vtype="str", no_case=True) is not None:
+                return expr
+            return {
+                "kind": "binary",
+                "op": "ne",
+                "left": expr,
+                "right": {
+                    "kind": "val",
+                    "type": "none",
+                    "value": None,
+                },
+            }
         if name in ["get", "lpop", "rpop"]:
             return {
                 "kind": "binary",

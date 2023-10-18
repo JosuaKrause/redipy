@@ -8,7 +8,7 @@ PYTHON="${PYTHON:-python}"
 
 ANY_DOUBLE="([^\\\\\"]|\\\\\")*"
 ANY_SINGLE="([^\\\\']|\\\\')*"
-IS_CURLY="([{][^{]|[^}][}])"
+IS_CURLY="([{](?![{])|(?<![}])[}])"
 EAT_DOUBLE="\"${ANY_DOUBLE}\""
 EAT_SINGLE="'${ANY_SINGLE}'"
 EAT_STRINGS="^([^\"'#]|${EAT_DOUBLE}|${EAT_SINGLE})*"
