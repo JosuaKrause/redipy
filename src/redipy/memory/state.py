@@ -46,7 +46,7 @@ class State:
         res = self._queues.get(key)
         if res is None:
             if self._parent is not None:
-                res = collections.deque(self.get_queue(key))
+                res = collections.deque(self._parent.get_queue(key))
             else:
                 res = collections.deque()
             self._queues[key] = res
@@ -64,7 +64,7 @@ class State:
         res = self._zorder.get(key)
         if res is None:
             if self._parent is not None:
-                res = list(self.get_zorder(key))
+                res = list(self._parent.get_zorder(key))
             else:
                 res = []
             self._zorder[key] = res
@@ -82,7 +82,7 @@ class State:
         res = self._zscores.get(key)
         if res is None:
             if self._parent is not None:
-                res = dict(self.get_zscores(key))
+                res = dict(self._parent.get_zscores(key))
             else:
                 res = {}
             self._zscores[key] = res
