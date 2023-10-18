@@ -25,7 +25,7 @@ a
 local arg_0 = cjson.decode(ARGV[1])  -- a
 local key_0 = (KEYS[1])  -- k
 if (tonumber((redis.call("get", key_0) or 0)) <= arg_0) then
-    (redis.call("set", key_0, arg_0) ~= nil)
+    redis.call("set", key_0, arg_0)
 end
 local var_0 = (redis.call("get", key_0) or nil)
 if (var_0 ~= nil) then
@@ -102,8 +102,8 @@ def test_rvar() -> None:
 
 
 @pytest.mark.parametrize("rt_lua", [False, True])
-def test_complex_set(rt_lua: bool) -> None:
-    rt = get_setup("test_complex_set", rt_lua, lua_script=None)
+def test_set_ext_args(rt_lua: bool) -> None:
+    rt = get_setup("test_set_ext_args", rt_lua, lua_script=None)
 
     def fun_check(
             expr: Callable[[RedisVar, Expr], Expr],

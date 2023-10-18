@@ -48,6 +48,13 @@ HELPER_FNS: dict[str, tuple[str, str]] = {
 class LuaFnHook:
     def __init__(self) -> None:
         self._helpers: set[str] = set()
+        self._is_expr_stmt = False
+
+    def set_expr_stmt(self, is_expr_stmt: bool) -> None:
+        self._is_expr_stmt = is_expr_stmt
+
+    def is_expr_stmt(self) -> bool:
+        return self._is_expr_stmt
 
     def build_helpers(self) -> list[str]:
         res = []
@@ -107,7 +114,7 @@ class LuaFnHook:
                 return (ix, val)
         return None
 
-    def adjust_function(self, expr: CallObj) -> ExprObj:
+    def adjust_function(self, expr: CallObj, is_expr_stmt: bool) -> ExprObj:
         expr["no_adjust"] = True
         name = expr["name"]
         args = expr["args"]
@@ -115,7 +122,7 @@ class LuaFnHook:
             r_name = self._get_literal(args[0], "str")
             if r_name is not None:
                 return self.adjust_redis_fn(
-                    expr, f"{r_name}", args[1:])
+                    expr, f"{r_name}", args[1:], is_expr_stmt=is_expr_stmt)
         if name == "string.find":
             return {
                 "kind": "call",
@@ -132,8 +139,12 @@ class LuaFnHook:
             self,
             expr: CallObj,
             name: str,
-            args: list[ExprObj]) -> ExprObj:
+            args: list[ExprObj],
+            *,
+            is_expr_stmt: bool) -> ExprObj:
         if name == "set":
+            if is_expr_stmt:
+                return expr
             if self._find_literal(
                     args[1:], "GET", vtype="str", no_case=True) is not None:
                 return expr
@@ -240,6 +251,7 @@ class LuaBackend(
             raise ValueError(
                 f"cannot assign to position of {cmd['assign']['kind']}")
         if cmd["kind"] == "stmt":
+            ctx.set_expr_stmt(True)
             stmt = self.compile_expr(ctx, cmd["expr"])
             return [stmt]
         if cmd["kind"] == "branch":
@@ -275,6 +287,9 @@ class LuaBackend(
         raise ValueError(f"unknown kind {cmd['kind']} for command {cmd}")
 
     def compile_expr(self, ctx: LuaFnHook, expr: ExprObj) -> str:
+        is_expr_stmt = ctx.is_expr_stmt()
+        if is_expr_stmt:
+            ctx.set_expr_stmt(False)
         if expr["kind"] == "var":
             return expr["name"]
         if expr["kind"] == "arg":
@@ -339,7 +354,7 @@ class LuaBackend(
             return f"#{self.compile_expr(ctx, expr['var'])}"
         if expr["kind"] == "call":
             if not expr["no_adjust"]:
-                adj_expr = ctx.adjust_function(expr)
+                adj_expr = ctx.adjust_function(expr, is_expr_stmt)
                 return self.compile_expr(ctx, adj_expr)
             argstr = ", ".join(
                 self.compile_expr(ctx, arg) for arg in expr["args"])
