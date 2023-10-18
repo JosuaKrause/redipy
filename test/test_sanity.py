@@ -47,8 +47,7 @@ def test_sanity() -> None:
     check_expression(
         "type(redis.call('get', KEYS[1]))", "string", keys=["bar"])
     assert redis.get("bar") == "b"
-    # FIXME: probably also return dict
-    assert redis.set("baz", "c") == "OK"
+    assert redis.set("baz", "c") is True
     assert redis.get("baz") == "c"
 
     # lpop
