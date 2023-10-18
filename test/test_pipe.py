@@ -11,8 +11,11 @@ def test_pipe(rt_lua: bool) -> None:
     rt.rpush("bar", "e", "f", "g")
     with rt.pipeline() as pipe:
         pipe.lpop("foo", 2)
+        assert rt.llen("foo") == 4
         pipe.rpop("bar")
+        assert rt.llen("bar") == 3
         pipe.rpush("baz", "h")
+        assert rt.llen("baz") == 0
         lpop_foo, lpop_bar, rpush_baz = pipe.execute()
     assert lpop_foo == ["a", "b"]
     assert lpop_bar == "g"
