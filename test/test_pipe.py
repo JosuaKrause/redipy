@@ -10,12 +10,13 @@ def test_pipe(rt_lua: bool) -> None:
     rt.rpush("foo", "a", "b", "c", "d")
     rt.rpush("bar", "e", "f", "g")
     with rt.pipeline() as pipe:
-        left = pipe.lpop("foo")
-        assert left is not None
-        right = pipe.lpop("bar")
-        assert right is not None
-        assert pipe.rpush("baz", left, right) == 2
+        pipe.lpop("foo", 2)
+        pipe.rpop("bar")
+        pipe.rpush("baz", "h")
         lpop_foo, lpop_bar, rpush_baz = pipe.execute()
-    assert lpop_foo == "a"
-    assert lpop_bar == "e"
-    assert rpush_baz == 2
+    assert lpop_foo == ["a", "b"]
+    assert lpop_bar == "g"
+    assert rpush_baz == 1
+    assert rt.lpop("foo", 2) == ["c", "d"]
+    assert rt.rpop("bar") == "f"
+    assert rt.rpush("baz", "i") == 2

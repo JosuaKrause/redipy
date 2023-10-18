@@ -173,8 +173,10 @@ that have not (or not completely) been implemented in `redipy` yet. For this
 follow these steps:
 
 1. Add the signature of the function to `redipy.api.RedisAPI`. Adjust as
-  necessary from the redis spec to get a pythonic feel.
-2. Implement the function in `redipy.redis.conn.RedisConnection`. This should
+  necessary from the redis spec to get a pythonic feel. Also, add the signature
+  to `redipy.api.PipelineAPI` but with `None` as return value.
+2. Implement the function in `redipy.redis.conn.RedisConnection` and
+  `redipy.redis.conn.PipelineConnection`. This should
   be straightforward as there are not too many changes expected. Don't forget
   to convert bytes into strings via `...decode("utf-8")`.
 3. Add tests to `test/test_sanity.py` to determine the function's behavior in
@@ -184,7 +186,8 @@ follow these steps:
   by either directly changing the returned expr for the execution graph or using
   a lua helper function via `redipy.redis.lua.HELPER_FNS`.
 5. Next, add and implement the functionality in
-  `redipy.memory.rt.LocalRuntime`.
+  `redipy.memory.state.Machine` and add the appropriate redirects in
+  `redipy.memory.rt.LocalRuntime` and `redipy.memory.rt.LocalPipeline`.
 6. To make the new function accessible in scripts from the memory backend add
   an entry in `redipy.memory.rt.LocalRuntime#redis_fn`.
 7. Add the approriate class or method in the right `redipy.symbolic.r...py`

@@ -2,7 +2,7 @@ import contextlib
 from collections.abc import Iterator
 from typing import Literal, overload
 
-from redipy.api import RedisAPI
+from redipy.api import PipelineAPI, RedisClientAPI
 from redipy.backend.backend import ExecFunction
 from redipy.backend.runtime import Runtime
 from redipy.memory.rt import LocalRuntime
@@ -10,7 +10,7 @@ from redipy.redis.conn import RedisConfig, RedisConnection, RedisFactory
 from redipy.symbolic.seq import FnContext
 
 
-class Redis(RedisAPI):
+class Redis(RedisClientAPI):
     def __init__(
             self,
             backend: Literal["memory", "redis", "custom"],
@@ -53,7 +53,7 @@ class Redis(RedisAPI):
         return self._rt.register_script(ctx)
 
     @contextlib.contextmanager
-    def pipeline(self) -> Iterator[RedisAPI]:
+    def pipeline(self) -> Iterator[PipelineAPI]:
         with self._rt.pipeline() as pipe:
             yield pipe
 

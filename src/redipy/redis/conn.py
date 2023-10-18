@@ -9,7 +9,7 @@ from redis.client import Pipeline
 from redis.commands.core import Script
 from redis.exceptions import ResponseError
 
-from redipy.api import RedisAPI
+from redipy.api import PipelineAPI
 from redipy.backend.runtime import Runtime
 from redipy.redis.lua import LuaBackend
 from redipy.util import is_test
@@ -101,31 +101,82 @@ class RedisWrapper:
                 self._service_conn[ix] = None
 
 
+class PipelineConnection(PipelineAPI):
+    def __init__(self, pipe: Pipeline, prefix: str) -> None:
+        super().__init__()
+        self._pipe = pipe
+        self._prefix = prefix
+
+    def with_prefix(self, key: str) -> str:
+        return f"{self._prefix}{key}"
+
+    def execute(self) -> list:
+        return self._pipe.execute()
+
+    def set(self, key: str, value: str) -> None:
+        self._pipe.set(self.with_prefix(key), value)
+
+    def get(self, key: str) -> None:
+        self._pipe.get(self.with_prefix(key))
+
+    def lpush(self, key: str, *values: str) -> None:
+        self._pipe.lpush(self.with_prefix(key), *values)
+
+    def rpush(self, key: str, *values: str) -> None:
+        self._pipe.rpush(self.with_prefix(key), *values)
+
+    def lpop(
+            self,
+            key: str,
+            count: int | None = None) -> None:
+        self._pipe.lpop(self.with_prefix(key), count)
+
+    def rpop(
+            self,
+            key: str,
+            count: int | None = None) -> None:
+        self._pipe.rpop(self.with_prefix(key), count)
+
+    def llen(self, key: str) -> None:
+        self._pipe.llen(self.with_prefix(key))
+
+    def zadd(self, key: str, mapping: dict[str, float]) -> None:
+        self._pipe.zadd(self.with_prefix(key), mapping)  # type: ignore
+
+    def zpop_max(
+            self,
+            key: str,
+            count: int = 1,
+            ) -> None:
+        self._pipe.zpopmax(self.with_prefix(key), count)
+
+    def zpop_min(
+            self,
+            key: str,
+            count: int = 1,
+            ) -> None:
+        self._pipe.zpopmin(self.with_prefix(key), count)
+
+    def zcard(self, key: str) -> None:
+        self._pipe.zcard(self.with_prefix(key))
+
+
 class RedisConnection(Runtime[list[str]]):
     def __init__(
             self,
             redis_module: str,
             *,
-            cfg: RedisConfig | None,
+            cfg: RedisConfig,
             redis_factory: RedisFactory | None = None,
-            is_caching_enabled: bool = True,
-            pipe: Pipeline | None = None) -> None:
+            is_caching_enabled: bool = True) -> None:
         super().__init__()
-        self._pipe = pipe
-        if pipe is None:
-            assert cfg is not None
-            self._conn: RedisWrapper | None = RedisWrapper(
-                cfg=cfg,
-                redis_factory=redis_factory,
-                is_caching_enabled=is_caching_enabled)
-            prefix = cfg.get("prefix", "")
-            prefix_str = f"{prefix}:" if prefix else ""
-            module = f"{prefix_str}{redis_module}".rstrip(":")
-        else:
-            assert cfg is None
-            assert redis_factory is None
-            self._conn = None
-            module = redis_module
+        self._conn: RedisWrapper = RedisWrapper(
+            cfg=cfg,
+            redis_factory=redis_factory,
+            is_caching_enabled=is_caching_enabled)
+        prefix = cfg.get("prefix", "")
+        prefix_str = f"{prefix}:" if prefix else ""
+        module = f"{prefix_str}{redis_module}".rstrip(":")
         self._module = f"{module}:" if module else ""
 
     @classmethod
@@ -133,26 +184,15 @@ class RedisConnection(Runtime[list[str]]):
         return LuaBackend()
 
     @contextlib.contextmanager
-    def pipeline(self) -> Iterator[RedisAPI]:
-        if self._conn is None:
-            yield self
-        else:
-            with self.get_connection() as conn:
-                with conn.pipeline() as pipe:
-                    yield RedisConnection(self._module, cfg=None, pipe=pipe)
-
-    def execute(self) -> list:  # FIXME properly move into own class
-        assert self._pipe is not None
-        return self._pipe.execute()
+    def pipeline(self) -> Iterator[PipelineAPI]:
+        with self.get_connection() as conn:
+            with conn.pipeline() as pipe:
+                yield PipelineConnection(pipe, self._module)
 
     @contextlib.contextmanager
     def get_connection(self) -> Iterator[Redis]:
-        if self._conn is None:
-            assert self._pipe is not None
-            yield self._pipe
-        else:
-            with self._conn.get_connection() as conn:
-                yield conn
+        with self._conn.get_connection() as conn:
+            yield conn
 
     def get_dynamic_script(self, code: str) -> RedisFunctionBytes:
         if is_test():
