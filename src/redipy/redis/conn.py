@@ -156,8 +156,19 @@ class PipelineConnection(PipelineAPI):
             expire_timestamp: datetime.datetime | None = None,
             expire_in: float | None = None,
             keep_ttl: bool = False) -> None:
-        # FIXME pass arguments
-        self._pipe.set(self.with_prefix(key), value)
+        expire = None
+        if expire_in is not None:
+            expire = int(expire_in * 1000.0)
+        elif expire_timestamp is not None:
+            expire = int(time_diff(now(), expire_timestamp) * 1000.0)
+        self._pipe.set(
+            self.with_prefix(key),
+            value,
+            get=return_previous,
+            nx=(mode == RSM_MISSING),
+            xx=(mode == RSM_EXISTS),
+            px=expire,
+            keepttl=keep_ttl)
 
     def get(self, key: str) -> None:
         self._pipe.get(self.with_prefix(key))
