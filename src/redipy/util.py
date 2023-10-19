@@ -479,7 +479,9 @@ def to_maybe_str(res: bytes | None) -> str | None:
     return res.decode("utf-8")
 
 
-def to_list_str(res: list[bytes]) -> list[str]:
+def to_list_str(res: list[bytes] | None) -> list[str] | None:
+    if res is None:
+        return res
     return [val.decode("utf-8") for val in res]
 
 
