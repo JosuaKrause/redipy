@@ -3,17 +3,31 @@ import datetime
 import threading
 import uuid
 from collections.abc import Callable, Iterable, Iterator
-from typing import Any, Literal, NotRequired, overload, Protocol, TypedDict
+from typing import (
+    Any,
+    cast,
+    Literal,
+    NotRequired,
+    overload,
+    Protocol,
+    TypedDict,
+)
 
 from redis import Redis
 from redis.client import Pipeline
 from redis.commands.core import Script
 from redis.exceptions import ResponseError
 
-from redipy.api import PipelineAPI, RSetMode, RSM_ALWAYS
+from redipy.api import (
+    PipelineAPI,
+    RSetMode,
+    RSM_ALWAYS,
+    RSM_EXISTS,
+    RSM_MISSING,
+)
 from redipy.backend.runtime import Runtime
 from redipy.redis.lua import LuaBackend
-from redipy.util import is_test
+from redipy.util import is_test, now, time_diff
 
 
 RedisConfig = TypedDict('RedisConfig', {
@@ -416,9 +430,25 @@ class RedisConnection(Runtime[list[str]]):
             expire_in: float | None = None,
             keep_ttl: bool = False) -> str | bool | None:
         with self.get_connection() as conn:
-            # FIXME pass paramters
-            conn.set(self.with_prefix(key), value)
-            return True
+            expire = None
+            if expire_in is not None:
+                expire = int(expire_in * 1000.0)
+            elif expire_timestamp is not None:
+                expire = int(time_diff(now(), expire_timestamp) * 1000.0)
+            res = conn.set(
+                self.with_prefix(key),
+                value,
+                get=return_previous,
+                nx=(mode == RSM_MISSING),
+                xx=(mode == RSM_EXISTS),
+                px=expire,
+                keepttl=keep_ttl)
+            if return_previous:
+                if res is not None:
+                    return cast(bytes, res).decode("utf-8")
+            elif res is None:
+                return False
+            return res
 
     def get(self, key: str) -> str | None:
         with self.get_connection() as conn:

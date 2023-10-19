@@ -124,6 +124,8 @@ class LuaFnHook:
                 return self.adjust_redis_fn(
                     expr, f"{r_name}", args[1:], is_expr_stmt=is_expr_stmt)
         if name == "string.find":
+            if is_expr_stmt:
+                return expr
             return {
                 "kind": "call",
                 "name": f"{HELPER_PKG}.nil_or_index",
@@ -154,11 +156,13 @@ class LuaFnHook:
                 "left": expr,
                 "right": {
                     "kind": "val",
-                    "type": "none",
-                    "value": None,
+                    "type": "bool",
+                    "value": False,
                 },
             }
         if name in ["get", "lpop", "rpop"]:
+            if is_expr_stmt:
+                return expr
             return {
                 "kind": "binary",
                 "op": "or",
@@ -170,6 +174,8 @@ class LuaFnHook:
                 },
             }
         if name in ["zpopmax", "zpopmin"]:
+            if is_expr_stmt:
+                return expr
             return {
                 "kind": "call",
                 "name": f"{HELPER_PKG}.pairlist",

@@ -34,6 +34,7 @@ def get_setup(
         rt_lua: bool,
         *,
         lua_script: str | None,
+        no_compile_hook: bool = False,
         ) -> Runtime:
     if rt_lua:
         res: Runtime = RedisConnection(test_name, cfg=get_test_config())
@@ -47,10 +48,12 @@ def get_setup(
     else:
         res = LocalRuntime()
 
-    def compile_hook(compiled: SequenceObj) -> None:
-        print(json.dumps(compiled, indent=2, sort_keys=True))
+    if not no_compile_hook:
 
-    res.set_compile_hook(compile_hook)
+        def compile_hook(compiled: SequenceObj) -> None:
+            print(json.dumps(compiled, indent=2, sort_keys=True))
+
+        res.set_compile_hook(compile_hook)
     return res
 
 

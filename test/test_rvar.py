@@ -1,9 +1,11 @@
 import json
+import time
 from collections.abc import Callable
 from test.util import get_setup, get_test_config
 
 import pytest
 
+from redipy.api import RSM_EXISTS, RSM_MISSING
 from redipy.memory.local import LocalBackend
 from redipy.memory.rt import LocalRuntime
 from redipy.redis.conn import RedisConnection
@@ -103,9 +105,12 @@ def test_rvar() -> None:
 
 @pytest.mark.parametrize("rt_lua", [False, True])
 def test_set_ext_args(rt_lua: bool) -> None:
-    rt = get_setup("test_set_ext_args", rt_lua, lua_script=None)
+    rt = get_setup(
+        "test_set_ext_args", rt_lua, lua_script=None, no_compile_hook=True)
 
     def fun_check(
+            key: str,
+            name: str,
             expr: Callable[[RedisVar, Expr], Expr],
             type_str: str,
             value_str: str,
@@ -144,14 +149,76 @@ def test_set_ext_args(rt_lua: bool) -> None:
         ctx.set_return_value(res_arr)
 
         exec_fun = rt.register_script(ctx)
-        res = exec_fun(keys={"in": "foo"}, args={"in": "a"})
+        res = exec_fun(keys={"in": key}, args={"in": name})
         assert isinstance(res, list)
         assert len(res) == 2
         assert res[0] == type_str
         assert res[1] == value_str
 
+    assert rt.get("bar") is None
+    assert rt.set("bar", "a") is True
+    assert rt.get("bar") == "a"
+    assert rt.set("bar", "c", mode=RSM_MISSING) is False
+    assert rt.get("bar") == "a"
+    assert rt.set("bar", "b", return_previous=True, expire_in=0.1) == "a"
+    assert rt.get("bar") == "b"
+    assert rt.set("bar", "c", mode=RSM_MISSING, keep_ttl=True) is False
+    assert rt.get("bar") == "b"
+    assert rt.set("bar", "e", mode=RSM_EXISTS, keep_ttl=True) is True
+    assert rt.get("bar") == "e"
+
+    assert rt.get("foo") is None
     fun_check(
+        "foo",
+        "a",
         lambda rvar, name: rvar.set(name),
         "boolean",
         "true",
-        "(redis.call(\"set\", key_0, arg_0) ~= nil)")
+        "(redis.call(\"set\", key_0, arg_0) ~= false)")
+    assert rt.get("foo") == "a"
+    fun_check(
+        "foo",
+        "c",
+        lambda rvar, name: rvar.set(name, mode=RSM_MISSING),
+        "boolean",
+        "false",
+        "(redis.call(\"set\", key_0, arg_0, \"NX\") ~= false)")
+    assert rt.get("foo") == "a"
+    fun_check(
+        "foo",
+        "b",
+        lambda rvar, name: rvar.set(name, return_previous=True, expire_in=0.1),
+        "string",
+        "a",
+        "redis.call(\"set\", key_0, arg_0, \"GET\", \"PX\", 100)")
+    assert rt.get("foo") == "b"
+    fun_check(
+        "foo",
+        "c",
+        lambda rvar, name: rvar.set(name, mode=RSM_MISSING, keep_ttl=True),
+        "boolean",
+        "false",
+        "(redis.call(\"set\", key_0, arg_0, \"NX\", \"KEEPTTL\") ~= false)")
+    assert rt.get("foo") == "b"
+    fun_check(
+        "foo",
+        "e",
+        lambda rvar, name: rvar.set(name, mode=RSM_EXISTS, keep_ttl=True),
+        "boolean",
+        "true",
+        "(redis.call(\"set\", key_0, arg_0, \"XX\", \"KEEPTTL\") ~= false)")
+    assert rt.get("foo") == "e"
+
+    time.sleep(0.1)
+
+    assert rt.set("bar", "d", mode=RSM_MISSING) is True
+    assert rt.get("bar") == "d"
+
+    fun_check(
+        "foo",
+        "d",
+        lambda rvar, name: rvar.set(name, mode=RSM_MISSING),
+        "boolean",
+        "true",
+        "(redis.call(\"set\", key_0, arg_0, \"NX\") ~= false)")
+    assert rt.get("foo") == "d"

@@ -33,7 +33,15 @@ def test_sanity() -> None:
 
     # set
     check_expression(
-        "cjson.encode(redis.call('set', KEYS[1], 'a'))",
+        "cjson.encode(redis.call('set', KEYS[1], 'd'))",
+        r'{"ok":"OK"}',
+        keys=["bar"])
+    check_expression(
+        "cjson.encode(redis.call('set', KEYS[1], 'a', 'NX'))",
+        "false",
+        keys=["bar"])
+    check_expression(
+        "cjson.encode(redis.call('set', KEYS[1], 'a', 'XX'))",
         r'{"ok":"OK"}',
         keys=["bar"])
     check_expression("redis.call('get', KEYS[1])", "a", keys=["bar"])
