@@ -177,7 +177,8 @@ follow these steps:
 2. Implement the function in `redipy.redis.conn.RedisConnection` and
   `redipy.redis.conn.PipelineConnection`. This should
   be straightforward as there are not too many changes expected. Don't forget
-  to convert bytes into strings via `...decode("utf-8")`.
+  to convert bytes into strings via `...decode("utf-8")` (there are various
+  helper functions for this in `redipy.util`).
 3. Add tests to `test/test_sanity.py` to determine the function's behavior in
   lua (especially its edge cases).
 4. If the lua behavior needs to be changed to provide a better feel you can
