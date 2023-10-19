@@ -120,8 +120,8 @@ class LocalRuntime(Runtime[Cmd]):
             self.require_argc(args, 1)
             return self.llen(key)
         if name == "zadd":
-            self.require_argc(args, 2)
-            return self.zadd(key, {f"{args[1]}": float(cast(float, args[2]))})
+            self.require_argc(args, 3)
+            return self.zadd(key, {f"{args[2]}": float(cast(float, args[1]))})
         if name == "zpopmax":
             self.require_argc(args, 1, at_most=2)
             return cast(list | None, self.zpop_max(
@@ -133,7 +133,7 @@ class LocalRuntime(Runtime[Cmd]):
         if name == "zcard":
             self.require_argc(args, 1)
             return self.zcard(key)
-        raise ValueError(f"unknow redis function {name}")
+        raise ValueError(f"unknown redis function {name}")
 
     def call_fn(
             self, name: str, args: list[JSONType]) -> JSONType:
