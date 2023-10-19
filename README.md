@@ -181,7 +181,7 @@ follow these steps:
 3. Add tests to `test/test_sanity.py` to determine the function's behavior in
   lua (especially its edge cases).
 4. If the lua behavior needs to be changed to provide a better feel you can
-  mokeypatch the function call in `redipy.redis.lua.LuaFnHook#adjust_redis_fn`
+  monkeypatch the function call in `redipy.redis.lua.LuaFnHook#adjust_redis_fn`
   by either directly changing the returned expr for the execution graph or using
   a lua helper function via `redipy.redis.lua.HELPER_FNS`.
 5. Next, add and implement the functionality in
