@@ -167,6 +167,31 @@ def test_set_ext_args(rt_lua: bool) -> None:
     assert rt.set("bar", "e", mode=RSM_EXISTS, keep_ttl=True) is True
     assert rt.get("bar") == "e"
 
+    with rt.pipeline() as pipe:
+        pipe.get("baz")  # 0
+        pipe.set("baz", "-", mode=RSM_EXISTS)  # 1
+        pipe.get("baz")  # 2
+        pipe.set("baz", "a")  # 3
+        pipe.get("baz")  # 4
+        pipe.set("baz", "b", mode=RSM_EXISTS)  # 5
+        pipe.get("baz")  # 6
+        pipe.set("baz", "c", mode=RSM_MISSING)  # 7
+        pipe.get("baz")  # 8
+        pipe.set("baz", "d", return_previous=True, expire_in=0.1)  # 9
+        pipe.get("baz")  # 10
+        pipe_res = pipe.execute()
+    assert pipe_res[0] is None
+    assert pipe_res[1] is False
+    assert pipe_res[2] is None
+    assert pipe_res[3] is True
+    assert pipe_res[4] == "a"
+    assert pipe_res[5] is True
+    assert pipe_res[6] == "b"
+    assert pipe_res[7] is False
+    assert pipe_res[8] == "b"
+    assert pipe_res[9] == "b"
+    assert pipe_res[10] == "d"
+
     assert rt.get("foo") is None
     fun_check(
         "foo",
@@ -213,6 +238,8 @@ def test_set_ext_args(rt_lua: bool) -> None:
 
     assert rt.set("bar", "d", mode=RSM_MISSING) is True
     assert rt.get("bar") == "d"
+
+    assert rt.get("baz") is None
 
     fun_check(
         "foo",
