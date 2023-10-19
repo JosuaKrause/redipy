@@ -33,7 +33,15 @@ def test_sanity() -> None:
 
     # set
     check_expression(
-        "cjson.encode(redis.call('set', KEYS[1], 'a'))",
+        "cjson.encode(redis.call('set', KEYS[1], 'd'))",
+        r'{"ok":"OK"}',
+        keys=["bar"])
+    check_expression(
+        "cjson.encode(redis.call('set', KEYS[1], 'a', 'NX'))",
+        "false",
+        keys=["bar"])
+    check_expression(
+        "cjson.encode(redis.call('set', KEYS[1], 'a', 'XX'))",
         r'{"ok":"OK"}',
         keys=["bar"])
     check_expression("redis.call('get', KEYS[1])", "a", keys=["bar"])
@@ -47,8 +55,7 @@ def test_sanity() -> None:
     check_expression(
         "type(redis.call('get', KEYS[1]))", "string", keys=["bar"])
     assert redis.get("bar") == "b"
-    # FIXME: probably also return dict
-    assert redis.set("baz", "c") == "OK"
+    assert redis.set("baz", "c") is True
     assert redis.get("baz") == "c"
 
     # lpop

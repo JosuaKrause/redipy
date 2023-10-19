@@ -143,6 +143,27 @@ def elapsed_time_string(elapsed: float) -> str:
     return cur
 
 
+def now() -> datetime.datetime:
+    return datetime.datetime.now(datetime.timezone.utc).astimezone()
+
+
+def fmt_time(when: datetime.datetime) -> str:
+    return when.isoformat()
+
+
+def get_time_str() -> str:
+    return fmt_time(now())
+
+
+def parse_time_str(time_str: str) -> datetime.datetime:
+    return datetime.datetime.fromisoformat(time_str)
+
+
+def time_diff(
+        from_time: datetime.datetime, to_time: datetime.datetime) -> float:
+    return (to_time - from_time).total_seconds()
+
+
 def to_bool(value: bool | float | int | str) -> bool:
     value = f"{value}".lower()
     if value == "true":
@@ -450,3 +471,32 @@ def unescape(text: str, subs: dict[str, str]) -> str:
             continue
         res.append(c)
     return "".join(res)
+
+
+def to_maybe_str(res: bytes | None) -> str | None:
+    if res is None:
+        return res
+    return res.decode("utf-8")
+
+
+def to_list_str(res: list[bytes] | None) -> list[str] | None:
+    if res is None:
+        return res
+    return [val.decode("utf-8") for val in res]
+
+
+def normalize_values(res: Any) -> Any:
+    if res is None:
+        return None
+    if isinstance(res, bytes):
+        return res.decode("utf-8")
+    if isinstance(res, list):
+        return [normalize_values(val) for val in res]
+    if isinstance(res, tuple):
+        return tuple(normalize_values(val) for val in res)
+    if isinstance(res, dict):
+        return {
+            normalize_values(key): normalize_values(value)
+            for key, value in res.items()
+        }
+    return res

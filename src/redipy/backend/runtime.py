@@ -3,7 +3,7 @@ import threading
 from collections.abc import Callable, Iterator
 from typing import Any, Generic, Self, TypeVar
 
-from redipy.api import RedisAPI
+from redipy.api import RedisClientAPI
 from redipy.backend.backend import Backend, ExecFunction
 from redipy.graph.seq import SequenceObj
 from redipy.symbolic.seq import FnContext
@@ -12,7 +12,7 @@ from redipy.symbolic.seq import FnContext
 T = TypeVar('T')
 
 
-class Runtime(Generic[T], RedisAPI):
+class Runtime(Generic[T], RedisClientAPI):
     def __init__(self) -> None:
         self._backend: Backend[T, Any, Any, Any, Self] | None = None
         self._compile_hook: Callable[[SequenceObj], None] | None = None

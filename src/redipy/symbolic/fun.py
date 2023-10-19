@@ -86,7 +86,12 @@ class ToNum(CallFn):
 
 class ToStr(CallFn):
     def __init__(self, arg: MixedType) -> None:
-        super().__init__("tostr", arg)
+        super().__init__("tostring", arg)
+
+
+class TypeStr(CallFn):
+    def __init__(self, arg: MixedType) -> None:
+        super().__init__("type", arg)
 
 
 class RedisFn(CallFn):

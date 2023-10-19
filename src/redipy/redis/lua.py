@@ -4,7 +4,7 @@ from typing import Literal, TYPE_CHECKING
 
 from redipy.backend.backend import Backend, ExecFunction
 from redipy.graph.cmd import CommandObj
-from redipy.graph.expr import BinOps, CallObj, ExprObj
+from redipy.graph.expr import BinOps, CallObj, ExprObj, ValueType
 from redipy.graph.seq import SequenceObj
 from redipy.symbolic.expr import JSONType
 from redipy.util import code_fmt, indent, json_compact, lua_fmt
@@ -48,6 +48,13 @@ HELPER_FNS: dict[str, tuple[str, str]] = {
 class LuaFnHook:
     def __init__(self) -> None:
         self._helpers: set[str] = set()
+        self._is_expr_stmt = False
+
+    def set_expr_stmt(self, is_expr_stmt: bool) -> None:
+        self._is_expr_stmt = is_expr_stmt
+
+    def is_expr_stmt(self) -> bool:
+        return self._is_expr_stmt
 
     def build_helpers(self) -> list[str]:
         res = []
@@ -60,16 +67,65 @@ class LuaFnHook:
             res.append("end")
         return res
 
-    def adjust_function(self, expr: CallObj) -> ExprObj:
+    @staticmethod
+    def _get_literal(obj: ExprObj, vtype: ValueType | None = None) -> JSONType:
+        if obj["kind"] != "val":
+            return None
+        if vtype is not None and obj["type"] != vtype:
+            return None
+        return obj["value"]
+
+    @staticmethod
+    def _is_none_literal(obj: ExprObj) -> bool:
+        if obj["kind"] != "val":
+            return False
+        if obj["type"] != "none":
+            return False
+        return True
+
+    @classmethod
+    def _find_literal(
+            cls,
+            objs: list[ExprObj],
+            value: JSONType,
+            *,
+            vtype: ValueType | None = None,
+            no_case: bool = False) -> tuple[int, JSONType] | None:
+        if vtype != "none" and value is not None:
+
+            def value_check(obj: ExprObj) -> tuple[bool, JSONType]:
+                res = cls._get_literal(obj, vtype)
+                if no_case and vtype == "str":
+                    return (f"{res}".upper() == f"{value}".upper(), res)
+                return (res == value, res)
+
+            check = value_check
+        else:
+
+            def none_check(obj: ExprObj) -> tuple[bool, JSONType]:
+                is_none = cls._is_none_literal(obj)
+                return (is_none, None)
+
+            check = none_check
+
+        for ix, obj in enumerate(objs):
+            is_hit, val = check(obj)
+            if is_hit:
+                return (ix, val)
+        return None
+
+    def adjust_function(self, expr: CallObj, is_expr_stmt: bool) -> ExprObj:
         expr["no_adjust"] = True
         name = expr["name"]
         args = expr["args"]
         if name == "redis.call":
-            r_name_obj = args[0]
-            if r_name_obj["kind"] == "val" and r_name_obj["type"] == "str":
+            r_name = self._get_literal(args[0], "str")
+            if r_name is not None:
                 return self.adjust_redis_fn(
-                    expr, f"{r_name_obj['value']}", args[1:])
+                    expr, f"{r_name}", args[1:], is_expr_stmt=is_expr_stmt)
         if name == "string.find":
+            if is_expr_stmt:
+                return expr
             return {
                 "kind": "call",
                 "name": f"{HELPER_PKG}.nil_or_index",
@@ -85,8 +141,28 @@ class LuaFnHook:
             self,
             expr: CallObj,
             name: str,
-            _args: list[ExprObj]) -> ExprObj:
+            args: list[ExprObj],
+            *,
+            is_expr_stmt: bool) -> ExprObj:
+        if name == "set":
+            if is_expr_stmt:
+                return expr
+            if self._find_literal(
+                    args[1:], "GET", vtype="str", no_case=True) is not None:
+                return expr
+            return {
+                "kind": "binary",
+                "op": "ne",
+                "left": expr,
+                "right": {
+                    "kind": "val",
+                    "type": "bool",
+                    "value": False,
+                },
+            }
         if name in ["get", "lpop", "rpop"]:
+            if is_expr_stmt:
+                return expr
             return {
                 "kind": "binary",
                 "op": "or",
@@ -98,6 +174,8 @@ class LuaFnHook:
                 },
             }
         if name in ["zpopmax", "zpopmin"]:
+            if is_expr_stmt:
+                return expr
             return {
                 "kind": "call",
                 "name": f"{HELPER_PKG}.pairlist",
@@ -179,6 +257,7 @@ class LuaBackend(
             raise ValueError(
                 f"cannot assign to position of {cmd['assign']['kind']}")
         if cmd["kind"] == "stmt":
+            ctx.set_expr_stmt(True)
             stmt = self.compile_expr(ctx, cmd["expr"])
             return [stmt]
         if cmd["kind"] == "branch":
@@ -214,6 +293,9 @@ class LuaBackend(
         raise ValueError(f"unknown kind {cmd['kind']} for command {cmd}")
 
     def compile_expr(self, ctx: LuaFnHook, expr: ExprObj) -> str:
+        is_expr_stmt = ctx.is_expr_stmt()
+        if is_expr_stmt:
+            ctx.set_expr_stmt(False)
         if expr["kind"] == "var":
             return expr["name"]
         if expr["kind"] == "arg":
@@ -278,7 +360,7 @@ class LuaBackend(
             return f"#{self.compile_expr(ctx, expr['var'])}"
         if expr["kind"] == "call":
             if not expr["no_adjust"]:
-                adj_expr = ctx.adjust_function(expr)
+                adj_expr = ctx.adjust_function(expr, is_expr_stmt)
                 return self.compile_expr(ctx, adj_expr)
             argstr = ", ".join(
                 self.compile_expr(ctx, arg) for arg in expr["args"])

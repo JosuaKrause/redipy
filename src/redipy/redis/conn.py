@@ -1,25 +1,48 @@
 import contextlib
+import datetime
 import threading
 import uuid
 from collections.abc import Callable, Iterable, Iterator
-from contextlib import AbstractContextManager
-from typing import Any, overload, Protocol, TypedDict
+from typing import (
+    Any,
+    cast,
+    Literal,
+    NotRequired,
+    overload,
+    Protocol,
+    TypedDict,
+)
 
 from redis import Redis
+from redis.client import Pipeline
 from redis.commands.core import Script
 from redis.exceptions import ResponseError
 
+from redipy.api import (
+    PipelineAPI,
+    RSetMode,
+    RSM_ALWAYS,
+    RSM_EXISTS,
+    RSM_MISSING,
+)
 from redipy.backend.runtime import Runtime
 from redipy.redis.lua import LuaBackend
-from redipy.util import is_test
+from redipy.util import (
+    is_test,
+    normalize_values,
+    now,
+    time_diff,
+    to_list_str,
+    to_maybe_str,
+)
 
 
 RedisConfig = TypedDict('RedisConfig', {
     "host": str,
     "port": int,
     "passwd": str,
-    "prefix": str,
-    "path": str,
+    "prefix": NotRequired[str],
+    "path": NotRequired[str],
 })
 
 
@@ -100,6 +123,118 @@ class RedisWrapper:
                 self._service_conn[ix] = None
 
 
+class PipelineConnection(PipelineAPI):
+    def __init__(self, pipe: Pipeline, prefix: str) -> None:
+        super().__init__()
+        self._pipe = pipe
+        self._fixes: list[Callable[[Any], Any]] = []
+        self._prefix = prefix
+
+    def with_prefix(self, key: str) -> str:
+        return f"{self._prefix}{key}"
+
+    def add_fixup(self, fix: Callable[[Any], Any]) -> None:
+        self._fixes.append(fix)
+
+    def execute(self) -> list:
+        fixes = self._fixes
+        self._fixes = []
+        res = self._pipe.execute()
+        assert len(res) == len(fixes)
+        return [
+            fixup(val)
+            for val, fixup in zip(res, fixes)
+        ]
+
+    def set(
+            self,
+            key: str,
+            value: str,
+            *,
+            mode: RSetMode = RSM_ALWAYS,
+            return_previous: bool = False,
+            expire_timestamp: datetime.datetime | None = None,
+            expire_in: float | None = None,
+            keep_ttl: bool = False) -> None:
+        expire = None
+        if expire_in is not None:
+            expire = int(expire_in * 1000.0)
+        elif expire_timestamp is not None:
+            expire = int(time_diff(now(), expire_timestamp) * 1000.0)
+        self._pipe.set(
+            self.with_prefix(key),
+            value,
+            get=return_previous,
+            nx=(mode == RSM_MISSING),
+            xx=(mode == RSM_EXISTS),
+            px=expire,
+            keepttl=keep_ttl)
+        if return_previous:
+            self.add_fixup(to_maybe_str)
+        else:
+            self.add_fixup(bool)
+
+    def get(self, key: str) -> None:
+        self._pipe.get(self.with_prefix(key))
+        self.add_fixup(to_maybe_str)
+
+    def lpush(self, key: str, *values: str) -> None:
+        self._pipe.lpush(self.with_prefix(key), *values)
+        self.add_fixup(int)
+
+    def rpush(self, key: str, *values: str) -> None:
+        self._pipe.rpush(self.with_prefix(key), *values)
+        self.add_fixup(int)
+
+    def lpop(
+            self,
+            key: str,
+            count: int | None = None) -> None:
+        self._pipe.lpop(self.with_prefix(key), count)
+        if count is None:
+            self.add_fixup(to_maybe_str)
+        else:
+            self.add_fixup(to_list_str)
+
+    def rpop(
+            self,
+            key: str,
+            count: int | None = None) -> None:
+        self._pipe.rpop(self.with_prefix(key), count)
+        if count is None:
+            self.add_fixup(to_maybe_str)
+        else:
+            self.add_fixup(to_list_str)
+
+    def llen(self, key: str) -> None:
+        self._pipe.llen(self.with_prefix(key))
+        self.add_fixup(int)
+
+    def zadd(self, key: str, mapping: dict[str, float]) -> None:
+        self._pipe.zadd(self.with_prefix(key), mapping)  # type: ignore
+        self.add_fixup(int)
+
+    def zpop_max(
+            self,
+            key: str,
+            count: int = 1,
+            ) -> None:
+        self._pipe.zpopmax(self.with_prefix(key), count)
+        self.add_fixup(normalize_values)
+
+    def zpop_min(
+            self,
+            key: str,
+            count: int = 1,
+            ) -> None:
+        self._pipe.zpopmin(self.with_prefix(key), count)
+        self.add_fixup(normalize_values)
+
+    def zcard(self, key: str) -> None:
+        self._pipe.zcard(self.with_prefix(key))
+        self.add_fixup(int)
+
+
 class RedisConnection(Runtime[list[str]]):
     def __init__(
             self,
@@ -109,11 +244,12 @@ class RedisConnection(Runtime[list[str]]):
             redis_factory: RedisFactory | None = None,
             is_caching_enabled: bool = True) -> None:
         super().__init__()
-        self._conn = RedisWrapper(
+        self._conn: RedisWrapper = RedisWrapper(
             cfg=cfg,
             redis_factory=redis_factory,
             is_caching_enabled=is_caching_enabled)
-        prefix_str = f"{cfg['prefix']}:" if cfg["prefix"] else ""
+        prefix = cfg.get("prefix", "")
+        prefix_str = f"{prefix}:" if prefix else ""
         module = f"{prefix_str}{redis_module}".rstrip(":")
         self._module = f"{module}:" if module else ""
 
@@ -121,8 +257,16 @@ class RedisConnection(Runtime[list[str]]):
     def create_backend(cls) -> LuaBackend:
         return LuaBackend()
 
-    def get_connection(self) -> AbstractContextManager[Redis]:
-        return self._conn.get_connection()
+    @contextlib.contextmanager
+    def pipeline(self) -> Iterator[PipelineAPI]:
+        with self.get_connection() as conn:
+            with conn.pipeline() as pipe:
+                yield PipelineConnection(pipe, self._module)
+
+    @contextlib.contextmanager
+    def get_connection(self) -> Iterator[Redis]:
+        with self._conn.get_connection() as conn:
+            yield conn
 
     def get_dynamic_script(self, code: str) -> RedisFunctionBytes:
         if is_test():
@@ -267,17 +411,79 @@ class RedisConnection(Runtime[list[str]]):
                 if count < 1000:
                     count = int(min(1000, count * 1.2))
 
-    def set(self, key: str, value: str) -> str:
+    @overload
+    def set(
+            self,
+            key: str,
+            value: str,
+            *,
+            mode: RSetMode,
+            return_previous: Literal[True],
+            expire_timestamp: datetime.datetime | None,
+            expire_in: float | None,
+            keep_ttl: bool) -> str | None:
+        ...
+
+    @overload
+    def set(
+            self,
+            key: str,
+            value: str,
+            *,
+            mode: RSetMode,
+            return_previous: Literal[False],
+            expire_timestamp: datetime.datetime | None,
+            expire_in: float | None,
+            keep_ttl: bool) -> bool | None:
+        ...
+
+    @overload
+    def set(
+            self,
+            key: str,
+            value: str,
+            *,
+            mode: RSetMode = RSM_ALWAYS,
+            return_previous: bool = False,
+            expire_timestamp: datetime.datetime | None = None,
+            expire_in: float | None = None,
+            keep_ttl: bool = False) -> str | bool | None:
+        ...
+
+    def set(
+            self,
+            key: str,
+            value: str,
+            *,
+            mode: RSetMode = RSM_ALWAYS,
+            return_previous: bool = False,
+            expire_timestamp: datetime.datetime | None = None,
+            expire_in: float | None = None,
+            keep_ttl: bool = False) -> str | bool | None:
         with self.get_connection() as conn:
-            conn.set(self.with_prefix(key), value)
-            return "OK"
+            expire = None
+            if expire_in is not None:
+                expire = int(expire_in * 1000.0)
+            elif expire_timestamp is not None:
+                expire = int(time_diff(now(), expire_timestamp) * 1000.0)
+            res = conn.set(
+                self.with_prefix(key),
+                value,
+                get=return_previous,
+                nx=(mode == RSM_MISSING),
+                xx=(mode == RSM_EXISTS),
+                px=expire,
+                keepttl=keep_ttl)
+            if return_previous:
+                if res is not None:
+                    return cast(bytes, res).decode("utf-8")
+            elif res is None:
+                return False
+            return res
 
     def get(self, key: str) -> str | None:
         with self.get_connection() as conn:
-            res = conn.get(self.with_prefix(key))
-            if res is None:
-                return None
-            return res.decode("utf-8")
+            return to_maybe_str(conn.get(self.with_prefix(key)))
 
     def lpush(self, key: str, *values: str) -> int:
         with self.get_connection() as conn:
@@ -307,11 +513,9 @@ class RedisConnection(Runtime[list[str]]):
             count: int | None = None) -> str | list[str] | None:
         with self.get_connection() as conn:
             res = conn.lpop(self.with_prefix(key), count)
-            if res is None:
-                return None
             if count is None:
-                return res.decode("utf-8")
-            return [val.decode("utf-8") for val in res]
+                return to_maybe_str(res)
+            return to_list_str(res)
 
     @overload
     def rpop(
@@ -333,11 +537,9 @@ class RedisConnection(Runtime[list[str]]):
             count: int | None = None) -> str | list[str] | None:
         with self.get_connection() as conn:
             res = conn.rpop(self.with_prefix(key), count)
-            if res is None:
-                return None
             if count is None:
-                return res.decode("utf-8")
-            return [val.decode("utf-8") for val in res]
+                return to_maybe_str(res)
+            return to_list_str(res)
 
     def llen(self, key: str) -> int:
         with self.get_connection() as conn:

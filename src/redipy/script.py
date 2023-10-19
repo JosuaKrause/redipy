@@ -7,6 +7,7 @@ from redipy.symbolic.fun import (  # noqa
     ToJSON,
     ToNum,
     ToStr,
+    TypeStr,
 )
 from redipy.symbolic.rlist import RedisList  # noqa
 from redipy.symbolic.rvar import RedisVar  # noqa

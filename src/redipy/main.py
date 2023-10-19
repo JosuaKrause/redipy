@@ -1,6 +1,9 @@
+import contextlib
+import datetime
+from collections.abc import Iterator
 from typing import Literal, overload
 
-from redipy.api import RedisAPI
+from redipy.api import PipelineAPI, RedisClientAPI, RSetMode, RSM_ALWAYS
 from redipy.backend.backend import ExecFunction
 from redipy.backend.runtime import Runtime
 from redipy.memory.rt import LocalRuntime
@@ -8,7 +11,7 @@ from redipy.redis.conn import RedisConfig, RedisConnection, RedisFactory
 from redipy.symbolic.seq import FnContext
 
 
-class Redis(RedisAPI):
+class Redis(RedisClientAPI):
     def __init__(
             self,
             backend: Literal["memory", "redis", "custom"],
@@ -50,8 +53,68 @@ class Redis(RedisAPI):
     def register_script(self, ctx: FnContext) -> ExecFunction:
         return self._rt.register_script(ctx)
 
-    def set(self, key: str, value: str) -> str:
-        return self._rt.set(key, value)
+    @contextlib.contextmanager
+    def pipeline(self) -> Iterator[PipelineAPI]:
+        with self._rt.pipeline() as pipe:
+            yield pipe
+
+    @overload
+    def set(
+            self,
+            key: str,
+            value: str,
+            *,
+            mode: RSetMode,
+            return_previous: Literal[True],
+            expire_timestamp: datetime.datetime | None,
+            expire_in: float | None,
+            keep_ttl: bool) -> str | None:
+        ...
+
+    @overload
+    def set(
+            self,
+            key: str,
+            value: str,
+            *,
+            mode: RSetMode,
+            return_previous: Literal[False],
+            expire_timestamp: datetime.datetime | None,
+            expire_in: float | None,
+            keep_ttl: bool) -> bool | None:
+        ...
+
+    @overload
+    def set(
+            self,
+            key: str,
+            value: str,
+            *,
+            mode: RSetMode = RSM_ALWAYS,
+            return_previous: bool = False,
+            expire_timestamp: datetime.datetime | None = None,
+            expire_in: float | None = None,
+            keep_ttl: bool = False) -> str | bool | None:
+        ...
+
+    def set(
+            self,
+            key: str,
+            value: str,
+            *,
+            mode: RSetMode = RSM_ALWAYS,
+            return_previous: bool = False,
+            expire_timestamp: datetime.datetime | None = None,
+            expire_in: float | None = None,
+            keep_ttl: bool = False) -> str | bool | None:
+        return self._rt.set(
+            key,
+            value,
+            mode=mode,
+            return_previous=return_previous,
+            expire_timestamp=expire_timestamp,
+            expire_in=expire_in,
+            keep_ttl=keep_ttl)
 
     def get(self, key: str) -> str | None:
         return self._rt.get(key)
