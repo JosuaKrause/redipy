@@ -27,7 +27,14 @@ from redipy.api import (
 )
 from redipy.backend.runtime import Runtime
 from redipy.redis.lua import LuaBackend
-from redipy.util import is_test, now, time_diff
+from redipy.util import (
+    is_test,
+    normalize_values,
+    now,
+    time_diff,
+    to_list_str,
+    to_maybe_str,
+)
 
 
 RedisConfig = TypedDict('RedisConfig', {
@@ -120,30 +127,23 @@ class PipelineConnection(PipelineAPI):
     def __init__(self, pipe: Pipeline, prefix: str) -> None:
         super().__init__()
         self._pipe = pipe
+        self._fixes: list[Callable[[Any], Any]] = []
         self._prefix = prefix
 
     def with_prefix(self, key: str) -> str:
         return f"{self._prefix}{key}"
 
+    def add_fixup(self, fix: Callable[[Any], Any]) -> None:
+        self._fixes.append(fix)
+
     def execute(self) -> list:
-
-        def normalize(res: Any) -> Any:
-            if res is None:
-                return None
-            if isinstance(res, bytes):
-                return res.decode("utf-8")
-            if isinstance(res, list):
-                return [normalize(val) for val in res]
-            if isinstance(res, dict):
-                return {
-                    normalize(key): normalize(value)
-                    for key, value in res.items()
-                }
-            return res
-
+        fixes = self._fixes
+        self._fixes = []
+        res = self._pipe.execute()
+        assert len(res) == len(fixes)
         return [
-            normalize(res)
-            for res in self._pipe.execute()
+            fixup(val)
+            for val, fixup in zip(res, fixes)
         ]
 
     def set(
@@ -169,33 +169,50 @@ class PipelineConnection(PipelineAPI):
             xx=(mode == RSM_EXISTS),
             px=expire,
             keepttl=keep_ttl)
+        if return_previous:
+            self.add_fixup(to_maybe_str)
+        else:
+            self.add_fixup(bool)
 
     def get(self, key: str) -> None:
         self._pipe.get(self.with_prefix(key))
+        self.add_fixup(to_maybe_str)
 
     def lpush(self, key: str, *values: str) -> None:
         self._pipe.lpush(self.with_prefix(key), *values)
+        self.add_fixup(int)
 
     def rpush(self, key: str, *values: str) -> None:
         self._pipe.rpush(self.with_prefix(key), *values)
+        self.add_fixup(int)
 
     def lpop(
             self,
             key: str,
             count: int | None = None) -> None:
         self._pipe.lpop(self.with_prefix(key), count)
+        if count is None:
+            self.add_fixup(to_maybe_str)
+        else:
+            self.add_fixup(to_list_str)
 
     def rpop(
             self,
             key: str,
             count: int | None = None) -> None:
         self._pipe.rpop(self.with_prefix(key), count)
+        if count is None:
+            self.add_fixup(to_maybe_str)
+        else:
+            self.add_fixup(to_list_str)
 
     def llen(self, key: str) -> None:
         self._pipe.llen(self.with_prefix(key))
+        self.add_fixup(int)
 
     def zadd(self, key: str, mapping: dict[str, float]) -> None:
         self._pipe.zadd(self.with_prefix(key), mapping)  # type: ignore
+        self.add_fixup(int)
 
     def zpop_max(
             self,
@@ -203,6 +220,7 @@ class PipelineConnection(PipelineAPI):
             count: int = 1,
             ) -> None:
         self._pipe.zpopmax(self.with_prefix(key), count)
+        self.add_fixup(normalize_values)
 
     def zpop_min(
             self,
@@ -210,9 +228,11 @@ class PipelineConnection(PipelineAPI):
             count: int = 1,
             ) -> None:
         self._pipe.zpopmin(self.with_prefix(key), count)
+        self.add_fixup(normalize_values)
 
     def zcard(self, key: str) -> None:
         self._pipe.zcard(self.with_prefix(key))
+        self.add_fixup(int)
 
 
 class RedisConnection(Runtime[list[str]]):
@@ -463,10 +483,7 @@ class RedisConnection(Runtime[list[str]]):
 
     def get(self, key: str) -> str | None:
         with self.get_connection() as conn:
-            res = conn.get(self.with_prefix(key))
-            if res is None:
-                return None
-            return res.decode("utf-8")
+            return to_maybe_str(conn.get(self.with_prefix(key)))
 
     def lpush(self, key: str, *values: str) -> int:
         with self.get_connection() as conn:
@@ -496,11 +513,9 @@ class RedisConnection(Runtime[list[str]]):
             count: int | None = None) -> str | list[str] | None:
         with self.get_connection() as conn:
             res = conn.lpop(self.with_prefix(key), count)
-            if res is None:
-                return None
             if count is None:
-                return res.decode("utf-8")
-            return [val.decode("utf-8") for val in res]
+                return to_maybe_str(res)
+            return to_list_str(res)
 
     @overload
     def rpop(
@@ -522,11 +537,9 @@ class RedisConnection(Runtime[list[str]]):
             count: int | None = None) -> str | list[str] | None:
         with self.get_connection() as conn:
             res = conn.rpop(self.with_prefix(key), count)
-            if res is None:
-                return None
             if count is None:
-                return res.decode("utf-8")
-            return [val.decode("utf-8") for val in res]
+                return to_maybe_str(res)
+            return to_list_str(res)
 
     def llen(self, key: str) -> int:
         with self.get_connection() as conn:

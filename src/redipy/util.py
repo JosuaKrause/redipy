@@ -471,3 +471,30 @@ def unescape(text: str, subs: dict[str, str]) -> str:
             continue
         res.append(c)
     return "".join(res)
+
+
+def to_maybe_str(res: bytes | None) -> str | None:
+    if res is None:
+        return res
+    return res.decode("utf-8")
+
+
+def to_list_str(res: list[bytes]) -> list[str]:
+    return [val.decode("utf-8") for val in res]
+
+
+def normalize_values(res: Any) -> Any:
+    if res is None:
+        return None
+    if isinstance(res, bytes):
+        return res.decode("utf-8")
+    if isinstance(res, list):
+        return [normalize_values(val) for val in res]
+    if isinstance(res, tuple):
+        return tuple(normalize_values(val) for val in res)
+    if isinstance(res, dict):
+        return {
+            normalize_values(key): normalize_values(value)
+            for key, value in res.items()
+        }
+    return res

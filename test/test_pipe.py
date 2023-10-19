@@ -25,3 +25,26 @@ def test_pipe(rt_lua: bool) -> None:
     assert rt.lpop("foo", 2) == ["c", "d"]
     assert rt.rpop("bar") == "f"
     assert rt.rpush("baz", "i") == 2
+
+    with rt.pipeline() as pipe:
+        assert rt.zadd("zset", {
+            "a": 5,
+            "b": 6,
+            "c": 4,
+        }) == 3
+        pipe.zadd("zset", {
+            "a": 0,
+            "b": -1,
+            "c": 1,
+        })
+        assert rt.zpop_min("zset") == [("c", 4)]
+        pipe.zpop_min("zset")
+        assert rt.zpop_max("zset") == [("b", 6)]
+        pipe.zpop_max("zset")
+        assert rt.zcard("zset") == 1
+        pipe.zcard("zset")
+        zadd_zset, zmin_zset, zmax_zset, zcard_zset = pipe.execute()
+    assert zadd_zset == 2
+    assert zmin_zset == [("b", -1)]
+    assert zmax_zset == [("c", 1)]
+    assert zcard_zset == 1

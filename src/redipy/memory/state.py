@@ -92,6 +92,8 @@ class State:
         if value is None:
             return False
         elem, _ = value
+        # NOTE: we don't remove the value here so the change
+        # can be propagated to the parent
         self.set_value(key, elem, time.monotonic() - 1.0)
         return True
 
