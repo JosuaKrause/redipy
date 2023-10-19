@@ -165,11 +165,17 @@ class LocalRuntime(Runtime[Cmd]):
                 return float(val)
         if name == "tostring":
             self.require_argc(args, 1)
-            return f"{args[0]}"
+            oval = args[0]
+            if isinstance(oval, bool):
+                return f"{oval}".lower()
+            # TODO dict, list
+            if oval is None:
+                return "nil"
+            return f"{oval}"
         if name == "type":
             self.require_argc(args, 1)
             tmap: dict[type, str] = {
-                bool: "bool",
+                bool: "boolean",
                 dict: "table",
                 float: "number",
                 int: "number",

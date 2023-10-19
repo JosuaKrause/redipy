@@ -120,7 +120,7 @@ def test_set_ext_args(rt_lua: bool) -> None:
             local arg_0 = cjson.decode(ARGV[1])  -- in
             local key_0 = (KEYS[1])  -- in
             local var_0 = {lua_snippet}
-            local var_1 = {{}}
+            local var_1 = cjson.decode("[]")
             var_1[#var_1 + 1] = type(var_0)
             var_1[#var_1 + 1] = tostring(var_0)
             return cjson.encode(var_1)
@@ -129,6 +129,7 @@ def test_set_ext_args(rt_lua: bool) -> None:
         def code_hook(code: list[str]) -> None:
             code_str = code_fmt(code)
             assert code_str == lua_fmt(lua_script)
+            print(code_str)
 
         if rt_lua:
             rt.set_code_hook(code_hook)
@@ -138,8 +139,8 @@ def test_set_ext_args(rt_lua: bool) -> None:
         rvar = RedisVar(ctx.add_key("in"))
         res_val = ctx.add_local(expr(rvar, arg_in))
         res_arr = ctx.add_local([])
-        res_arr.set_at(res_arr.len_(), TypeStr(res_val))
-        res_arr.set_at(res_arr.len_(), ToStr(res_val))
+        ctx.add(res_arr.set_at(res_arr.len_(), TypeStr(res_val)))
+        ctx.add(res_arr.set_at(res_arr.len_(), ToStr(res_val)))
         ctx.set_return_value(res_arr)
 
         exec_fun = rt.register_script(ctx)
@@ -151,6 +152,6 @@ def test_set_ext_args(rt_lua: bool) -> None:
 
     fun_check(
         lambda rvar, name: rvar.set(name),
-        "bool",
+        "boolean",
         "true",
-        "(redis.call(\"set\", key_0, arg_0) != nil)")
+        "(redis.call(\"set\", key_0, arg_0) ~= nil)")
