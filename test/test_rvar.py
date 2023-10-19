@@ -126,8 +126,10 @@ def test_set_ext_args(rt_lua: bool) -> None:
             local key_0 = (KEYS[1])  -- in
             local var_0 = {lua_snippet}
             local var_1 = cjson.decode("[]")
-            var_1[#var_1 + 1] = type(var_0)
-            var_1[#var_1 + 1] = tostring(var_0)
+            var_1[#var_1 + 1] = ""
+            var_1[#var_1 + 1] = ""
+            var_1[0 + 1] = type(var_0)
+            var_1[1 + 1] = tostring(var_0)
             return cjson.encode(var_1)
         """
 
@@ -144,8 +146,10 @@ def test_set_ext_args(rt_lua: bool) -> None:
         rvar = RedisVar(ctx.add_key("in"))
         res_val = ctx.add_local(expr(rvar, arg_in))
         res_arr = ctx.add_local([])
-        ctx.add(res_arr.set_at(res_arr.len_(), TypeStr(res_val)))
-        ctx.add(res_arr.set_at(res_arr.len_(), ToStr(res_val)))
+        ctx.add(res_arr.set_at(res_arr.len_(), ""))
+        ctx.add(res_arr.set_at(res_arr.len_(), ""))
+        ctx.add(res_arr.set_at(0, TypeStr(res_val)))
+        ctx.add(res_arr.set_at(1, ToStr(res_val)))
         ctx.set_return_value(res_arr)
 
         exec_fun = rt.register_script(ctx)
