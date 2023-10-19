@@ -46,7 +46,6 @@ r = redipy.Redis(
         "port": 6379,
         "passwd": "",
         "prefix": "",
-        "path": ".",
     })
 ```
 
@@ -134,7 +133,7 @@ r.lpop("big", 4)  # ["3", "4"]
 The current limitations of `redipy` are:
 
 - Not all Redis commands are supported yet: This will eventually be resolved.
-- The API differs slightly: Most notably stoerd values are always strings
+- The API differs slightly: Most notably stored values are always strings
   (i.e., the bytes returned by redis are decoded as utf-8).
 - The semantic of redis functions inside scripts has been altered to feel more
   natural coming from python: Redis functions inside lua scripts often differ
