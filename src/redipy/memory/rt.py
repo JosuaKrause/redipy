@@ -40,12 +40,20 @@ class LocalRuntime(Runtime[Cmd]):
 
     @contextlib.contextmanager
     def pipeline(self) -> Iterator[PipelineAPI]:
-        with self.lock():
-            pipe = LocalPipeline(self._sm.get_state())
-            yield pipe
-            if pipe.has_queue():
-                raise ValueError(f"unexecuted commands in pipeline {pipe}")
-            self._sm.get_state().apply(pipe.get_state())
+
+        def exec_call(execute: Callable[[], list]) -> list:
+            with self.lock():
+                res = execute()
+                state = pipe.get_state()
+                self._sm.get_state().apply(state)
+                state.reset()
+                return res
+
+        pipe = LocalPipeline(
+            self._sm.get_state(), exec_call)
+        yield pipe
+        if pipe.has_queue():
+            raise ValueError(f"unexecuted commands in pipeline {pipe}")
 
     @staticmethod
     def require_argc(
@@ -342,9 +350,13 @@ class LocalRuntime(Runtime[Cmd]):
 
 
 class LocalPipeline(PipelineAPI):
-    def __init__(self, parent: State) -> None:
+    def __init__(
+            self,
+            parent: State,
+            exec_call: Callable[[Callable[[], list]], list]) -> None:
         super().__init__()
         self._sm = Machine(State(parent))
+        self._exec_call = exec_call
         self._cmd_queue: list[Callable[[], Any]] = []
 
     def get_state(self) -> State:
@@ -356,7 +368,11 @@ class LocalPipeline(PipelineAPI):
     def execute(self) -> list:
         cmds = self._cmd_queue
         self._cmd_queue = []
-        return [cmd() for cmd in cmds]
+
+        def executor() -> list:
+            return [cmd() for cmd in cmds]
+
+        return self._exec_call(executor)
 
     def add_cmd(self, cb: Callable[[], Any]) -> None:
         self._cmd_queue.append(cb)

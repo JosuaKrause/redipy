@@ -111,11 +111,13 @@ class RedisWrapper:
 
     @contextlib.contextmanager
     def get_connection(self) -> Iterator[Redis]:
+        success = False
         try:
             yield self._get_redis_cached_conn()
-        except Exception:
-            self.reset()
-            raise
+            success = True
+        finally:
+            if not success:
+                self.reset()
 
     def reset(self) -> None:
         with self._lock:

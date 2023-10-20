@@ -412,6 +412,7 @@ class LocalBackend(
                 keys: dict[str, str],
                 args: dict[str, JSONType]) -> JSONType:
             with runtime.lock():
+                success = False
                 try:
                     state: ExecState = (
                         [],  # keyv
@@ -431,9 +432,10 @@ class LocalBackend(
                         # NOTE: we turn empty lists or objects into None
                         # to have a consistent behavior with lua
                         res = None
-                    return res
-                except Exception as e:
-                    print(f"state: {state}")
-                    raise e
+                    success = True
+                finally:
+                    if not success:
+                        print(f"state: {state}")
+                return res
 
         return exec_code

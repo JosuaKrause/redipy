@@ -39,6 +39,12 @@ class State:
         self._zscores.update(other.raw_zscores())
         self._clean_vals()
 
+    def reset(self) -> None:
+        self._vals.clear()
+        self._queues.clear()
+        self._zorder.clear()
+        self._zscores.clear()
+
     def _is_alive(self, value: tuple[str, float | None]) -> bool:
         _, expire = value
         if expire is None:
