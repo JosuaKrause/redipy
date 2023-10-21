@@ -188,6 +188,9 @@ class Redis(RedisClientAPI):
     def zcard(self, key: str) -> int:
         return self._rt.zcard(key)
 
+    def exists(self, *keys: str) -> int:
+        return self._rt.exists(*keys)
+
     def delete(self, *keys: str) -> int:
         return self._rt.delete(*keys)
 
