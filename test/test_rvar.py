@@ -108,6 +108,8 @@ def test_set_ext_args(rt_lua: bool) -> None:
     rt = get_setup(
         "test_set_ext_args", rt_lua, lua_script=None, no_compile_hook=True)
 
+    # FIXME: test expire_timestamp
+
     def fun_check(
             key: str,
             name: str,

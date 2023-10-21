@@ -58,7 +58,7 @@ class RGetFn(LocalRedisFunction):
     @staticmethod
     def argc() -> ArgcSpec:
         return {
-             "count": 0,
+            "count": 0,
         }
 
     @staticmethod
