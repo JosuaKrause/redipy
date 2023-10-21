@@ -337,7 +337,7 @@ class RHMGet(LocalRedisFunction):
     def argc() -> ArgcSpec:
         return {
             "count": 1,
-            "at_least": True
+            "at_least": True,
         }
 
     @staticmethod

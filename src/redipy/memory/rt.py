@@ -255,6 +255,50 @@ class LocalRuntime(Runtime[Cmd]):
         with self.lock():
             return self._sm.zcard(key)
 
+    def incrby(self, key: str, inc: float | int) -> float:
+        with self.lock():
+            return self._sm.incrby(key, inc)
+
+    def exists(self, *keys: str) -> int:
+        with self.lock():
+            return self._sm.exists(*keys)
+
+    def delete(self, *keys: str) -> int:
+        with self.lock():
+            return self._sm.delete(*keys)
+
+    def hset(self, key: str, mapping: dict[str, str]) -> int:
+        with self.lock():
+            return self.hset(key, mapping)
+
+    def hdel(self, key: str, *fields: str) -> int:
+        with self.lock():
+            return self.hdel(key, *fields)
+
+    def hget(self, key: str, field: str) -> str | None:
+        with self.lock():
+            return self.hget(key, field)
+
+    def hmget(self, key: str, *fields: str) -> dict[str, str | None]:
+        with self.lock():
+            return self.hmget(key, *fields)
+
+    def hincrby(self, key: str, field: str, inc: float | int) -> float:
+        with self.lock():
+            return self.hincrby(key, field, inc)
+
+    def hkeys(self, key: str) -> list[str]:
+        with self.lock():
+            return self.hkeys(key)
+
+    def hvals(self, key: str) -> list[str]:
+        with self.lock():
+            return self.hvals(key)
+
+    def hgetall(self, key: str) -> dict[str, str]:
+        with self.lock():
+            return self.hgetall(key)
+
     def __str__(self) -> str:
         return f"{self.__class__.__name__}[{self._sm.get_state()}]"
 
@@ -356,3 +400,36 @@ class LocalPipeline(PipelineAPI):
 
     def zcard(self, key: str) -> None:
         self.add_cmd(lambda: self._sm.zcard(key))
+
+    def incrby(self, key: str, inc: float | int) -> None:
+        self.add_cmd(lambda: self._sm.incrby(key, inc))
+
+    def exists(self, *keys: str) -> None:
+        self.add_cmd(lambda: self._sm.exists(*keys))
+
+    def delete(self, *keys: str) -> None:
+        self.add_cmd(lambda: self._sm.delete(*keys))
+
+    def hset(self, key: str, mapping: dict[str, str]) -> None:
+        self.add_cmd(lambda: self.hset(key, mapping))
+
+    def hdel(self, key: str, *fields: str) -> None:
+        self.add_cmd(lambda: self.hdel(key, *fields))
+
+    def hget(self, key: str, field: str) -> None:
+        self.add_cmd(lambda: self.hget(key, field))
+
+    def hmget(self, key: str, *fields: str) -> None:
+        self.add_cmd(lambda: self.hmget(key, *fields))
+
+    def hincrby(self, key: str, field: str, inc: float | int) -> None:
+        self.add_cmd(lambda: self.hincrby(key, field, inc))
+
+    def hkeys(self, key: str) -> None:
+        self.add_cmd(lambda: self.hkeys(key))
+
+    def hvals(self, key: str) -> None:
+        self.add_cmd(lambda: self.hvals(key))
+
+    def hgetall(self, key: str) -> None:
+        self.add_cmd(lambda: self.hgetall(key))
