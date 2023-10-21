@@ -6,11 +6,12 @@ from test.util import get_setup, get_test_config
 import pytest
 
 from redipy.api import RSM_EXISTS, RSM_MISSING
+from redipy.graph.expr import JSONType
 from redipy.memory.local import LocalBackend
 from redipy.memory.rt import LocalRuntime
 from redipy.redis.conn import RedisConnection
 from redipy.redis.lua import LuaBackend
-from redipy.symbolic.expr import Expr, JSONType
+from redipy.symbolic.expr import Expr
 from redipy.symbolic.fun import ToNum, ToStr, TypeStr
 from redipy.symbolic.rvar import RedisVar
 from redipy.symbolic.seq import FnContext

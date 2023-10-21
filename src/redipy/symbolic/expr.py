@@ -62,7 +62,6 @@ class Constant(Expr):
         }
 
 
-JSONType = str | int | float | list | dict | None
 LiteralType = str | int | float | bool | list | None
 MixedType = LiteralType | Expr
 

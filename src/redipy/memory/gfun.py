@@ -1,8 +1,8 @@
 import json
 from typing import cast
 
+from redipy.graph.expr import JSONType
 from redipy.plugin import ArgcSpec, LocalGeneralFunction
-from redipy.symbolic.expr import JSONType
 
 
 class GStringFindFn(LocalGeneralFunction):

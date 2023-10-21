@@ -4,9 +4,8 @@ from typing import Any, cast, Literal, TYPE_CHECKING, TypedDict
 
 from redipy.backend.backend import Backend, ExecFunction
 from redipy.graph.cmd import CommandObj
-from redipy.graph.expr import BinOps, ExprObj
+from redipy.graph.expr import BinOps, ExprObj, JSONType
 from redipy.graph.seq import SequenceObj
-from redipy.symbolic.expr import JSONType
 from redipy.util import json_compact
 
 

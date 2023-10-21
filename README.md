@@ -182,7 +182,13 @@ via `redipy.script.RedisFn` or `redipy.script.CallFn` respectively.
 
 Note, that `redipy.script.RedisFn` and `redipy.script.CallFn` can always be
 used in redis backend scripts. However, calling functions this way will have
-the native lua behavior which can lead to surprising results.
+the native lua behavior which can lead to surprising results. To patch those
+up as well you can use `redipy.redis.lua.LuaBackend.add_redis_patch_plugin`,
+`redipy.redis.lua.LuaBackend.add_general_patch_plugin`, and
+`redipy.redis.lua.LuaBackend.add_helper_function_plugin` to add the subclasses
+of `redipy.plugin.LuaRedisPatch`, `redipy.plugin.LuaRedisPatch`, and
+`redipy.plugin.HelperFunction` respectively. Those functions then can also be
+used with the `redipy.script.RedisFn` and `redipy.script.CallFn` commands.
 
 Adding functions as described above is discouraged as it may lead to
 inconsistent support of different backends and inconsistent behavior across
@@ -203,15 +209,17 @@ follow these steps:
   helper functions for this in `redipy.util`).
 3. Add tests to `test/test_sanity.py` to determine the function's behavior in
   lua (especially its edge cases).
-4. If the lua behavior needs to be changed to provide a better feel you can
-  monkeypatch the function call in `redipy.redis.lua.LuaFnHook.adjust_redis_fn`
-  by either directly changing the returned expr for the execution graph or using
-  a lua helper function via adding a class to `redipy.redis.helpers`.
+4. If the lua behavior needs to be changed to provide a better feel you can add
+  a monkeypatch for the function call by either creating a class in
+  `redipy.redis.rpatch` to directly change the returned expr for the execution
+  graph or using a lua helper function via adding a class to
+  `redipy.redis.helpers` (you need to use a patch to use the helper in the
+  right location).
 5. Next, add and implement the functionality in
   `redipy.memory.state.Machine` and add the appropriate redirects in
   `redipy.memory.rt.LocalRuntime` and `redipy.memory.rt.LocalPipeline`.
 6. To make the new function accessible in scripts from the memory backend add
-  a class in `redipy.memory.rfun.py`.
+  a class in `redipy.memory.rfun`.
 7. Add the approriate class or method in the right `redipy.symbolic.r...py`
   file. If it is a new class / file add an import to `redipy.script`.
 8. Add a new test to verify the new function works inside a script for all

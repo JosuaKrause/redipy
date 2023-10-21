@@ -1,9 +1,9 @@
 from typing import cast
 
 from redipy.api import RSetMode, RSM_ALWAYS, RSM_EXISTS, RSM_MISSING
+from redipy.graph.expr import JSONType
 from redipy.memory.state import Machine
 from redipy.plugin import ArgcSpec, LocalRedisFunction
-from redipy.symbolic.expr import JSONType
 
 
 class RSetFn(LocalRedisFunction):

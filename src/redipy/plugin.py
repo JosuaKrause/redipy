@@ -1,9 +1,8 @@
 import importlib
 from typing import NotRequired, TypedDict, TypeVar
 
-from redipy.graph.expr import ExprObj
+from redipy.graph.expr import CallObj, ExprObj, JSONType
 from redipy.memory.state import Machine
-from redipy.symbolic.expr import JSONType
 
 
 ArgcSpec = TypedDict('ArgcSpec', {
@@ -37,23 +36,36 @@ class LocalGeneralFunction(GeneralFunction):
         raise NotImplementedError()
 
 
-class LuaRedisFunction(GeneralFunction):
+HELPER_PKG = "redipy"
+
+
+class LuaPatch:
+    def __init__(self, name: str) -> None:
+        self._name = name
+
+    def name(self) -> str:
+        return self._name
+
     @staticmethod
-    def call(args: list[JSONType]) -> ExprObj:
+    def names() -> set[str]:
         raise NotImplementedError()
 
-    @staticmethod
-    def patch(expr: ExprObj, *, is_expr_stmt: bool) -> ExprObj:
+    def helper_pkg(self) -> str:
+        return HELPER_PKG
+
+
+class LuaRedisPatch(LuaPatch):
+    def patch(
+            self,
+            expr: CallObj,
+            args: list[ExprObj],
+            *,
+            is_expr_stmt: bool) -> ExprObj:
         raise NotImplementedError()
 
 
-class LuaGeneralFunction(GeneralFunction):
-    @staticmethod
-    def call(args: list[JSONType]) -> ExprObj:
-        raise NotImplementedError()
-
-    @staticmethod
-    def patch(expr: ExprObj, *, is_expr_stmt: bool) -> ExprObj:
+class LuaGeneralPatch(LuaPatch):
+    def patch(self, expr: CallObj, *, is_expr_stmt: bool) -> ExprObj:
         raise NotImplementedError()
 
 
@@ -88,8 +100,38 @@ def add_plugin(
     for rfun in candidates:
         rname = rfun.name()
         if rname in disallowed:
-            raise RuntimeError(f"redis function name {rname} is not allowed")
+            raise RuntimeError(
+                f"function name {rname} is not allowed")
         if rname in target:
             raise RuntimeError(
-                f"duplicate redis function definition: {rname}")
+                f"duplicate function definition: {rname}")
         target[rname] = rfun()
+
+
+U = TypeVar('U', bound=LuaPatch)
+
+
+def add_patch_plugin(
+        module: str,
+        target: dict[str, U],
+        clazz: type[U],
+        disallowed: set[str] | None = None) -> None:
+    if disallowed is None:
+        disallowed = set()
+    mod = importlib.import_module(module)
+    candidates = [
+        cls
+        for cls in mod.__dict__.values()
+        if isinstance(cls, type)
+        and cls.__module__ == module
+        and issubclass(cls, clazz)
+    ]
+    for pfun in candidates:
+        for pname in pfun.names():
+            if pname in disallowed:
+                raise RuntimeError(
+                    f"patch name {pname} is not allowed")
+            if pname in target:
+                raise RuntimeError(
+                    f"duplicate patch definition: {pname}")
+            target[pname] = pfun(pname)

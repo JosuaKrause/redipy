@@ -2,6 +2,7 @@ from typing import Literal, TypedDict
 
 
 LiteralValueType = str | int | float | bool | list | None
+JSONType = str | int | float | list | dict | None
 
 
 ValueType = Literal["str", "int", "float", "bool", "list", "none"]
@@ -92,3 +93,49 @@ ExprObj = (
     | ArrayLengthObj
     | CallObj
 )
+
+
+def get_literal(obj: ExprObj, vtype: ValueType | None = None) -> JSONType:
+    if obj["kind"] != "val":
+        return None
+    if vtype is not None and obj["type"] != vtype:
+        return None
+    return obj["value"]
+
+
+def is_none_literal(obj: ExprObj) -> bool:
+    if obj["kind"] != "val":
+        return False
+    if obj["type"] != "none":
+        return False
+    return True
+
+
+def find_literal(
+        objs: list[ExprObj],
+        value: JSONType,
+        *,
+        vtype: ValueType | None = None,
+        no_case: bool = False) -> tuple[int, JSONType] | None:
+    if vtype != "none" and value is not None:
+
+        def value_check(obj: ExprObj) -> tuple[bool, JSONType]:
+            res = get_literal(obj, vtype)
+            if no_case and vtype == "str":
+                return (f"{res}".upper() == f"{value}".upper(), res)
+            return (res == value, res)
+
+        check = value_check
+    else:
+
+        def none_check(obj: ExprObj) -> tuple[bool, JSONType]:
+            is_none = is_none_literal(obj)
+            return (is_none, None)
+
+        check = none_check
+
+    for ix, obj in enumerate(objs):
+        is_hit, val = check(obj)
+        if is_hit:
+            return (ix, val)
+    return None

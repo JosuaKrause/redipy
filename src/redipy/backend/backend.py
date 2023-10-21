@@ -1,9 +1,8 @@
 from typing import Generic, Protocol, TYPE_CHECKING, TypeVar
 
 from redipy.graph.cmd import CommandObj
-from redipy.graph.expr import ExprObj
+from redipy.graph.expr import ExprObj, JSONType
 from redipy.graph.seq import SequenceObj
-from redipy.symbolic.expr import JSONType
 
 
 if TYPE_CHECKING:

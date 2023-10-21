@@ -5,10 +5,10 @@ from typing import Any, Literal, overload, TypeVar
 
 from redipy.api import PipelineAPI, RSetMode, RSM_ALWAYS
 from redipy.backend.runtime import Runtime
+from redipy.graph.expr import JSONType
 from redipy.memory.local import Cmd, LocalBackend
 from redipy.memory.state import Machine, State
 from redipy.plugin import add_plugin, LocalGeneralFunction, LocalRedisFunction
-from redipy.symbolic.expr import JSONType
 
 
 T = TypeVar('T')
