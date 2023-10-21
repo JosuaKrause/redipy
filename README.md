@@ -206,7 +206,7 @@ follow these steps:
 4. If the lua behavior needs to be changed to provide a better feel you can
   monkeypatch the function call in `redipy.redis.lua.LuaFnHook.adjust_redis_fn`
   by either directly changing the returned expr for the execution graph or using
-  a lua helper function via `redipy.redis.lua.HELPER_FNS`.
+  a lua helper function via adding a class to `redipy.redis.helpers`.
 5. Next, add and implement the functionality in
   `redipy.memory.state.Machine` and add the appropriate redirects in
   `redipy.memory.rt.LocalRuntime` and `redipy.memory.rt.LocalPipeline`.

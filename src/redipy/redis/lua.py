@@ -6,6 +6,7 @@ from redipy.backend.backend import Backend, ExecFunction
 from redipy.graph.cmd import CommandObj
 from redipy.graph.expr import BinOps, CallObj, ExprObj, ValueType
 from redipy.graph.seq import SequenceObj
+from redipy.plugin import add_plugin, HelperFunction
 from redipy.symbolic.expr import JSONType
 from redipy.util import code_fmt, indent, json_compact, lua_fmt
 
@@ -17,37 +18,10 @@ if TYPE_CHECKING:
 HELPER_PKG = "redipy"
 
 
-HELPER_FNS: dict[str, tuple[str, str]] = {
-    "pairlist": (
-        "arr",
-        lua_fmt(r"""
-            local res = {}
-            local key = nil
-            for ix, value in ipairs(arr) do
-                if ix % 2 == 1 then
-                    key = value
-                else
-                    res[#res + 1] = {key, value}
-                end
-            end
-            return res
-        """),
-    ),
-    "nil_or_index": (
-        "val",
-        lua_fmt(r"""
-            if val ~= nil then
-                val = val - 1
-            end
-            return val
-        """),
-    ),
-}
-
-
 class LuaFnHook:
-    def __init__(self) -> None:
+    def __init__(self, helper_fns: dict[str, HelperFunction]) -> None:
         self._helpers: set[str] = set()
+        self._helper_fns = helper_fns
         self._is_expr_stmt = False
 
     def set_expr_stmt(self, is_expr_stmt: bool) -> None:
@@ -61,9 +35,11 @@ class LuaFnHook:
         prefix = f"{HELPER_PKG}."
         for helper in sorted(self._helpers):
             short_name = helper.removeprefix(prefix)
-            args, body = HELPER_FNS[short_name]
-            res.append(f"function {helper} ({args})")
-            res.extend(indent(body, 2))
+            help_obj = self._helper_fns.get(short_name)
+            if help_obj is None:
+                raise RuntimeError(f"unknown helper {short_name}")
+            res.append(f"function {helper} ({help_obj.args()})")
+            res.extend(indent(lua_fmt(help_obj.body()), 2))
             res.append("end")
         return res
 
@@ -197,8 +173,16 @@ HOOK_END = "]]"
 
 class LuaBackend(
         Backend[list[str], str, LuaFnHook, LuaFnHook, 'RedisConnection']):
+    def __init__(self) -> None:
+        super().__init__()
+        self._helper_fns: dict[str, HelperFunction] = {}
+        self.add_helper_function_plugin("redpy.redis.helpers")
+
+    def add_helper_function_plugin(self, module: str) -> None:
+        add_plugin(module, self._helper_fns, HelperFunction)
+
     def create_command_context(self) -> LuaFnHook:
-        return LuaFnHook()
+        return LuaFnHook(self._helper_fns)
 
     def finish(self, ctx: LuaFnHook, script: list[str]) -> list[str]:
         res = []

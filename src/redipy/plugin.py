@@ -13,11 +13,13 @@ ArgcSpec = TypedDict('ArgcSpec', {
 })
 
 
-class GeneralFunction:
+class NamedFunction:  # pylint: disable=too-few-public-methods
     @staticmethod
     def name() -> str:
         raise NotImplementedError()
 
+
+class GeneralFunction(NamedFunction):
     @staticmethod
     def argc() -> ArgcSpec:
         raise NotImplementedError()
@@ -55,7 +57,17 @@ class LuaGeneralFunction(GeneralFunction):
         raise NotImplementedError()
 
 
-T = TypeVar('T', bound=GeneralFunction)
+class HelperFunction(NamedFunction):
+    @staticmethod
+    def args() -> str:
+        raise NotImplementedError()
+
+    @staticmethod
+    def body() -> str:
+        raise NotImplementedError()
+
+
+T = TypeVar('T', bound=NamedFunction)
 
 
 def add_plugin(
