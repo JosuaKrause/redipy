@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from test.util import get_test_config
 
 import pytest
@@ -10,16 +11,43 @@ from redipy.symbolic.expr import Strs
 from redipy.symbolic.rhash import RedisHash
 from redipy.symbolic.rvar import RedisVar
 from redipy.symbolic.seq import FnContext
+from redipy.util import code_fmt, lua_fmt
+
+
+LUA_SET_VALUE = """
+"""
+
+
+LUA_GET_VALUE = """
+"""
+
+
+LUA_POP_FRAME = """
+"""
+
+
+LUA_GET_CASCADING = """
+"""
 
 
 class RStack:
-    def __init__(self, rt: RedisClientAPI, base: str) -> None:
+    def __init__(
+            self,
+            rt: RedisClientAPI,
+            base: str,
+            set_lua_script: Callable[[str | None], None]) -> None:
         self._rt = rt
         self._base = base
+
+        set_lua_script(LUA_SET_VALUE)
         self._set_value = self._set_value_script()
+        set_lua_script(LUA_GET_VALUE)
         self._get_value = self._get_value_script()
+        set_lua_script(LUA_POP_FRAME)
         self._pop_frame = self._pop_frame_script()
+        set_lua_script(LUA_GET_CASCADING)
         self._get_cascading = self._get_cascading_script()
+        set_lua_script(None)
 
     def key(self, name: str) -> str:
         return f"{self._base}:{name}"
@@ -59,6 +87,7 @@ class RStack:
         rframe.hset({
             field: value,
         })
+        ctx.set_return_value(None)
         return self._rt.register_script(ctx)
 
     def _get_value_script(self) -> ExecFunction:
@@ -75,6 +104,7 @@ class RStack:
         rframe = RedisHash(Strs(ctx.add_key("frame"), ":", rsize.get()))
         rsize.incrby(-1)
         rframe.delete()
+        ctx.set_return_value(None)
         return self._rt.register_script(ctx)
 
     def _get_cascading_script(self) -> ExecFunction:
@@ -98,11 +128,28 @@ class RStack:
 
 @pytest.mark.parametrize("rt_lua", [False, True])
 def test_stack(rt_lua: bool) -> None:
+    lua_script = None
+
+    def set_lua_script(lscript: str | None) -> None:
+        nonlocal lua_script
+
+        lua_script = lscript
+
+    def code_hook(code: list[str]) -> None:
+        nonlocal lua_script
+
+        if lua_script is None:
+            return
+        code_str = code_fmt(code)
+        lscript = lua_fmt(lua_script)
+        assert code_str == lscript
+
     redis = Redis(
         "redis" if rt_lua else "memory",
-        cfg=get_test_config() if rt_lua else None)
-    stack_foo = RStack(redis, "foo")
-    stack_bar = RStack(redis, "bar")
+        cfg=get_test_config() if rt_lua else None,
+        lua_code_hook=code_hook)
+    stack_foo = RStack(redis, "foo", set_lua_script)
+    stack_bar = RStack(redis, "bar", set_lua_script)
 
     stack_foo.init()
     stack_bar.init()

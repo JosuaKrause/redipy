@@ -66,6 +66,22 @@ class RGetFn(LocalRedisFunction):
         return sm.get(key)
 
 
+class RIncrBy(LocalRedisFunction):
+    @staticmethod
+    def name() -> str:
+        return "incrby"
+
+    @staticmethod
+    def argc() -> ArgcSpec:
+        return {
+            "count": 1,
+        }
+
+    @staticmethod
+    def call(sm: Machine, key: str, args: list[JSONType]) -> JSONType:
+        return sm.incrby(key, cast(float, args[0]))
+
+
 class RLPushFn(LocalRedisFunction):
     @staticmethod
     def name() -> str:
@@ -218,3 +234,176 @@ class RZCard(LocalRedisFunction):
     @staticmethod
     def call(sm: Machine, key: str, args: list[JSONType]) -> JSONType:
         return sm.zcard(key)
+
+
+class RExists(LocalRedisFunction):
+    @staticmethod
+    def name() -> str:
+        return "exists"
+
+    @staticmethod
+    def argc() -> ArgcSpec:
+        return {
+            "count": 0,
+        }
+
+    @staticmethod
+    def call(sm: Machine, key: str, args: list[JSONType]) -> JSONType:
+        return sm.exists(key)
+
+
+class RDel(LocalRedisFunction):
+    @staticmethod
+    def name() -> str:
+        return "del"
+
+    @staticmethod
+    def argc() -> ArgcSpec:
+        return {
+            "count": 0,
+        }
+
+    @staticmethod
+    def call(sm: Machine, key: str, args: list[JSONType]) -> JSONType:
+        return sm.delete(key)
+
+
+class RHSet(LocalRedisFunction):
+    @staticmethod
+    def name() -> str:
+        return "hset"
+
+    @staticmethod
+    def argc() -> ArgcSpec:
+        return {
+            "count": 2,
+            "at_least": True,
+        }
+
+    @staticmethod
+    def call(sm: Machine, key: str, args: list[JSONType]) -> JSONType:
+        mapping = {}
+        ix = 0
+        while ix < len(args):
+            key = f"{args[ix]}"
+            ix += 1
+            if ix >= len(args):
+                raise ValueError(f"unbalanced key value pairs: {args}")
+            value = f"{args[ix]}"
+            ix += 1
+            mapping[key] = value
+        return sm.hset(key, mapping)
+
+
+class RHDel(LocalRedisFunction):
+    @staticmethod
+    def name() -> str:
+        return "hdel"
+
+    @staticmethod
+    def argc() -> ArgcSpec:
+        return {
+            "count": 1,
+            "at_least": True,
+        }
+
+    @staticmethod
+    def call(sm: Machine, key: str, args: list[JSONType]) -> JSONType:
+        return sm.hdel(key, *(f"{arg}" for arg in args))
+
+
+class RHGet(LocalRedisFunction):
+    @staticmethod
+    def name() -> str:
+        return "hget"
+
+    @staticmethod
+    def argc() -> ArgcSpec:
+        return {
+            "count": 1,
+        }
+
+    @staticmethod
+    def call(sm: Machine, key: str, args: list[JSONType]) -> JSONType:
+        return sm.hget(key, f"{args[0]}")
+
+
+class RHMGet(LocalRedisFunction):
+    @staticmethod
+    def name() -> str:
+        return "hmget"
+
+    @staticmethod
+    def argc() -> ArgcSpec:
+        return {
+            "count": 1,
+            "at_least": True
+        }
+
+    @staticmethod
+    def call(sm: Machine, key: str, args: list[JSONType]) -> JSONType:
+        return sm.hmget(key, *(f"{arg}" for arg in args))
+
+
+class RHIncrBy(LocalRedisFunction):
+    @staticmethod
+    def name() -> str:
+        return "hincrby"
+
+    @staticmethod
+    def argc() -> ArgcSpec:
+        return {
+            "count": 2,
+        }
+
+    @staticmethod
+    def call(sm: Machine, key: str, args: list[JSONType]) -> JSONType:
+        return sm.hincrby(key, f"{args[0]}", cast(float, args[1]))
+
+
+class RHKeys(LocalRedisFunction):
+    @staticmethod
+    def name() -> str:
+        return "hkeys"
+
+    @staticmethod
+    def argc() -> ArgcSpec:
+        return {
+            "count": 0,
+        }
+
+    @staticmethod
+    def call(sm: Machine, key: str, args: list[JSONType]) -> JSONType:
+        return sm.hkeys(key)
+
+
+class RHVals(LocalRedisFunction):
+    @staticmethod
+    def name() -> str:
+        return "hvals"
+
+    @staticmethod
+    def argc() -> ArgcSpec:
+        return {
+            "count": 0,
+        }
+
+    @staticmethod
+    def call(sm: Machine, key: str, args: list[JSONType]) -> JSONType:
+        return sm.hvals(key)
+
+
+class RHGetAll(LocalRedisFunction):
+    @staticmethod
+    def name() -> str:
+        return "hgetall"
+
+    @staticmethod
+    def argc() -> ArgcSpec:
+        return {
+            "count": 0,
+        }
+
+    @staticmethod
+    def call(sm: Machine, key: str, args: list[JSONType]) -> JSONType:
+        return sm.hgetall(key)

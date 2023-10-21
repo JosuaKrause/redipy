@@ -1,6 +1,6 @@
 import contextlib
 import datetime
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from typing import Literal, overload
 
 from redipy.api import PipelineAPI, RedisClientAPI, RSetMode, RSM_ALWAYS
@@ -26,6 +26,7 @@ class Redis(RedisClientAPI):
             is_caching_enabled: bool = True,
             redis_factory: RedisFactory | None = None,
             rt: Runtime | None = None,
+            lua_code_hook: Callable[[list[str]], None] | None = None,
             ) -> None:
         if backend == "custom":
             if rt is None:
@@ -41,11 +42,14 @@ class Redis(RedisClientAPI):
                     "prefix": "" if prefix is None else prefix,
                     "path": "." if path is None else path,
                 }
-            rt = RedisConnection(
+            rrt = RedisConnection(
                 "" if redis_module is None else redis_module,
                 cfg=cfg,
                 redis_factory=redis_factory,
                 is_caching_enabled=is_caching_enabled)
+            if lua_code_hook is not None:
+                rrt.set_code_hook(lua_code_hook)
+            rt = rrt
         else:
             raise ValueError(f"unknown backend {backend}")
         self._rt: Runtime = rt

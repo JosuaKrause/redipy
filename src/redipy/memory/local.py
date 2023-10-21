@@ -437,7 +437,11 @@ class LocalBackend(
                     )
                     code(state)
                     # print(f"state: {state}")
-                    res = state[state_return].pop()
+                    try:
+                        res = state[state_return].pop()
+                    except IndexError as e:
+                        msg = "did you forget to call 'set_return_value'?"
+                        raise ValueError(msg) from e
                     if res in ({}, []):
                         # NOTE: we turn empty lists or objects into None
                         # to have a consistent behavior with lua

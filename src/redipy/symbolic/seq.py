@@ -102,6 +102,12 @@ class FnContext(Sequence):
         return loop
 
     def set_return_value(self, value: MixedType) -> None:
+        if value is None:
+            self.add(CmdHelper(lambda: {
+                "kind": "return",
+                "value": None,
+            }))
+            return
         expr = lit_helper(value)
         self.add(CmdHelper(lambda: {
             "kind": "return",

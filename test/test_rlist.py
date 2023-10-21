@@ -34,7 +34,6 @@ end
 if (redis.call("llen", key_1) > redis.call("llen", key_2)) then
     redis.call("lpush", key_2, (redis.call("rpop", key_1) or nil))
 end
-return cjson.encode(nil)
 """)
 
 
