@@ -176,7 +176,7 @@ class LuaBackend(
     def __init__(self) -> None:
         super().__init__()
         self._helper_fns: dict[str, HelperFunction] = {}
-        self.add_helper_function_plugin("redpy.redis.helpers")
+        self.add_helper_function_plugin("redipy.redis.helpers")
 
     def add_helper_function_plugin(self, module: str) -> None:
         add_plugin(module, self._helper_fns, HelperFunction)
