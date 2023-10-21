@@ -1,9 +1,11 @@
 # pylint: disable=unused-import
 from redipy.symbolic.fun import (  # noqa
+    CallFn,
     FindFn,
     FromJSON,
     LogFn,
     LogLevel,
+    RedisFn,
     ToJSON,
     ToNum,
     ToStr,
