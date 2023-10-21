@@ -188,6 +188,9 @@ class Redis(RedisClientAPI):
     def zcard(self, key: str) -> int:
         return self._rt.zcard(key)
 
+    def incrby(self, key: str, inc: float | int) -> float:
+        return self._rt.incrby(key, inc)
+
     def exists(self, *keys: str) -> int:
         return self._rt.exists(*keys)
 
@@ -206,7 +209,7 @@ class Redis(RedisClientAPI):
     def hmget(self, key: str, *fields: str) -> dict[str, str | None]:
         return self._rt.hmget(key, *fields)
 
-    def hincrby(self, key: str, field: str, inc: float) -> float:
+    def hincrby(self, key: str, field: str, inc: float | int) -> float:
         return self._rt.hincrby(key, field, inc)
 
     def hkeys(self, key: str) -> list[str]:

@@ -1,35 +1,32 @@
 from redipy.symbolic.expr import Expr, MixedType
-from redipy.symbolic.fun import KeyVariable, RedisFn
+from redipy.symbolic.fun import RedisObj
 
 
-class RedisHash:
-    def __init__(self, key: KeyVariable) -> None:
-        self._key = key
-
+class RedisHash(RedisObj):
     def hset(self, mapping: dict[MixedType, MixedType]) -> Expr:
         args = []
         for key, value in mapping.items():
             args.append(key)
             args.append(value)
-        return RedisFn("hset", self._key, *args)
+        return self.redis_fn("hset", self.key(), *args)
 
     def hdel(self, *fields: MixedType) -> Expr:
-        return RedisFn("hdel", self._key, *fields)
+        return self.redis_fn("hdel", *fields)
 
-    def hget(self, field: str) -> Expr:
-        return RedisFn("hget", self._key, field)
+    def hget(self, field: MixedType) -> Expr:
+        return self.redis_fn("hget", field)
 
     def hmget(self, *fields: MixedType) -> Expr:
-        return RedisFn("hmget", self._key, *fields)
+        return self.redis_fn("hmget", *fields)
 
     def hincrby(self, field: MixedType, inc: MixedType) -> Expr:
-        return RedisFn("hincrby", self._key, field, inc)
+        return self.redis_fn("hincrby", field, inc)
 
     def hkeys(self) -> Expr:
-        return RedisFn("hkeys", self._key)
+        return self.redis_fn("hkeys")
 
     def hvals(self) -> Expr:
-        return RedisFn("hvals", self._key)
+        return self.redis_fn("hvals")
 
     def hgetall(self) -> Expr:
-        return RedisFn("hgetall", self._key)
+        return self.redis_fn("hgetall")

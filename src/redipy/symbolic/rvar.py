@@ -1,12 +1,9 @@
 from redipy.api import RSetMode, RSM_ALWAYS, RSM_EXISTS, RSM_MISSING
 from redipy.symbolic.expr import Expr, MixedType
-from redipy.symbolic.fun import KeyVariable, RedisFn
+from redipy.symbolic.fun import RedisObj
 
 
-class RedisVar:
-    def __init__(self, key: KeyVariable) -> None:
-        self._key = key
-
+class RedisVar(RedisObj):
     def set(
             self,
             value: MixedType,
@@ -28,7 +25,10 @@ class RedisVar:
             args.append(expire_milli)
         elif keep_ttl:
             args.append("KEEPTTL")
-        return RedisFn("set", self._key, value, *args)
+        return self.redis_fn("set", value, *args)
 
     def get(self, *, no_adjust: bool = False) -> Expr:
-        return RedisFn("get", self._key, no_adjust=no_adjust)
+        return self.redis_fn("get", no_adjust=no_adjust)
+
+    def incrby(self, inc: MixedType) -> Expr:
+        return self.redis_fn("incrby", inc)

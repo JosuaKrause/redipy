@@ -5,7 +5,7 @@ import pytest
 
 @pytest.mark.parametrize("rt_lua", [False, True])
 def test_pipe(rt_lua: bool) -> None:
-    rt = get_setup("test_pipe", rt_lua, lua_script=None)
+    rt = get_setup("test_pipe", rt_lua)
 
     rt.rpush("foo", "a", "b", "c", "d")
     rt.rpush("bar", "e", "f", "g")

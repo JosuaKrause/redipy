@@ -107,7 +107,7 @@ def test_rvar() -> None:
 @pytest.mark.parametrize("rt_lua", [False, True])
 def test_set_ext_args(rt_lua: bool) -> None:
     rt = get_setup(
-        "test_set_ext_args", rt_lua, lua_script=None, no_compile_hook=True)
+        "test_set_ext_args", rt_lua, no_compile_hook=True)
 
     # FIXME: test expire_timestamp
 

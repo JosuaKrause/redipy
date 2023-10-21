@@ -149,13 +149,6 @@ class State:
     def has_value(self, key: str) -> bool:
         return self.get_value(key) is not None
 
-    def remove_value(self, key: str) -> bool:
-        value = self.get_value(key)
-        if value is None:
-            return False
-        self.delete({key})
-        return True
-
     def get_queue(self, key: str) -> collections.deque[str]:
         self.verify_key("list", key)
         res = self._queues.get(key)
@@ -444,6 +437,17 @@ class Machine(RedisAPI):
     def zcard(self, key: str) -> int:
         return self._state.zorder_len(key)
 
+    def incrby(self, key: str, inc: float | int) -> float:
+        res = self._state.get_value(key)
+        if res is None:
+            val = "0"
+            expire = None
+        else:
+            val, expire = res
+        num = float(val) + inc
+        self._state.set_value(key, f"{num}", expire)
+        return num
+
     def exists(self, *keys: str) -> int:
         res = 0
         for key in keys:
@@ -487,7 +491,7 @@ class Machine(RedisAPI):
             for field in fields
         }
 
-    def hincrby(self, key: str, field: str, inc: float) -> float:
+    def hincrby(self, key: str, field: str, inc: float | int) -> float:
         res = self._state.get_hash(key)
         num = float(res.get(field, 0)) + inc
         res[key] = f"{num}"

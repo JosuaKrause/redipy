@@ -77,6 +77,9 @@ class PipelineAPI:
     def zcard(self, key: str) -> None:
         raise NotImplementedError()
 
+    def incrby(self, key: str, inc: float | int) -> None:
+        raise NotImplementedError()
+
     def exists(self, *keys: str) -> None:
         raise NotImplementedError()
 
@@ -95,7 +98,7 @@ class PipelineAPI:
     def hmget(self, key: str, *fields: str) -> None:
         raise NotImplementedError()
 
-    def hincrby(self, key: str, field: str, inc: float) -> None:
+    def hincrby(self, key: str, field: str, inc: float | int) -> None:
         raise NotImplementedError()
 
     def hkeys(self, key: str) -> None:
@@ -232,6 +235,9 @@ class RedisAPI:
     def zcard(self, key: str) -> int:
         raise NotImplementedError()
 
+    def incrby(self, key: str, inc: float | int) -> float:
+        raise NotImplementedError()
+
     def exists(self, *keys: str) -> int:
         raise NotImplementedError()
 
@@ -250,7 +256,7 @@ class RedisAPI:
     def hmget(self, key: str, *fields: str) -> dict[str, str | None]:
         raise NotImplementedError()
 
-    def hincrby(self, key: str, field: str, inc: float) -> float:
+    def hincrby(self, key: str, field: str, inc: float | int) -> float:
         raise NotImplementedError()
 
     def hkeys(self, key: str) -> list[str]:

@@ -386,6 +386,17 @@ class LocalBackend(
         if expr["kind"] == "array_len":
             arr_ref = self.compile_expr(ctx, expr["var"])
             return lambda state: len(cast(list, arr_ref(state)))
+        if expr["kind"] == "concat":
+            exec_strs = [
+                self.compile_expr(ctx, strobj)
+                for strobj in expr["strings"]
+            ]
+
+            def exec_concat(state: ExecState) -> JSONType:
+                strs = [f"{expr_str(state)}" for expr_str in exec_strs]
+                return "".join(strs)
+
+            return exec_concat
         if expr["kind"] == "call":
             exec_args = [
                 self.compile_expr(ctx, arg_fn)

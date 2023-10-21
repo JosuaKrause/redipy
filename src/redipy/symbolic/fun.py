@@ -98,11 +98,32 @@ class RedisFn(CallFn):
     def __init__(
             self,
             redis_fn: str,
-            key: KeyVariable,
+            key: MixedType,
             *args: MixedType,
             no_adjust: bool = False) -> None:
         super().__init__(
             "redis.call", redis_fn, key, *args, no_adjust=no_adjust)
+
+
+class RedisObj:
+    def __init__(self, key: MixedType) -> None:
+        self._key = lit_helper(key)
+
+    def key(self) -> Expr:
+        return self._key
+
+    def redis_fn(
+            self,
+            name: str,
+            *args: MixedType,
+            no_adjust: bool = False) -> Expr:
+        return RedisFn(name, self.key(), *args, no_adjust=no_adjust)
+
+    def exists(self) -> Expr:
+        return self.redis_fn("exists")
+
+    def delete(self) -> Expr:
+        return self.redis_fn("del")
 
 
 LogLevel = Literal["debug", "verbose", "notice", "warning"]

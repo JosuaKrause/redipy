@@ -76,6 +76,10 @@ ArrayLengthObj = TypedDict('ArrayLengthObj', {
     "kind": Literal["array_len"],
     "var": RefIdObj,
 })
+ConcatObj = TypedDict('ConcatObj', {
+    "kind": Literal["concat"],
+    "strings": 'list[ExprObj]',
+})
 CallObj = TypedDict('CallObj', {
     "kind": Literal["call"],
     "name": str,
@@ -91,6 +95,7 @@ ExprObj = (
     | BinaryOpObj
     | ArrayAtObj
     | ArrayLengthObj
+    | ConcatObj
     | CallObj
 )
 

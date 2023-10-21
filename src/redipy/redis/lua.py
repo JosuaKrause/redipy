@@ -278,6 +278,10 @@ class LuaBackend(
                 f"[{self.compile_expr(ctx, expr['index'])} + 1]")
         if expr["kind"] == "array_len":
             return f"#{self.compile_expr(ctx, expr['var'])}"
+        if expr["kind"] == "concat":
+            return " .. ".join(
+                f"({self.compile_expr(ctx, strobj)})"
+                for strobj in expr["strings"])
         if expr["kind"] == "call":
             if not expr["no_adjust"]:
                 adj_expr = ctx.adjust_function(expr, is_expr_stmt)
