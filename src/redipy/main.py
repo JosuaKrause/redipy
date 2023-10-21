@@ -187,3 +187,30 @@ class Redis(RedisClientAPI):
 
     def zcard(self, key: str) -> int:
         return self._rt.zcard(key)
+
+    def delete(self, *keys: str) -> int:
+        return self._rt.delete(*keys)
+
+    def hset(self, key: str, mapping: dict[str, str]) -> int:
+        return self._rt.hset(key, mapping)
+
+    def hdel(self, key: str, *fields: str) -> int:
+        return self._rt.hdel(key, *fields)
+
+    def hget(self, key: str, field: str) -> str | None:
+        return self._rt.hget(key, field)
+
+    def hmget(self, key: str, *fields: str) -> dict[str, str | None]:
+        return self._rt.hmget(key, *fields)
+
+    def hincrby(self, key: str, field: str, inc: float) -> float:
+        return self._rt.hincrby(key, field, inc)
+
+    def hkeys(self, key: str) -> list[str]:
+        return self._rt.hkeys(key)
+
+    def hvals(self, key: str) -> list[str]:
+        return self._rt.hvals(key)
+
+    def hgetall(self, key: str) -> dict[str, str]:
+        return self._rt.hgetall(key)

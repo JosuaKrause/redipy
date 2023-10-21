@@ -202,6 +202,33 @@ class RedisAPI:
     def zcard(self, key: str) -> int:
         raise NotImplementedError()
 
+    def delete(self, *keys: str) -> int:
+        raise NotImplementedError()
+
+    def hset(self, key: str, mapping: dict[str, str]) -> int:
+        raise NotImplementedError()
+
+    def hdel(self, key: str, *fields: str) -> int:
+        raise NotImplementedError()
+
+    def hget(self, key: str, field: str) -> str | None:
+        raise NotImplementedError()
+
+    def hmget(self, key: str, *fields: str) -> dict[str, str | None]:
+        raise NotImplementedError()
+
+    def hincrby(self, key: str, field: str, inc: float) -> float:
+        raise NotImplementedError()
+
+    def hkeys(self, key: str) -> list[str]:
+        raise NotImplementedError()
+
+    def hvals(self, key: str) -> list[str]:
+        raise NotImplementedError()
+
+    def hgetall(self, key: str) -> dict[str, str]:
+        raise NotImplementedError()
+
 
 class RedisClientAPI(RedisAPI):
     @contextlib.contextmanager
