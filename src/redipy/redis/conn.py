@@ -237,50 +237,52 @@ class PipelineConnection(PipelineAPI):
         self.add_fixup(int)
 
     def incrby(self, key: str, inc: float | int) -> None:
-        self._pipe.incrbyfloat(key, inc)
+        self._pipe.incrbyfloat(self.with_prefix(key), inc)
         self.add_fixup(float)
 
     def exists(self, *keys: str) -> None:
-        self._pipe.exists(*keys)
+        self._pipe.exists(*(
+            self.with_prefix(key) for key in keys))
         self.add_fixup(int)
 
     def delete(self, *keys: str) -> None:
-        self._pipe.delete(*keys)
+        self._pipe.delete(*(
+            self.with_prefix(key) for key in keys))
         self.add_fixup(int)
 
     def hset(self, key: str, mapping: dict[str, str]) -> None:
-        self._pipe.hset(key, mapping)  # type: ignore
+        self._pipe.hset(self.with_prefix(key), mapping)  # type: ignore
         self.add_fixup(int)
 
     def hdel(self, key: str, *fields: str) -> None:
-        self._pipe.hdel(key, *fields)
+        self._pipe.hdel(self.with_prefix(key), *fields)
         self.add_fixup(int)
 
     def hget(self, key: str, field: str) -> None:
-        self._pipe.hget(key, field)
+        self._pipe.hget(self.with_prefix(key), field)
         self.add_fixup(to_maybe_str)
 
     def hmget(self, key: str, *fields: str) -> None:
-        self._pipe.hmget(key, *fields)
+        self._pipe.hmget(self.with_prefix(key), *fields)
         self.add_fixup(lambda res: {
             field: to_maybe_str(val)
             for field, val in zip(fields, res)
         })
 
     def hincrby(self, key: str, field: str, inc: float | int) -> None:
-        self._pipe.hincrbyfloat(key, field, inc)
+        self._pipe.hincrbyfloat(self.with_prefix(key), field, inc)
         self.add_fixup(float)
 
     def hkeys(self, key: str) -> None:
-        self._pipe.hkeys(key)
+        self._pipe.hkeys(self.with_prefix(key))
         self.add_fixup(to_list_str)
 
     def hvals(self, key: str) -> None:
-        self._pipe.hvals(key)
+        self._pipe.hvals(self.with_prefix(key))
         self.add_fixup(to_list_str)
 
     def hgetall(self, key: str) -> None:
-        self._pipe.hgetall(key)
+        self._pipe.hgetall(self.with_prefix(key))
         self.add_fixup(lambda res: {
             to_maybe_str(field): to_maybe_str(val)
             for field, val in res
@@ -637,31 +639,33 @@ class RedisConnection(Runtime[list[str]]):
 
     def incrby(self, key: str, inc: float | int) -> float:
         with self.get_connection() as conn:
-            return conn.incrbyfloat(key, inc)
+            return conn.incrbyfloat(self.with_prefix(key), inc)
 
     def exists(self, *keys: str) -> int:
         with self.get_connection() as conn:
-            return conn.exists(*keys)
+            return conn.exists(*(
+                self.with_prefix(key) for key in keys))
 
     def delete(self, *keys: str) -> int:
         with self.get_connection() as conn:
-            return conn.delete(*keys)
+            return conn.delete(*(
+                self.with_prefix(key) for key in keys))
 
     def hset(self, key: str, mapping: dict[str, str]) -> int:
         with self.get_connection() as conn:
-            return conn.hset(key, mapping)  # type: ignore
+            return conn.hset(self.with_prefix(key), mapping)  # type: ignore
 
     def hdel(self, key: str, *fields: str) -> int:
         with self.get_connection() as conn:
-            return conn.hdel(key, *fields)
+            return conn.hdel(self.with_prefix(key), *fields)
 
     def hget(self, key: str, field: str) -> str | None:
         with self.get_connection() as conn:
-            return to_maybe_str(conn.hget(key, field))
+            return to_maybe_str(conn.hget(self.with_prefix(key), field))
 
     def hmget(self, key: str, *fields: str) -> dict[str, str | None]:
         with self.get_connection() as conn:
-            res = conn.hmget(key, *fields)
+            res = conn.hmget(self.with_prefix(key), *fields)
             return {
                 field: to_maybe_str(val)
                 for field, val in zip(fields, res)
@@ -669,19 +673,19 @@ class RedisConnection(Runtime[list[str]]):
 
     def hincrby(self, key: str, field: str, inc: float | int) -> float:
         with self.get_connection() as conn:
-            return conn.hincrbyfloat(key, field, inc)
+            return conn.hincrbyfloat(self.with_prefix(key), field, inc)
 
     def hkeys(self, key: str) -> list[str]:
         with self.get_connection() as conn:
-            return to_list_str(conn.hkeys(key))
+            return to_list_str(conn.hkeys(self.with_prefix(key)))
 
     def hvals(self, key: str) -> list[str]:
         with self.get_connection() as conn:
-            return to_list_str(conn.hvals(key))
+            return to_list_str(conn.hvals(self.with_prefix(key)))
 
     def hgetall(self, key: str) -> dict[str, str]:
         with self.get_connection() as conn:
             return {
                 to_maybe_str(field): to_maybe_str(val)
-                for field, val in conn.hgetall(key)
+                for field, val in conn.hgetall(self.with_prefix(key))
             }

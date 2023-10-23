@@ -8,7 +8,7 @@ from redipy.backend.backend import ExecFunction
 from redipy.graph.expr import JSONType
 from redipy.main import Redis
 from redipy.symbolic.expr import Strs
-from redipy.symbolic.fun import LogFn, ToIntStr, ToNum
+from redipy.symbolic.fun import ToIntStr, ToNum
 from redipy.symbolic.rhash import RedisHash
 from redipy.symbolic.rvar import RedisVar
 from redipy.symbolic.seq import FnContext
