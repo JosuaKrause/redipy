@@ -79,7 +79,7 @@ class RIncrBy(LocalRedisFunction):
 
     @staticmethod
     def call(sm: Machine, key: str, args: list[JSONType]) -> JSONType:
-        return sm.incrby(key, cast(float, args[0]))
+        return sm.incrby(key, float(cast(float, args[0])))
 
 
 class RLPushFn(LocalRedisFunction):
@@ -285,13 +285,13 @@ class RHSet(LocalRedisFunction):
         mapping = {}
         ix = 0
         while ix < len(args):
-            key = f"{args[ix]}"
+            field = f"{args[ix]}"
             ix += 1
             if ix >= len(args):
-                raise ValueError(f"unbalanced key value pairs: {args}")
+                raise ValueError(f"unbalanced field value pairs: {args}")
             value = f"{args[ix]}"
             ix += 1
-            mapping[key] = value
+            mapping[field] = value
         return sm.hset(key, mapping)
 
 

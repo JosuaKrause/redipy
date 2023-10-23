@@ -1,4 +1,10 @@
-from redipy.graph.expr import CallObj, ExprObj, find_literal
+from redipy.graph.expr import (
+    CallObj,
+    ExprObj,
+    find_literal,
+    get_literal,
+    LiteralValObj,
+)
 from redipy.plugin import LuaRedisPatch
 
 
@@ -33,7 +39,7 @@ class RSetPatch(LuaRedisPatch):
 class RGetPatch(LuaRedisPatch):
     @staticmethod
     def names() -> set[str]:
-        return {"get", "lpop", "rpop"}
+        return {"get", "lpop", "rpop", "hget"}
 
     def patch(
             self,
@@ -74,3 +80,24 @@ class RSortedPopPatch(LuaRedisPatch):
             "args": [expr],
             "no_adjust": False,
         }
+
+
+class RIncrByPatch(LuaRedisPatch):
+    @staticmethod
+    def names() -> set[str]:
+        return {"incrby", "hincrby"}
+
+    def patch(
+            self,
+            expr: CallObj,
+            args: list[ExprObj],
+            *,
+            is_expr_stmt: bool) -> ExprObj:
+        name = f"{get_literal(expr['args'][0], 'str')}float"
+        literal: LiteralValObj = {
+            "kind": "val",
+            "type": "str",
+            "value": name,
+        }
+        expr["args"][0] = literal
+        return expr

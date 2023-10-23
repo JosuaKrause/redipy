@@ -134,7 +134,8 @@ class State:
         return self._deletes
 
     def set_value(self, key: str, value: str, expire: float | None) -> None:
-        self.verify_key("value", key)
+        if key not in self._vals:
+            self.verify_key("value", key)
         self._vals[key] = (value, expire)
 
     def get_value(self, key: str) -> tuple[str, float | None] | None:
@@ -150,9 +151,9 @@ class State:
         return self.get_value(key) is not None
 
     def get_queue(self, key: str) -> collections.deque[str]:
-        self.verify_key("list", key)
         res = self._queues.get(key)
         if res is None:
+            self.verify_key("list", key)
             if self._parent is not None:
                 res = collections.deque(self._parent.get_queue(key))
             else:
@@ -169,9 +170,9 @@ class State:
         return len(res)
 
     def get_hash(self, key: str) -> dict[str, str]:
-        self.verify_key("hash", key)
         res = self._hashes.get(key)
         if res is None:
+            self.verify_key("hash", key)
             if self._parent is not None:
                 res = dict(self._parent.get_hash(key))
             else:
@@ -188,9 +189,9 @@ class State:
         return res
 
     def get_zorder(self, key: str) -> list[str]:
-        self.verify_key("zset", key)
         res = self._zorder.get(key)
         if res is None:
+            self.verify_key("zset", key)
             if self._parent is not None:
                 res = list(self._parent.get_zorder(key))
             else:
@@ -207,9 +208,9 @@ class State:
         return len(res)
 
     def get_zscores(self, key: str) -> dict[str, float]:
-        self.verify_key("zset", key)
         res = self._zscores.get(key)
         if res is None:
+            self.verify_key("zset", key)
             if self._parent is not None:
                 res = dict(self._parent.get_zscores(key))
             else:
@@ -222,6 +223,7 @@ class State:
             f"{self.__class__.__name__}["
             f"vals={self._vals},"
             f"queues={dict(self._queues)},"
+            f"hashes={dict(self._hashes)},"
             f"zorder={dict(self._zorder)},"
             f"zscores={dict(self._zscores)}]")
 

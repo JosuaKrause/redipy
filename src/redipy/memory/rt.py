@@ -269,35 +269,35 @@ class LocalRuntime(Runtime[Cmd]):
 
     def hset(self, key: str, mapping: dict[str, str]) -> int:
         with self.lock():
-            return self.hset(key, mapping)
+            return self._sm.hset(key, mapping)
 
     def hdel(self, key: str, *fields: str) -> int:
         with self.lock():
-            return self.hdel(key, *fields)
+            return self._sm.hdel(key, *fields)
 
     def hget(self, key: str, field: str) -> str | None:
         with self.lock():
-            return self.hget(key, field)
+            return self._sm.hget(key, field)
 
     def hmget(self, key: str, *fields: str) -> dict[str, str | None]:
         with self.lock():
-            return self.hmget(key, *fields)
+            return self._sm.hmget(key, *fields)
 
     def hincrby(self, key: str, field: str, inc: float | int) -> float:
         with self.lock():
-            return self.hincrby(key, field, inc)
+            return self._sm.hincrby(key, field, inc)
 
     def hkeys(self, key: str) -> list[str]:
         with self.lock():
-            return self.hkeys(key)
+            return self._sm.hkeys(key)
 
     def hvals(self, key: str) -> list[str]:
         with self.lock():
-            return self.hvals(key)
+            return self._sm.hvals(key)
 
     def hgetall(self, key: str) -> dict[str, str]:
         with self.lock():
-            return self.hgetall(key)
+            return self._sm.hgetall(key)
 
     def __str__(self) -> str:
         return f"{self.__class__.__name__}[{self._sm.get_state()}]"
@@ -411,25 +411,25 @@ class LocalPipeline(PipelineAPI):
         self.add_cmd(lambda: self._sm.delete(*keys))
 
     def hset(self, key: str, mapping: dict[str, str]) -> None:
-        self.add_cmd(lambda: self.hset(key, mapping))
+        self.add_cmd(lambda: self._sm.hset(key, mapping))
 
     def hdel(self, key: str, *fields: str) -> None:
-        self.add_cmd(lambda: self.hdel(key, *fields))
+        self.add_cmd(lambda: self._sm.hdel(key, *fields))
 
     def hget(self, key: str, field: str) -> None:
-        self.add_cmd(lambda: self.hget(key, field))
+        self.add_cmd(lambda: self._sm.hget(key, field))
 
     def hmget(self, key: str, *fields: str) -> None:
-        self.add_cmd(lambda: self.hmget(key, *fields))
+        self.add_cmd(lambda: self._sm.hmget(key, *fields))
 
     def hincrby(self, key: str, field: str, inc: float | int) -> None:
-        self.add_cmd(lambda: self.hincrby(key, field, inc))
+        self.add_cmd(lambda: self._sm.hincrby(key, field, inc))
 
     def hkeys(self, key: str) -> None:
-        self.add_cmd(lambda: self.hkeys(key))
+        self.add_cmd(lambda: self._sm.hkeys(key))
 
     def hvals(self, key: str) -> None:
-        self.add_cmd(lambda: self.hvals(key))
+        self.add_cmd(lambda: self._sm.hvals(key))
 
     def hgetall(self, key: str) -> None:
-        self.add_cmd(lambda: self.hgetall(key))
+        self.add_cmd(lambda: self._sm.hgetall(key))

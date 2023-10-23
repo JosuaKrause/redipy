@@ -20,3 +20,21 @@ class GStringFindPatch(LuaGeneralPatch):
             "args": [expr],
             "no_adjust": False,
         }
+
+
+class GAsIntStrPatch(LuaGeneralPatch):
+    @staticmethod
+    def names() -> set[str]:
+        return {"asintstr"}
+
+    def patch(
+            self,
+            expr: CallObj,
+            *,
+            is_expr_stmt: bool) -> ExprObj:
+        return {
+            "kind": "call",
+            "name": f"{self.helper_pkg()}.asintstr",
+            "args": expr["args"],
+            "no_adjust": False,
+        }

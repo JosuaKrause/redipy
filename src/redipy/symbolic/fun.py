@@ -84,6 +84,11 @@ class ToNum(CallFn):
         super().__init__("tonumber", arg)
 
 
+class ToIntStr(CallFn):
+    def __init__(self, arg: MixedType) -> None:
+        super().__init__("asintstr", arg)
+
+
 class ToStr(CallFn):
     def __init__(self, arg: MixedType) -> None:
         super().__init__("tostring", arg)

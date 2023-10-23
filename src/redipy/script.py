@@ -6,6 +6,7 @@ from redipy.symbolic.fun import (  # noqa
     LogFn,
     LogLevel,
     RedisFn,
+    ToIntStr,
     ToJSON,
     ToNum,
     ToStr,

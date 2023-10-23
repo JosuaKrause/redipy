@@ -6,6 +6,7 @@ from typing import Literal, overload
 from redipy.api import PipelineAPI, RedisClientAPI, RSetMode, RSM_ALWAYS
 from redipy.backend.backend import ExecFunction
 from redipy.backend.runtime import Runtime
+from redipy.graph.seq import SequenceObj
 from redipy.memory.rt import LocalRuntime
 from redipy.redis.conn import RedisConfig, RedisConnection, RedisFactory
 from redipy.symbolic.seq import FnContext
@@ -27,6 +28,8 @@ class Redis(RedisClientAPI):
             redis_factory: RedisFactory | None = None,
             rt: Runtime | None = None,
             lua_code_hook: Callable[[list[str]], None] | None = None,
+            compile_hook: Callable[[SequenceObj], None] | None = None,
+            verbose_lua_test: bool = False,
             ) -> None:
         if backend == "custom":
             if rt is None:
@@ -46,13 +49,15 @@ class Redis(RedisClientAPI):
                 "" if redis_module is None else redis_module,
                 cfg=cfg,
                 redis_factory=redis_factory,
-                is_caching_enabled=is_caching_enabled)
+                is_caching_enabled=is_caching_enabled,
+                verbose_test=verbose_lua_test)
             if lua_code_hook is not None:
                 rrt.set_code_hook(lua_code_hook)
             rt = rrt
         else:
             raise ValueError(f"unknown backend {backend}")
         self._rt: Runtime = rt
+        rt.set_compile_hook(compile_hook)
 
     def register_script(self, ctx: FnContext) -> ExecFunction:
         return self._rt.register_script(ctx)

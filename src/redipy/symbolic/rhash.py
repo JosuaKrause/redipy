@@ -8,7 +8,7 @@ class RedisHash(RedisObj):
         for key, value in mapping.items():
             args.append(key)
             args.append(value)
-        return self.redis_fn("hset", self.key(), *args)
+        return self.redis_fn("hset", *args)
 
     def hdel(self, *fields: MixedType) -> Expr:
         return self.redis_fn("hdel", *fields)

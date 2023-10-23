@@ -43,3 +43,19 @@ class HNilOrIndexFn(HelperFunction):
             end
             return val
         """
+
+
+class HAsIntStrFn(HelperFunction):
+    @staticmethod
+    def name() -> str:
+        return "asintstr"
+
+    @staticmethod
+    def args() -> str:
+        return "val"
+
+    @staticmethod
+    def body() -> str:
+        return r"""
+            return math.floor(val)
+        """

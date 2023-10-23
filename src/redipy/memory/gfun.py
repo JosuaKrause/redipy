@@ -81,6 +81,26 @@ class GToNumberFn(LocalGeneralFunction):
             return float(val)
 
 
+class GAsIntStrFn(LocalGeneralFunction):
+    @staticmethod
+    def name() -> str:
+        return "asintstr"
+
+    @staticmethod
+    def argc() -> ArgcSpec:
+        return {
+            "count": 1,
+        }
+
+    @staticmethod
+    def call(args: list[JSONType]) -> JSONType:
+        val = cast(str, args[0])
+        try:
+            return int(val)
+        except (ValueError, TypeError):
+            return int(float(val))
+
+
 class GToStringFn(LocalGeneralFunction):
     @staticmethod
     def name() -> str:

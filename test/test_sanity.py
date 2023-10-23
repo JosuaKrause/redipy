@@ -1,5 +1,8 @@
 from test.util import get_test_config
 
+import pytest
+import redis as redis_lib
+
 from redipy.redis.conn import RedisConnection
 
 
@@ -127,3 +130,35 @@ def test_sanity() -> None:
     check_expression("redis.call('zadd', KEYS[1], 2, 'a')", "1", keys=["zbar"])
     check_expression("redis.call('zadd', KEYS[1], 3, 'b')", "1", keys=["zbar"])
     assert redis.zpop_min("zbar", 2) == [("a", 2), ("b", 3)]
+
+
+def test_ensure_name_available() -> None:
+    redis = RedisConnection(
+        "test_ensure_name_available", cfg=get_test_config())
+
+    def check_name(
+            name: str,
+            args: str,
+            error_msg: str,
+            error_notes: list[str]) -> None:
+        code = f"return {name}({args})"
+        run = redis.get_dynamic_script(code)
+        with pytest.raises(
+                redis_lib.exceptions.ResponseError,
+                match=error_msg) as exc_info:
+            with redis.get_connection() as conn:
+                run(
+                    keys=[],
+                    args=[],
+                    client=conn)
+        assert exc_info.value.__notes__ == error_notes
+
+    check_name(
+        "asintstr",
+        "3.2",
+        r"user_script:1: Script attempted to access nonexistent global "
+        r"variable 'asintstr' script: [a-f0-9]+, on @user_script:1\.",
+        [
+            "Code:\nreturn asintstr(3.2)\n\nContext:\n  \n  \n  \n"
+            "> return asintstr(3.2)",
+        ])

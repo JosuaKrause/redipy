@@ -24,10 +24,11 @@ class Runtime(Generic[T], RedisClientAPI):
         with self._lock:
             yield
 
-    def set_compile_hook(self, hook: Callable[[SequenceObj], None]) -> None:
+    def set_compile_hook(
+            self, hook: Callable[[SequenceObj], None] | None) -> None:
         self._compile_hook = hook
 
-    def set_code_hook(self, hook: Callable[[T], None]) -> None:
+    def set_code_hook(self, hook: Callable[[T], None] | None) -> None:
         self._code_hook = hook
 
     def register_script(self, ctx: FnContext) -> ExecFunction:
