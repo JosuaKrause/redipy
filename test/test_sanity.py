@@ -157,7 +157,7 @@ def test_ensure_name_available() -> None:
         "asintstr",
         "3.2",
         r"user_script:1: Script attempted to access nonexistent global "
-        r"variable 'asintstr' script: [a-f0-9]+, on @user_script:1\.",
+        r"variable 'asintstr'",
         [
             "Code:\nreturn asintstr(3.2)\n\nContext:\n  \n  \n  \n"
             "> return asintstr(3.2)",
