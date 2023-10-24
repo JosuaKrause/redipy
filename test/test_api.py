@@ -8,6 +8,7 @@ from redipy.graph.expr import JSONType
 from redipy.main import Redis
 from redipy.symbolic.expr import Expr
 from redipy.symbolic.fun import KeyVariable
+from redipy.symbolic.rlist import RedisList
 from redipy.symbolic.rvar import RedisVar
 from redipy.symbolic.seq import FnContext
 from redipy.util import code_fmt, lua_fmt
@@ -54,21 +55,23 @@ def test_api(rt_lua: bool) -> None:
             pipeline: Callable[[PipelineAPI, str], None],
             lua: Callable[[FnContext, KeyVariable], Expr],
             code: str,
+            teardown: Callable[[str], JSONType],
+            output_setup: JSONType,
             output: JSONType,
-            teardown: Callable[[str], JSONType]) -> None:
+            output_teardown: JSONType) -> None:
         print(f"testing {name}")
         key = "foo"
 
-        setup(key)
+        assert setup(key) == output_setup
         result = normal(key)
-        teardown(key)
+        assert teardown(key) == output_teardown
         assert result == output
 
-        setup(key)
+        assert setup(key) == output_setup
         with redis.pipeline() as pipe:
             pipeline(pipe, key)
             result, = pipe.execute()
-        teardown(key)
+        assert teardown(key) == output_teardown
         assert result == output
 
         ctx = FnContext()
@@ -89,9 +92,9 @@ def test_api(rt_lua: bool) -> None:
         set_lua_script(name, lua_code)
         fun = redis.register_script(ctx)
 
-        setup(key)
+        assert setup(key) == output_setup
         result = fun(keys={"key": key}, args={})
-        teardown(key)
+        assert teardown(key) == output_teardown
         assert result == output
 
     check(
@@ -101,5 +104,31 @@ def test_api(rt_lua: bool) -> None:
         lambda pipe, key: pipe.exists(key),
         lambda ctx, key: RedisVar(key).exists(),
         "redis.call(\"exists\", key_0)",
+        lambda key: [redis.get(key), redis.delete(key)],
+        True,
         1,
-        lambda key: redis.delete(key))
+        ["a", 1])
+
+    check(
+        "lpop",
+        lambda key: redis.lpush(key, "a"),
+        lambda key: redis.lpop(key),
+        lambda pipe, key: pipe.lpop(key),
+        lambda ctx, key: RedisList(key).lpop(),
+        "(redis.call(\"lpop\", key_0) or nil)",
+        lambda key: redis.exists(key),
+        1,
+        "a",
+        0)
+
+    check(
+        "rpop",
+        lambda key: redis.rpush(key, "a"),
+        lambda key: redis.rpop(key),
+        lambda pipe, key: pipe.rpop(key),
+        lambda ctx, key: RedisList(key).rpop(),
+        "(redis.call(\"rpop\", key_0) or nil)",
+        lambda key: redis.exists(key),
+        1,
+        "a",
+        0)

@@ -351,12 +351,17 @@ class Machine(RedisAPI):
         if not queue:
             return None
         if count is None:
-            return queue.popleft()
+            rval = queue.popleft()
+            if not queue:
+                self.delete(key)
+            return rval
         popc = count
         res = []
         while popc > 0 and queue:
             res.append(queue.popleft())
             popc -= 1
+        if not queue:
+            self.delete(key)
         return res if res else None
 
     @overload
@@ -381,12 +386,17 @@ class Machine(RedisAPI):
         if not queue:
             return None
         if count is None:
-            return queue.pop()
+            rval = queue.pop()
+            if not queue:
+                self.delete(key)
+            return rval
         popc = count
         res = []
         while popc > 0 and queue:
             res.append(queue.pop())
             popc -= 1
+        if not queue:
+            self.delete(key)
         return res if res else None
 
     def llen(self, key: str) -> int:
