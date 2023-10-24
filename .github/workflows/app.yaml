@@ -84,8 +84,8 @@ jobs:
     strategy:
       matrix:
         python: ['3.11']
-        ci_node_total: [2]
-        ci_node_index: [0, 1]
+        ci_node_total: [3]
+        ci_node_index: [0, 1, 2]
     env:
       ENV: CI
 
