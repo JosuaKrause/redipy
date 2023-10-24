@@ -62,9 +62,20 @@ class Constant(Expr):
         }
 
 
-JSONType = str | int | float | list | dict | None
 LiteralType = str | int | float | bool | list | None
 MixedType = LiteralType | Expr
+
+
+class Strs(Expr):
+    def __init__(self, *values: MixedType) -> None:
+        super().__init__()
+        self._values = [lit_helper(val) for val in values]
+
+    def compile(self) -> ExprObj:
+        return {
+            "kind": "concat",
+            "strings": [val.compile() for val in self._values],
+        }
 
 
 class LiteralOp(Expr):

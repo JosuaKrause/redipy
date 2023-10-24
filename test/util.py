@@ -33,7 +33,7 @@ def get_setup(
         test_name: str,
         rt_lua: bool,
         *,
-        lua_script: str | None,
+        lua_script: str | None = None,
         no_compile_hook: bool = False,
         ) -> Runtime:
     if rt_lua:

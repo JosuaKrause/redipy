@@ -5,7 +5,7 @@ import pytest
 
 @pytest.mark.parametrize("rt_lua", [False, True])
 def test_pipe(rt_lua: bool) -> None:
-    rt = get_setup("test_pipe", rt_lua, lua_script=None)
+    rt = get_setup("test_pipe", rt_lua)
 
     rt.rpush("foo", "a", "b", "c", "d")
     rt.rpush("bar", "e", "f", "g")
@@ -48,3 +48,7 @@ def test_pipe(rt_lua: bool) -> None:
     assert zmin_zset == [("b", -1)]
     assert zmax_zset == [("c", 1)]
     assert zcard_zset == 1
+
+    # FIXME test deleting during a pipe and filling fresh (for all key types)
+    # FIXME test deleting and creating a different key during a pipe
+    # FIXME check if value "exists" after deleting in pipe

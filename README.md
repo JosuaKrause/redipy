@@ -46,7 +46,6 @@ r = redipy.Redis(
         "port": 6379,
         "passwd": "",
         "prefix": "",
-        "path": ".",
     })
 ```
 
@@ -134,7 +133,7 @@ r.lpop("big", 4)  # ["3", "4"]
 The current limitations of `redipy` are:
 
 - Not all Redis commands are supported yet: This will eventually be resolved.
-- The API differs slightly: Most notably stoerd values are always strings
+- The API differs slightly: Most notably stored values are always strings
   (i.e., the bytes returned by redis are decoded as utf-8).
 - The semantic of redis functions inside scripts has been altered to feel more
   natural coming from python: Redis functions inside lua scripts often differ
@@ -167,6 +166,34 @@ The current limitations of `redipy` are:
 ## License
 `redipy` is licensed under the [Apache License (Version 2.0)](LICENSE).
 
+## Missing Redis or Lua Functions
+If you encounter a missing redis or lua function please consider adding it
+yourself (see #Contributing). However, if you need it only in your local setup
+without API support or support for multiple backends, pipelines, etc. you can
+use the plug-in mechanism.
+
+For the memory backend you can use
+`redipy.memory.rt.LocalRuntime.add_redis_function_plugin` or
+`redipy.memory.rt.LocalRuntime.add_general_function_plugin`. The methods need
+a module that contains subclasses of `redipy.plugin.LocalRedisFunction` and
+`redipy.plugin.LocalGeneralFunction` respectively. Once the new functions are
+defined via loading the plugin they can be used in a `redipy.script.FnContext`
+via `redipy.script.RedisFn` or `redipy.script.CallFn` respectively.
+
+Note, that `redipy.script.RedisFn` and `redipy.script.CallFn` can always be
+used in redis backend scripts. However, calling functions this way will have
+the native lua behavior which can lead to surprising results. To patch those
+up as well you can use `redipy.redis.lua.LuaBackend.add_redis_patch_plugin`,
+`redipy.redis.lua.LuaBackend.add_general_patch_plugin`, and
+`redipy.redis.lua.LuaBackend.add_helper_function_plugin` to add the subclasses
+of `redipy.plugin.LuaRedisPatch`, `redipy.plugin.LuaRedisPatch`, and
+`redipy.plugin.HelperFunction` respectively. Those functions then can also be
+used with the `redipy.script.RedisFn` and `redipy.script.CallFn` commands.
+
+Adding functions as described above is discouraged as it may lead to
+inconsistent support of different backends and inconsistent behavior across
+different backends.
+
 ## Contributing
 The easiest way to contribute to `redipy` is to pick some redis API functions
 that have not (or not completely) been implemented in `redipy` yet. For this
@@ -178,18 +205,21 @@ follow these steps:
 2. Implement the function in `redipy.redis.conn.RedisConnection` and
   `redipy.redis.conn.PipelineConnection`. This should
   be straightforward as there are not too many changes expected. Don't forget
-  to convert bytes into strings via `...decode("utf-8")`.
+  to convert bytes into strings via `...decode("utf-8")` (there are various
+  helper functions for this in `redipy.util`).
 3. Add tests to `test/test_sanity.py` to determine the function's behavior in
   lua (especially its edge cases).
-4. If the lua behavior needs to be changed to provide a better feel you can
-  mokeypatch the function call in `redipy.redis.lua.LuaFnHook#adjust_redis_fn`
-  by either directly changing the returned expr for the execution graph or using
-  a lua helper function via `redipy.redis.lua.HELPER_FNS`.
+4. If the lua behavior needs to be changed to provide a better feel you can add
+  a monkeypatch for the function call by either creating a class in
+  `redipy.redis.rpatch` to directly change the returned expr for the execution
+  graph or using a lua helper function via adding a class to
+  `redipy.redis.helpers` (you need to use a patch to use the helper in the
+  right location).
 5. Next, add and implement the functionality in
   `redipy.memory.state.Machine` and add the appropriate redirects in
   `redipy.memory.rt.LocalRuntime` and `redipy.memory.rt.LocalPipeline`.
 6. To make the new function accessible in scripts from the memory backend add
-  an entry in `redipy.memory.rt.LocalRuntime#redis_fn`.
+  a class in `redipy.memory.rfun`.
 7. Add the approriate class or method in the right `redipy.symbolic.r...py`
   file. If it is a new class / file add an import to `redipy.script`.
 8. Add a new test to verify the new function works inside a script for all

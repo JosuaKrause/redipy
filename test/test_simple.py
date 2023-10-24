@@ -1,11 +1,11 @@
 import json
 from test.util import get_test_config
 
+from redipy.graph.expr import JSONType
 from redipy.memory.local import LocalBackend
 from redipy.memory.rt import LocalRuntime
 from redipy.redis.conn import RedisConnection
 from redipy.redis.lua import LuaBackend
-from redipy.symbolic.expr import JSONType
 from redipy.symbolic.seq import FnContext
 from redipy.util import code_fmt, lua_fmt
 

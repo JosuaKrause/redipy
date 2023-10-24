@@ -1,28 +1,25 @@
 from redipy.symbolic.expr import Expr, MixedType
-from redipy.symbolic.fun import KeyVariable, RedisFn
+from redipy.symbolic.fun import RedisObj
 
 
-class RedisList:
-    def __init__(self, key: KeyVariable) -> None:
-        self._key = key
-
+class RedisList(RedisObj):
     def lpush(self, *values: MixedType) -> Expr:
-        return RedisFn("lpush", self._key, *values)
+        return self.redis_fn("lpush", *values)
 
     def rpush(self, *values: MixedType) -> Expr:
-        return RedisFn("rpush", self._key, *values)
+        return self.redis_fn("rpush", *values)
 
     def lpop(
             self, count: MixedType = None, *, no_adjust: bool = False) -> Expr:
         if count is None:
-            return RedisFn("lpop", self._key, no_adjust=no_adjust)
-        return RedisFn("lpop", self._key, count, no_adjust=no_adjust)
+            return self.redis_fn("lpop", no_adjust=no_adjust)
+        return self.redis_fn("lpop", count, no_adjust=no_adjust)
 
     def rpop(
             self, count: MixedType = None, *, no_adjust: bool = False) -> Expr:
         if count is None:
-            return RedisFn("rpop", self._key, no_adjust=no_adjust)
-        return RedisFn("rpop", self._key, count, no_adjust=no_adjust)
+            return self.redis_fn("rpop", no_adjust=no_adjust)
+        return self.redis_fn("rpop", count, no_adjust=no_adjust)
 
     def llen(self) -> Expr:
-        return RedisFn("llen", self._key)
+        return self.redis_fn("llen")

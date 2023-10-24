@@ -1,20 +1,14 @@
 import contextlib
 import datetime
-import json
 from collections.abc import Callable, Iterator
-from typing import Any, cast, Literal, overload, TypeVar
+from typing import Any, Literal, overload, TypeVar
 
-from redipy.api import (
-    PipelineAPI,
-    RSetMode,
-    RSM_ALWAYS,
-    RSM_EXISTS,
-    RSM_MISSING,
-)
+from redipy.api import PipelineAPI, RSetMode, RSM_ALWAYS
 from redipy.backend.runtime import Runtime
+from redipy.graph.expr import JSONType
 from redipy.memory.local import Cmd, LocalBackend
 from redipy.memory.state import Machine, State
-from redipy.symbolic.expr import JSONType
+from redipy.plugin import add_plugin, LocalGeneralFunction, LocalRedisFunction
 
 
 T = TypeVar('T')
@@ -33,6 +27,20 @@ class LocalRuntime(Runtime[Cmd]):
     def __init__(self) -> None:
         super().__init__()
         self._sm = Machine(State())
+        self._rfuns: dict[str, LocalRedisFunction] = {}
+        self._gfuns: dict[str, LocalGeneralFunction] = {}
+        self.add_redis_function_plugin("redipy.memory.rfun")
+        self.add_general_function_plugin("redipy.memory.gfun")
+
+    def add_redis_function_plugin(self, module: str) -> None:
+        add_plugin(module, self._rfuns, LocalRedisFunction)
+
+    def add_general_function_plugin(self, module: str) -> None:
+        add_plugin(
+            module,
+            self._gfuns,
+            LocalGeneralFunction,
+            disallowed={"redis.call"})
 
     @classmethod
     def create_backend(cls) -> LocalBackend:
@@ -40,12 +48,20 @@ class LocalRuntime(Runtime[Cmd]):
 
     @contextlib.contextmanager
     def pipeline(self) -> Iterator[PipelineAPI]:
-        with self.lock():
-            pipe = LocalPipeline(self._sm.get_state())
-            yield pipe
-            if pipe.has_queue():
-                raise ValueError(f"unexecuted commands in pipeline {pipe}")
-            self._sm.get_state().apply(pipe.get_state())
+
+        def exec_call(execute: Callable[[], list]) -> list:
+            with self.lock():
+                res = execute()
+                state = pipe.get_state()
+                self._sm.get_state().apply(state)
+                state.reset()
+                return res
+
+        pipe = LocalPipeline(
+            self._sm.get_state(), exec_call)
+        yield pipe
+        if pipe.has_queue():
+            raise ValueError(f"unexecuted commands in pipeline {pipe}")
 
     @staticmethod
     def require_argc(
@@ -65,130 +81,35 @@ class LocalRuntime(Runtime[Cmd]):
             "incorrect number of arguments need "
             f"{'at least' if at_least else 'exactly'} {count} got {argc}")
 
-    def _set(self, key: str, value: str, args: list[JSONType]) -> JSONType:
-        mode: RSetMode = RSM_ALWAYS
-        return_previous = False
-        expire_in = None
-        keep_ttl = False
-        pos = 0
-        while pos < len(args):
-            arg = f"{args[pos]}".upper()
-            if arg == "XX":
-                mode = RSM_EXISTS
-            elif arg == "NX":
-                mode = RSM_MISSING
-            elif arg == "GET":
-                return_previous = True
-            elif arg == "PX":
-                pos += 1
-                expire_in = float(cast(float, args[pos])) / 1000.0
-            elif arg == "KEEPTTL":
-                keep_ttl = True
-            pos += 1
-        return self.set(
-            key,
-            value,
-            mode=mode,
-            return_previous=return_previous,
-            expire_in=expire_in,
-            keep_ttl=keep_ttl)
-
     def redis_fn(
             self, name: str, args: list[JSONType]) -> JSONType:
         key = f"{args[0]}"
-        if name == "set":
-            self.require_argc(args, 2, at_least=True)
-            return self._set(key, f"{args[1]}", args[2:])
-        if name == "get":
-            self.require_argc(args, 1)
-            return self.get(key)
-        if name == "lpush":
-            self.require_argc(args, 2, at_least=True)
-            return self.lpush(key, *(f"{arg}" for arg in args[1:]))
-        if name == "rpush":
-            self.require_argc(args, 2, at_least=True)
-            return self.rpush(key, *(f"{arg}" for arg in args[1:]))
-        if name == "lpop":
-            self.require_argc(args, 1, at_most=2)
-            return self.lpop(
-                key, None if len(args) < 2 else int(cast(int, args[1])))
-        if name == "rpop":
-            self.require_argc(args, 1, at_most=2)
-            return self.rpop(
-                key, None if len(args) < 2 else int(cast(int, args[1])))
-        if name == "llen":
-            self.require_argc(args, 1)
-            return self.llen(key)
-        if name == "zadd":
-            self.require_argc(args, 3)
-            return self.zadd(key, {f"{args[2]}": float(cast(float, args[1]))})
-        if name == "zpopmax":
-            self.require_argc(args, 1, at_most=2)
-            return cast(list | None, self.zpop_max(
-                key, 1 if len(args) < 2 else int(cast(int, args[1]))))
-        if name == "zpopmin":
-            self.require_argc(args, 1, at_most=2)
-            return cast(list | None, self.zpop_min(
-                key, 1 if len(args) < 2 else int(cast(int, args[1]))))
-        if name == "zcard":
-            self.require_argc(args, 1)
-            return self.zcard(key)
-        raise ValueError(f"unknown redis function {name}")
+        rfun = self._rfuns.get(name)
+        if rfun is None:
+            raise ValueError(f"unknown redis function {name}")
+        argc = rfun.argc()
+        count = argc["count"] + 1
+        at_least = argc.get("at_least", False)
+        at_most = argc.get("at_most")
+        if at_most is not None:
+            at_most += 1
+        self.require_argc(args, count, at_least=at_least, at_most=at_most)
+        return rfun.call(self._sm, key, args[1:])
 
     def call_fn(
             self, name: str, args: list[JSONType]) -> JSONType:
         if name == "redis.call":
             self.require_argc(args, 2, at_least=True)
             return self.redis_fn(f"{args[0]}", args[1:])
-        if name == "string.find":
-            self.require_argc(args, 2, at_most=3)
-            found_ix = f"{args[0]}".find(
-                f"{args[1]}",
-                int(cast(int, args[2])) if len(args) > 2 else None)
-            return None if found_ix < 0 else found_ix
-        if name == "cjson.decode":
-            self.require_argc(args, 1)
-            return json.loads(f"{args[0]}")
-        if name == "cjson.encode":
-            self.require_argc(args, 1)
-            return json.dumps(
-                f"{args[0]}",
-                sort_keys=True,
-                indent=None,
-                separators=(",", ":"))
-        if name == "tonumber":
-            self.require_argc(args, 1)
-            val = cast(str, args[0])
-            try:
-                return int(val)
-            except (ValueError, TypeError):
-                return float(val)
-        if name == "tostring":
-            self.require_argc(args, 1)
-            oval = args[0]
-            if isinstance(oval, bool):
-                return f"{oval}".lower()
-            # TODO dict, list
-            if oval is None:
-                return "nil"
-            return f"{oval}"
-        if name == "type":
-            self.require_argc(args, 1)
-            tmap: dict[type, str] = {
-                bool: "boolean",
-                dict: "table",
-                float: "number",
-                int: "number",
-                list: "table",
-                str: "string",
-                type(None): "nil",
-            }
-            return tmap[type(args[0])]
-        if name == "redis.log":
-            self.require_argc(args, 2)
-            print(f"{args[0]}: {args[1]}")
-            return None
-        raise ValueError(f"unknown function {name}")
+        gfun = self._gfuns.get(name)
+        if gfun is None:
+            raise ValueError(f"unknown function {name}")
+        argc = gfun.argc()
+        count = argc["count"]
+        at_least = argc.get("at_least", False)
+        at_most = argc.get("at_most")
+        self.require_argc(args, count, at_least=at_least, at_most=at_most)
+        return gfun.call(args)
 
     def get_constant(self, raw: str) -> JSONType:
         return CONST[raw]
@@ -334,6 +255,50 @@ class LocalRuntime(Runtime[Cmd]):
         with self.lock():
             return self._sm.zcard(key)
 
+    def incrby(self, key: str, inc: float | int) -> float:
+        with self.lock():
+            return self._sm.incrby(key, inc)
+
+    def exists(self, *keys: str) -> int:
+        with self.lock():
+            return self._sm.exists(*keys)
+
+    def delete(self, *keys: str) -> int:
+        with self.lock():
+            return self._sm.delete(*keys)
+
+    def hset(self, key: str, mapping: dict[str, str]) -> int:
+        with self.lock():
+            return self._sm.hset(key, mapping)
+
+    def hdel(self, key: str, *fields: str) -> int:
+        with self.lock():
+            return self._sm.hdel(key, *fields)
+
+    def hget(self, key: str, field: str) -> str | None:
+        with self.lock():
+            return self._sm.hget(key, field)
+
+    def hmget(self, key: str, *fields: str) -> dict[str, str | None]:
+        with self.lock():
+            return self._sm.hmget(key, *fields)
+
+    def hincrby(self, key: str, field: str, inc: float | int) -> float:
+        with self.lock():
+            return self._sm.hincrby(key, field, inc)
+
+    def hkeys(self, key: str) -> list[str]:
+        with self.lock():
+            return self._sm.hkeys(key)
+
+    def hvals(self, key: str) -> list[str]:
+        with self.lock():
+            return self._sm.hvals(key)
+
+    def hgetall(self, key: str) -> dict[str, str]:
+        with self.lock():
+            return self._sm.hgetall(key)
+
     def __str__(self) -> str:
         return f"{self.__class__.__name__}[{self._sm.get_state()}]"
 
@@ -342,9 +307,13 @@ class LocalRuntime(Runtime[Cmd]):
 
 
 class LocalPipeline(PipelineAPI):
-    def __init__(self, parent: State) -> None:
+    def __init__(
+            self,
+            parent: State,
+            exec_call: Callable[[Callable[[], list]], list]) -> None:
         super().__init__()
         self._sm = Machine(State(parent))
+        self._exec_call = exec_call
         self._cmd_queue: list[Callable[[], Any]] = []
 
     def get_state(self) -> State:
@@ -356,7 +325,11 @@ class LocalPipeline(PipelineAPI):
     def execute(self) -> list:
         cmds = self._cmd_queue
         self._cmd_queue = []
-        return [cmd() for cmd in cmds]
+
+        def executor() -> list:
+            return [cmd() for cmd in cmds]
+
+        return self._exec_call(executor)
 
     def add_cmd(self, cb: Callable[[], Any]) -> None:
         self._cmd_queue.append(cb)
@@ -427,3 +400,36 @@ class LocalPipeline(PipelineAPI):
 
     def zcard(self, key: str) -> None:
         self.add_cmd(lambda: self._sm.zcard(key))
+
+    def incrby(self, key: str, inc: float | int) -> None:
+        self.add_cmd(lambda: self._sm.incrby(key, inc))
+
+    def exists(self, *keys: str) -> None:
+        self.add_cmd(lambda: self._sm.exists(*keys))
+
+    def delete(self, *keys: str) -> None:
+        self.add_cmd(lambda: self._sm.delete(*keys))
+
+    def hset(self, key: str, mapping: dict[str, str]) -> None:
+        self.add_cmd(lambda: self._sm.hset(key, mapping))
+
+    def hdel(self, key: str, *fields: str) -> None:
+        self.add_cmd(lambda: self._sm.hdel(key, *fields))
+
+    def hget(self, key: str, field: str) -> None:
+        self.add_cmd(lambda: self._sm.hget(key, field))
+
+    def hmget(self, key: str, *fields: str) -> None:
+        self.add_cmd(lambda: self._sm.hmget(key, *fields))
+
+    def hincrby(self, key: str, field: str, inc: float | int) -> None:
+        self.add_cmd(lambda: self._sm.hincrby(key, field, inc))
+
+    def hkeys(self, key: str) -> None:
+        self.add_cmd(lambda: self._sm.hkeys(key))
+
+    def hvals(self, key: str) -> None:
+        self.add_cmd(lambda: self._sm.hvals(key))
+
+    def hgetall(self, key: str) -> None:
+        self.add_cmd(lambda: self._sm.hgetall(key))

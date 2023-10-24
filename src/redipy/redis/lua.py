@@ -4,9 +4,16 @@ from typing import Literal, TYPE_CHECKING
 
 from redipy.backend.backend import Backend, ExecFunction
 from redipy.graph.cmd import CommandObj
-from redipy.graph.expr import BinOps, CallObj, ExprObj, ValueType
+from redipy.graph.expr import BinOps, CallObj, ExprObj, get_literal, JSONType
 from redipy.graph.seq import SequenceObj
-from redipy.symbolic.expr import JSONType
+from redipy.plugin import (
+    add_patch_plugin,
+    add_plugin,
+    HELPER_PKG,
+    HelperFunction,
+    LuaGeneralPatch,
+    LuaRedisPatch,
+)
 from redipy.util import code_fmt, indent, json_compact, lua_fmt
 
 
@@ -14,40 +21,16 @@ if TYPE_CHECKING:
     from redipy.redis.conn import RedisConnection
 
 
-HELPER_PKG = "redipy"
-
-
-HELPER_FNS: dict[str, tuple[str, str]] = {
-    "pairlist": (
-        "arr",
-        lua_fmt(r"""
-            local res = {}
-            local key = nil
-            for ix, value in ipairs(arr) do
-                if ix % 2 == 1 then
-                    key = value
-                else
-                    res[#res + 1] = {key, value}
-                end
-            end
-            return res
-        """),
-    ),
-    "nil_or_index": (
-        "val",
-        lua_fmt(r"""
-            if val ~= nil then
-                val = val - 1
-            end
-            return val
-        """),
-    ),
-}
-
-
 class LuaFnHook:
-    def __init__(self) -> None:
+    def __init__(
+            self,
+            helper_fns: dict[str, HelperFunction],
+            general_patch_fns: dict[str, LuaGeneralPatch],
+            redis_patch_fns: dict[str, LuaRedisPatch]) -> None:
         self._helpers: set[str] = set()
+        self._helper_fns = helper_fns
+        self._general_patch_fns = general_patch_fns
+        self._redis_patch_fns = redis_patch_fns
         self._is_expr_stmt = False
 
     def set_expr_stmt(self, is_expr_stmt: bool) -> None:
@@ -61,77 +44,26 @@ class LuaFnHook:
         prefix = f"{HELPER_PKG}."
         for helper in sorted(self._helpers):
             short_name = helper.removeprefix(prefix)
-            args, body = HELPER_FNS[short_name]
-            res.append(f"function {helper} ({args})")
-            res.extend(indent(body, 2))
+            help_obj = self._helper_fns.get(short_name)
+            if help_obj is None:
+                raise RuntimeError(f"unknown helper {short_name}")
+            res.append(f"function {helper} ({help_obj.args()})")
+            res.extend(indent(lua_fmt(help_obj.body()), 2))
             res.append("end")
         return res
-
-    @staticmethod
-    def _get_literal(obj: ExprObj, vtype: ValueType | None = None) -> JSONType:
-        if obj["kind"] != "val":
-            return None
-        if vtype is not None and obj["type"] != vtype:
-            return None
-        return obj["value"]
-
-    @staticmethod
-    def _is_none_literal(obj: ExprObj) -> bool:
-        if obj["kind"] != "val":
-            return False
-        if obj["type"] != "none":
-            return False
-        return True
-
-    @classmethod
-    def _find_literal(
-            cls,
-            objs: list[ExprObj],
-            value: JSONType,
-            *,
-            vtype: ValueType | None = None,
-            no_case: bool = False) -> tuple[int, JSONType] | None:
-        if vtype != "none" and value is not None:
-
-            def value_check(obj: ExprObj) -> tuple[bool, JSONType]:
-                res = cls._get_literal(obj, vtype)
-                if no_case and vtype == "str":
-                    return (f"{res}".upper() == f"{value}".upper(), res)
-                return (res == value, res)
-
-            check = value_check
-        else:
-
-            def none_check(obj: ExprObj) -> tuple[bool, JSONType]:
-                is_none = cls._is_none_literal(obj)
-                return (is_none, None)
-
-            check = none_check
-
-        for ix, obj in enumerate(objs):
-            is_hit, val = check(obj)
-            if is_hit:
-                return (ix, val)
-        return None
 
     def adjust_function(self, expr: CallObj, is_expr_stmt: bool) -> ExprObj:
         expr["no_adjust"] = True
         name = expr["name"]
         args = expr["args"]
         if name == "redis.call":
-            r_name = self._get_literal(args[0], "str")
+            r_name = get_literal(args[0], "str")
             if r_name is not None:
                 return self.adjust_redis_fn(
                     expr, f"{r_name}", args[1:], is_expr_stmt=is_expr_stmt)
-        if name == "string.find":
-            if is_expr_stmt:
-                return expr
-            return {
-                "kind": "call",
-                "name": f"{HELPER_PKG}.nil_or_index",
-                "args": [expr],
-                "no_adjust": False,
-            }
+        patch_fn = self._general_patch_fns.get(name)
+        if patch_fn is not None:
+            return patch_fn.patch(expr, is_expr_stmt=is_expr_stmt)
         if name.startswith(f"{HELPER_PKG}."):
             self._helpers.add(name)
             return expr
@@ -144,45 +76,10 @@ class LuaFnHook:
             args: list[ExprObj],
             *,
             is_expr_stmt: bool) -> ExprObj:
-        if name == "set":
-            if is_expr_stmt:
-                return expr
-            if self._find_literal(
-                    args[1:], "GET", vtype="str", no_case=True) is not None:
-                return expr
-            return {
-                "kind": "binary",
-                "op": "ne",
-                "left": expr,
-                "right": {
-                    "kind": "val",
-                    "type": "bool",
-                    "value": False,
-                },
-            }
-        if name in ["get", "lpop", "rpop"]:
-            if is_expr_stmt:
-                return expr
-            return {
-                "kind": "binary",
-                "op": "or",
-                "left": expr,
-                "right": {
-                    "kind": "val",
-                    "type": "none",
-                    "value": None,
-                },
-            }
-        if name in ["zpopmax", "zpopmin"]:
-            if is_expr_stmt:
-                return expr
-            return {
-                "kind": "call",
-                "name": f"{HELPER_PKG}.pairlist",
-                "args": [expr],
-                "no_adjust": False,
-            }
-        return expr
+        patch_fn = self._redis_patch_fns.get(name)
+        if patch_fn is None:
+            return expr
+        return patch_fn.patch(expr, args, is_expr_stmt=is_expr_stmt)
 
 
 def indent_str(code: Iterable[str], add_indent: int) -> list[str]:
@@ -197,8 +94,31 @@ HOOK_END = "]]"
 
 class LuaBackend(
         Backend[list[str], str, LuaFnHook, LuaFnHook, 'RedisConnection']):
+    def __init__(self) -> None:
+        super().__init__()
+        self._helper_fns: dict[str, HelperFunction] = {}
+        self._redis_patch_fns: dict[str, LuaRedisPatch] = {}
+        self._general_patch_fns: dict[str, LuaGeneralPatch] = {}
+        self.add_helper_function_plugin("redipy.redis.helpers")
+        self.add_general_patch_plugin("redipy.redis.gpatch")
+        self.add_redis_patch_plugin("redipy.redis.rpatch")
+
+    def add_helper_function_plugin(self, module: str) -> None:
+        add_plugin(module, self._helper_fns, HelperFunction)
+
+    def add_general_patch_plugin(self, module: str) -> None:
+        add_patch_plugin(
+            module,
+            self._general_patch_fns,
+            LuaGeneralPatch,
+            disallowed={"redis.call"})
+
+    def add_redis_patch_plugin(self, module: str) -> None:
+        add_patch_plugin(module, self._redis_patch_fns, LuaRedisPatch)
+
     def create_command_context(self) -> LuaFnHook:
-        return LuaFnHook()
+        return LuaFnHook(
+            self._helper_fns, self._general_patch_fns, self._redis_patch_fns)
 
     def finish(self, ctx: LuaFnHook, script: list[str]) -> list[str]:
         res = []
@@ -358,6 +278,10 @@ class LuaBackend(
                 f"[{self.compile_expr(ctx, expr['index'])} + 1]")
         if expr["kind"] == "array_len":
             return f"#{self.compile_expr(ctx, expr['var'])}"
+        if expr["kind"] == "concat":
+            return " .. ".join(
+                f"({self.compile_expr(ctx, strobj)})"
+                for strobj in expr["strings"])
         if expr["kind"] == "call":
             if not expr["no_adjust"]:
                 adj_expr = ctx.adjust_function(expr, is_expr_stmt)

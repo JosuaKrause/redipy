@@ -8,7 +8,7 @@ import string
 import threading
 import uuid
 from collections.abc import Callable, Iterable
-from typing import Any, IO, TypeVar
+from typing import Any, IO, overload, TypeVar
 
 import pytz
 
@@ -58,6 +58,8 @@ def deindent(text: str) -> str:
     if lines and not lines[0]:
         lines.pop(0)
     for line in lines:
+        if not line.strip():
+            continue
         cur_indent = len(line) - len(line.lstrip())
         if min_indent is None or min_indent > cur_indent:
             min_indent = cur_indent
@@ -473,13 +475,33 @@ def unescape(text: str, subs: dict[str, str]) -> str:
     return "".join(res)
 
 
+@overload
+def to_maybe_str(res: bytes) -> str:
+    ...
+
+
+@overload
+def to_maybe_str(res: None) -> None:
+    ...
+
+
 def to_maybe_str(res: bytes | None) -> str | None:
     if res is None:
         return res
     return res.decode("utf-8")
 
 
-def to_list_str(res: list[bytes] | None) -> list[str] | None:
+@overload
+def to_list_str(res: Iterable[bytes]) -> list[str]:
+    ...
+
+
+@overload
+def to_list_str(res: None) -> None:
+    ...
+
+
+def to_list_str(res: Iterable[bytes] | None) -> list[str] | None:
     if res is None:
         return res
     return [val.decode("utf-8") for val in res]

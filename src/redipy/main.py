@@ -1,11 +1,12 @@
 import contextlib
 import datetime
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from typing import Literal, overload
 
 from redipy.api import PipelineAPI, RedisClientAPI, RSetMode, RSM_ALWAYS
 from redipy.backend.backend import ExecFunction
 from redipy.backend.runtime import Runtime
+from redipy.graph.seq import SequenceObj
 from redipy.memory.rt import LocalRuntime
 from redipy.redis.conn import RedisConfig, RedisConnection, RedisFactory
 from redipy.symbolic.seq import FnContext
@@ -26,6 +27,9 @@ class Redis(RedisClientAPI):
             is_caching_enabled: bool = True,
             redis_factory: RedisFactory | None = None,
             rt: Runtime | None = None,
+            lua_code_hook: Callable[[list[str]], None] | None = None,
+            compile_hook: Callable[[SequenceObj], None] | None = None,
+            verbose_lua_test: bool = False,
             ) -> None:
         if backend == "custom":
             if rt is None:
@@ -41,14 +45,19 @@ class Redis(RedisClientAPI):
                     "prefix": "" if prefix is None else prefix,
                     "path": "." if path is None else path,
                 }
-            rt = RedisConnection(
+            rrt = RedisConnection(
                 "" if redis_module is None else redis_module,
                 cfg=cfg,
                 redis_factory=redis_factory,
-                is_caching_enabled=is_caching_enabled)
+                is_caching_enabled=is_caching_enabled,
+                verbose_test=verbose_lua_test)
+            if lua_code_hook is not None:
+                rrt.set_code_hook(lua_code_hook)
+            rt = rrt
         else:
             raise ValueError(f"unknown backend {backend}")
         self._rt: Runtime = rt
+        rt.set_compile_hook(compile_hook)
 
     def register_script(self, ctx: FnContext) -> ExecFunction:
         return self._rt.register_script(ctx)
@@ -187,3 +196,36 @@ class Redis(RedisClientAPI):
 
     def zcard(self, key: str) -> int:
         return self._rt.zcard(key)
+
+    def incrby(self, key: str, inc: float | int) -> float:
+        return self._rt.incrby(key, inc)
+
+    def exists(self, *keys: str) -> int:
+        return self._rt.exists(*keys)
+
+    def delete(self, *keys: str) -> int:
+        return self._rt.delete(*keys)
+
+    def hset(self, key: str, mapping: dict[str, str]) -> int:
+        return self._rt.hset(key, mapping)
+
+    def hdel(self, key: str, *fields: str) -> int:
+        return self._rt.hdel(key, *fields)
+
+    def hget(self, key: str, field: str) -> str | None:
+        return self._rt.hget(key, field)
+
+    def hmget(self, key: str, *fields: str) -> dict[str, str | None]:
+        return self._rt.hmget(key, *fields)
+
+    def hincrby(self, key: str, field: str, inc: float | int) -> float:
+        return self._rt.hincrby(key, field, inc)
+
+    def hkeys(self, key: str) -> list[str]:
+        return self._rt.hkeys(key)
+
+    def hvals(self, key: str) -> list[str]:
+        return self._rt.hvals(key)
+
+    def hgetall(self, key: str) -> dict[str, str]:
+        return self._rt.hgetall(key)

@@ -4,9 +4,8 @@ from typing import Any, cast, Literal, TYPE_CHECKING, TypedDict
 
 from redipy.backend.backend import Backend, ExecFunction
 from redipy.graph.cmd import CommandObj
-from redipy.graph.expr import BinOps, ExprObj
+from redipy.graph.expr import BinOps, ExprObj, JSONType
 from redipy.graph.seq import SequenceObj
-from redipy.symbolic.expr import JSONType
 from redipy.util import json_compact
 
 
@@ -387,6 +386,17 @@ class LocalBackend(
         if expr["kind"] == "array_len":
             arr_ref = self.compile_expr(ctx, expr["var"])
             return lambda state: len(cast(list, arr_ref(state)))
+        if expr["kind"] == "concat":
+            exec_strs = [
+                self.compile_expr(ctx, strobj)
+                for strobj in expr["strings"]
+            ]
+
+            def exec_concat(state: ExecState) -> JSONType:
+                strs = [f"{expr_str(state)}" for expr_str in exec_strs]
+                return "".join(strs)
+
+            return exec_concat
         if expr["kind"] == "call":
             exec_args = [
                 self.compile_expr(ctx, arg_fn)
@@ -412,6 +422,7 @@ class LocalBackend(
                 keys: dict[str, str],
                 args: dict[str, JSONType]) -> JSONType:
             with runtime.lock():
+                success = False
                 try:
                     state: ExecState = (
                         [],  # keyv
@@ -426,14 +437,19 @@ class LocalBackend(
                     )
                     code(state)
                     # print(f"state: {state}")
-                    res = state[state_return].pop()
+                    try:
+                        res = state[state_return].pop()
+                    except IndexError as e:
+                        msg = "did you forget to call 'set_return_value'?"
+                        raise ValueError(msg) from e
                     if res in ({}, []):
                         # NOTE: we turn empty lists or objects into None
                         # to have a consistent behavior with lua
                         res = None
-                    return res
-                except Exception as e:
-                    print(f"state: {state}")
-                    raise e
+                    success = True
+                finally:
+                    if not success:
+                        print(f"state: {state}")
+                return res
 
         return exec_code
