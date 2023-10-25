@@ -129,6 +129,121 @@ r.lpop("small", 4)  # ["1", "2"]
 r.lpop("big", 4)  # ["3", "4"]
 ```
 
+## More Advanced Example
+
+Here, we are implementing and object stack with fall-through lookup. Each frame
+in the stack has its own fields. If the user tries to access a field that
+doesn't exist in the current stack frame (and they are setting `cascade=True`)
+the accessor will recursively go down the stack until a value for the given
+field is found (or the end of the stack is reached).
+
+```python
+from redipy.api import RedisClientAPI
+from redipy.backend.backend import ExecFunction
+from redipy.graph.expr import JSONType
+from redipy.symbolic.expr import Strs
+from redipy.symbolic.fun import ToIntStr, ToNum
+from redipy.symbolic.rhash import RedisHash
+from redipy.symbolic.rvar import RedisVar
+from redipy.symbolic.seq import FnContext
+
+
+class RStack:
+    def __init__(
+            self,
+            rt: RedisClientAPI,
+            base: str) -> None:
+        self._rt = rt
+        self._base = base
+
+        self._set_value = self._set_value_script()
+        self._get_value = self._get_value_script()
+        self._pop_frame = self._pop_frame_script()
+        self._get_cascading = self._get_cascading_script()
+
+    def key(self, name: str) -> str:
+        return f"{self._base}:{name}"
+
+    def init(self) -> None:
+        self._rt.set(self.key("size"), "0")
+
+    def push_frame(self) -> None:
+        self._rt.incrby(self.key("size"), 1)
+
+    def pop_frame(self) -> None:
+        self._pop_frame(
+            keys={"size": self.key("size"), "frame": self.key("frame")},
+            args={})
+
+    def set_value(self, field: str, value: str) -> None:
+        self._set_value(
+            keys={"size": self.key("size"), "frame": self.key("frame")},
+            args={"field": field, "value": value})
+
+    def get_value(self, field: str, *, cascade: bool = False) -> JSONType:
+        if cascade:
+            return self._get_cascading(
+                keys={"size": self.key("size"), "frame": self.key("frame")},
+                args={"field": field})
+        return self._get_value(
+            keys={"size": self.key("size"), "frame": self.key("frame")},
+            args={"field": field})
+
+    def _set_value_script(self) -> ExecFunction:
+        ctx = FnContext()
+        rsize = RedisVar(ctx.add_key("size"))
+        rframe = RedisHash(Strs(
+            ctx.add_key("frame"),
+            ":",
+            ToIntStr(rsize.get(no_adjust=True))))
+        field = ctx.add_arg("field")
+        value = ctx.add_arg("value")
+        ctx.add(rframe.hset({
+            field: value,
+        }))
+        ctx.set_return_value(None)
+        return self._rt.register_script(ctx)
+
+    def _get_value_script(self) -> ExecFunction:
+        ctx = FnContext()
+        rsize = RedisVar(ctx.add_key("size"))
+        rframe = RedisHash(Strs(
+            ctx.add_key("frame"),
+            ":",
+            ToIntStr(rsize.get(no_adjust=True))))
+        field = ctx.add_arg("field")
+        ctx.set_return_value(rframe.hget(field))
+        return self._rt.register_script(ctx)
+
+    def _pop_frame_script(self) -> ExecFunction:
+        ctx = FnContext()
+        rsize = RedisVar(ctx.add_key("size"))
+        rframe = RedisHash(
+            Strs(ctx.add_key("frame"), ":", ToIntStr(rsize.get())))
+        ctx.add(rframe.delete())
+        ctx.add(rsize.incrby(-1))
+        ctx.set_return_value(None)
+        return self._rt.register_script(ctx)
+
+    def _get_cascading_script(self) -> ExecFunction:
+        ctx = FnContext()
+        rsize = RedisVar(ctx.add_key("size"))
+        base = ctx.add_local(ctx.add_key("frame"))
+        field = ctx.add_arg("field")
+        pos = ctx.add_local(ToNum(rsize.get()))
+        res = ctx.add_local(None)
+        cur = ctx.add_local(None)
+        rframe = RedisHash(cur)
+
+        loop = ctx.while_(res.eq_(None).and_(pos.ge_(0)))
+        loop.add(cur.assign(Strs(base, ":", ToIntStr(pos))))
+        loop.add(res.assign(rframe.hget(field)))
+        loop.add(pos.assign(pos - 1))
+
+        ctx.set_return_value(res)
+        return self._rt.register_script(ctx)
+```
+
 ## Limitations
 The current limitations of `redipy` are:
 
