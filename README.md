@@ -91,7 +91,9 @@ The main features of `redipy` are:
 ## Scripts
 
 Redis scripts can be defined via a symbolic API in python and can be executed
-by any backend:
+by any backend. Here, we are writing a filter function that drains a redis list
+and puts items into a "left" and a "right" list by comparing each items
+numerical value with a given `cmp` value:
 
 ```python
 ctx = redipy.script.FnContext()
