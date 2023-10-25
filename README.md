@@ -141,13 +141,10 @@ field is found (or the end of the stack is reached).
 
 ```python
 from redipy.api import RedisClientAPI
-from redipy.backend.backend import ExecFunction
-from redipy.graph.expr import JSONType
-from redipy.symbolic.expr import Strs
-from redipy.symbolic.fun import ToIntStr, ToNum
-from redipy.symbolic.rhash import RedisHash
-from redipy.symbolic.rvar import RedisVar
-from redipy.symbolic.seq import FnContext
+from redipy.script import Strs, ToIntStr, ToNum, RedisVar, FnContext
+from redipy.backend.backend import ExecFunction  # FIXME fix to script in 0.4.0
+from redipy.graph.expr import JSONType  # FIXME fix to script in 0.4.0
+from redipy.symbolic.rhash import RedisHash  # FIXME fix to script in 0.4.0
 
 
 class RStack:
