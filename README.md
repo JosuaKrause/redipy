@@ -141,10 +141,16 @@ field is found (or the end of the stack is reached).
 
 ```python
 from redipy.api import RedisClientAPI
-from redipy.script import Strs, ToIntStr, ToNum, RedisVar, FnContext
-from redipy.backend.backend import ExecFunction  # FIXME fix to script in 0.4.0
-from redipy.graph.expr import JSONType  # FIXME fix to script in 0.4.0
-from redipy.symbolic.rhash import RedisHash  # FIXME fix to script in 0.4.0
+from redipy.script import (
+    ExecFunction,
+    FnContext,
+    JSONType,
+    RedisHash,
+    RedisVar,
+    Strs,
+    ToIntStr,
+    ToNum,
+)
 
 
 class RStack:
@@ -265,7 +271,7 @@ The current limitations of `redipy` are:
   script are passed as JSON bytes for the lua backend. Keys are passed as is.
   The return value of the script is also converted into JSON when moving from
   lua to python. Note, that the empty dictionary (`{}`) and the empty list
-  (`[]`) are indistinguishable in lua so `None` is returned instead if setting
+  (`[]`) are indistinguishable in lua so `None` is returned instead of setting
   the return value to either of these.
 
 ## TODOs

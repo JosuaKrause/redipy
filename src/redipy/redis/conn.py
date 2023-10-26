@@ -132,6 +132,9 @@ class PipelineConnection(PipelineAPI):
         self._fixes: list[Callable[[Any], Any]] = []
         self._prefix = prefix
 
+    def has_pending(self) -> bool:
+        return len(self._fixes) > 0
+
     def with_prefix(self, key: str) -> str:
         return f"{self._prefix}{key}"
 
@@ -320,7 +323,10 @@ class RedisConnection(Runtime[list[str]]):
     def pipeline(self) -> Iterator[PipelineAPI]:
         with self.get_connection() as conn:
             with conn.pipeline() as pipe:
-                yield PipelineConnection(pipe, self._module)
+                pconn = PipelineConnection(pipe, self._module)
+                yield pconn
+                if pconn.has_pending():
+                    pconn.execute()  # drain pending tasks
 
     @contextlib.contextmanager
     def get_connection(self) -> Iterator[Redis]:

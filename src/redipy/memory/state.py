@@ -69,6 +69,7 @@ class State:
         return False
 
     def delete(self, deletes: Iterable[str]) -> None:
+        # FIXME delete in pipeline and then recreating value doesn't work
         if self._parent is not None:
             self._deletes.update(deletes)
         for key in deletes:

@@ -60,8 +60,8 @@ class LocalRuntime(Runtime[Cmd]):
         pipe = LocalPipeline(
             self._sm.get_state(), exec_call)
         yield pipe
-        if pipe.has_queue():
-            raise ValueError(f"unexecuted commands in pipeline {pipe}")
+        if pipe.has_pending():
+            pipe.execute()
 
     @staticmethod
     def require_argc(
@@ -319,7 +319,7 @@ class LocalPipeline(PipelineAPI):
     def get_state(self) -> State:
         return self._sm.get_state()
 
-    def has_queue(self) -> bool:
+    def has_pending(self) -> bool:
         return len(self._cmd_queue) > 0
 
     def execute(self) -> list:
