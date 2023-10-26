@@ -18,6 +18,7 @@ RSM_EXISTS: RSetMode = "if_exists"
 
 
 class PipelineAPI:
+    # FIXME: maybe make pipelines just another program
     def execute(self) -> list:
         raise NotImplementedError()
 
