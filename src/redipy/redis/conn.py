@@ -365,6 +365,7 @@ class RedisConnection(Runtime[list[str]]):
                 else:
                     yield client
             except ResponseError as e:
+                # FIXME don't use notes
                 handle_err(e)
                 raise e
 
