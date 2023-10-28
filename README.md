@@ -314,6 +314,10 @@ Adding functions as described above is discouraged as it may lead to
 inconsistent support of different backends and inconsistent behavior across
 different backends.
 
+## If You Find a Bug
+
+TODO
+
 ## Contributing
 The easiest way to contribute to `redipy` is to pick some redis API functions
 that have not (or not completely) been implemented in `redipy` yet. For this

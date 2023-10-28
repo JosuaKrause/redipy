@@ -23,3 +23,5 @@ class RedisList(RedisObj):
 
     def llen(self) -> Expr:
         return self.redis_fn("llen")
+
+    # TODO implement lrange

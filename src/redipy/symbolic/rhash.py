@@ -30,3 +30,5 @@ class RedisHash(RedisObj):
 
     def hgetall(self) -> Expr:
         return self.redis_fn("hgetall")
+
+    # FIXME test hgetall hvals hkeys

@@ -59,6 +59,8 @@ class Redis(RedisClientAPI):
         self._rt: Runtime = rt
         rt.set_compile_hook(compile_hook)
 
+    # FIXME access to raw connection
+
     def register_script(self, ctx: FnContext) -> ExecFunction:
         return self._rt.register_script(ctx)
 

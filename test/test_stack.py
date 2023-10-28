@@ -1,5 +1,6 @@
 from collections.abc import Callable
 from test.util import get_test_config
+from typing import cast
 
 import pytest
 
@@ -143,10 +144,13 @@ class RStack:
     def push_frame(self) -> None:
         self._rt.incrby(self.key("size"), 1)
 
-    def pop_frame(self) -> None:
-        self._pop_frame(
+    def pop_frame(self) -> dict[str, str] | None:
+        res = self._pop_frame(
             keys={"size": self.key("size"), "frame": self.key("frame")},
             args={})
+        if res is None:
+            return None
+        return cast(dict, res)
 
     def set_value(self, field: str, value: str) -> None:
         self._set_value(
@@ -194,9 +198,10 @@ class RStack:
         rsize = RedisVar(ctx.add_key("size"))
         rframe = RedisHash(
             Strs(ctx.add_key("frame"), ":", ToIntStr(rsize.get())))
+        lcl = ctx.add_local(rframe.hgetall())
         ctx.add(rframe.delete())
         ctx.add(rsize.incrby(-1))
-        ctx.set_return_value(None)
+        ctx.set_return_value(lcl)
         return self._rt.register_script(ctx)
 
     def _get_cascading_script(self) -> ExecFunction:
@@ -331,7 +336,10 @@ def test_stack(rt_lua: bool) -> None:
     assert stack_bar.get_cascading("c") == "3c"
     assert stack_bar.get_cascading("d") is None
 
-    stack_foo.pop_frame()
+    assert stack_foo.pop_frame() == {
+        "b": "3b",
+        "c": "3c",
+    }
     stack_bar.pop_frame()
 
     assert stack_foo.get_value("a") is None

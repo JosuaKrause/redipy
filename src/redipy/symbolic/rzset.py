@@ -19,3 +19,5 @@ class RedisSortedSet(RedisObj):
 
     def card(self) -> Expr:
         return self.redis_fn("zcard")
+
+    # FIXME implement ZRANGE
