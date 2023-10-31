@@ -15,7 +15,7 @@ from redipy.symbolic.seq import FnContext
 class Redis(RedisClientAPI):
     def __init__(
             self,
-            backend: Literal["memory", "redis", "custom"],
+            backend: Literal["memory", "redis", "custom", "infer"] = "infer",
             *,
             cfg: RedisConfig | None = None,
             host: str | None = None,
@@ -31,12 +31,18 @@ class Redis(RedisClientAPI):
             compile_hook: Callable[[SequenceObj], None] | None = None,
             verbose_lua_test: bool = False,
             ) -> None:
+        if backend == "infer":
+            redis_cfgs = [cfg, host, port, passwd, prefix, path]
+            if rt is not None:
+                backend = "custom"
+            elif any(val is not None for val in redis_cfgs):
+                backend = "redis"
+            else:
+                backend = "memory"
         if backend == "custom":
             if rt is None:
                 raise ValueError("rt must not be None for custom backend")
-        elif backend == "memory":
-            rt = LocalRuntime()
-        elif backend == "redis":
+        elif backend == "redis" or (backend == "infer" and any(cfg)):
             if cfg is None:
                 cfg = {
                     "host": "localhost" if host is None else host,
@@ -54,6 +60,8 @@ class Redis(RedisClientAPI):
             if lua_code_hook is not None:
                 rrt.set_code_hook(lua_code_hook)
             rt = rrt
+        elif backend == "memory":
+            rt = LocalRuntime()
         else:
             raise ValueError(f"unknown backend {backend}")
         self._rt: Runtime = rt
