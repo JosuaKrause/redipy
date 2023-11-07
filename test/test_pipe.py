@@ -1,4 +1,5 @@
 # pylint: disable=singleton-comparison
+"""Tests pipeline functionality."""
 from test.util import get_setup
 
 import pytest
@@ -6,6 +7,12 @@ import pytest
 
 @pytest.mark.parametrize("rt_lua", [False, True])
 def test_pipe(rt_lua: bool) -> None:
+    """
+    Tests pipeline functionality.
+
+    Args:
+        rt_lua (bool): Whether to use the redis or memory runtime.
+    """
     rt = get_setup("test_pipe", rt_lua)
 
     rt.rpush("foo", "a", "b", "c", "d")
@@ -51,17 +58,28 @@ def test_pipe(rt_lua: bool) -> None:
     assert zcard_zset == 1
 
     rt.set("value", "5")
+    rt.set("third", "3")
     with rt.pipeline() as pipe:
         pipe.delete("value")
         pipe.exists("value")
         pipe.set("value", "10")
         pipe.exists("value")
         v_0, v_1, v_2, v_3 = pipe.execute()
+        pipe.set("other", "a")
+        pipe.delete("third")
+        v_4, v_5 = pipe.execute()
     assert v_0 == True  # noqa
     assert v_1 == False  # noqa
     assert v_2 == True  # noqa
     assert v_3 == True  # noqa
+    assert v_4 == False  # noqa
+    assert v_5 == True  # noqa
+    assert rt.exists("value") == True  # noqa
+    assert rt.exists("other") == True  # noqa
+    assert rt.exists("third") == False  # noqa
     assert rt.get("value") == "10"
+    assert rt.get("other") == "a"
+    assert rt.get("third") is None
 
     # FIXME test deleting during a pipe and filling fresh (for all key types)
     # FIXME test deleting and creating a different key during a pipe
