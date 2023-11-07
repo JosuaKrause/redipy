@@ -130,7 +130,6 @@
         "global-statement",
         "import-outside-toplevel",
         "invalid-unary-operand-type",
-        "missing-docstring",
         "not-an-iterable",
         "not-callable",
         "too-many-arguments",

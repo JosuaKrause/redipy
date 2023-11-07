@@ -1,3 +1,4 @@
+# pylint: disable=singleton-comparison
 from test.util import get_setup
 
 import pytest
@@ -48,6 +49,19 @@ def test_pipe(rt_lua: bool) -> None:
     assert zmin_zset == [("b", -1)]
     assert zmax_zset == [("c", 1)]
     assert zcard_zset == 1
+
+    rt.set("value", "5")
+    with rt.pipeline() as pipe:
+        pipe.delete("value")
+        pipe.exists("value")
+        pipe.set("value", "10")
+        pipe.exists("value")
+        v_0, v_1, v_2, v_3 = pipe.execute()
+    assert v_0 == True  # noqa
+    assert v_1 == False  # noqa
+    assert v_2 == True  # noqa
+    assert v_3 == True  # noqa
+    assert rt.get("value") == "10"
 
     # FIXME test deleting during a pipe and filling fresh (for all key types)
     # FIXME test deleting and creating a different key during a pipe

@@ -67,7 +67,68 @@ class Redis(RedisClientAPI):
         self._rt: Runtime = rt
         rt.set_compile_hook(compile_hook)
 
-    # FIXME access to raw connection
+    def get_runtime(self) -> Runtime:
+        """
+        Returns the associated runtime.
+
+        Returns:
+            Runtime: The current runtime.
+        """
+        return self._rt
+
+    def maybe_get_redis_runtime(self) -> RedisConnection | None:
+        """
+        Returns the redis runtime if this is a redis connection.
+
+        Returns:
+            RedisConnection | None: The redis runtime if available.
+            None otherwise.
+        """
+        if not isinstance(self._rt, RedisConnection):
+            return None
+        return self._rt
+
+    def maybe_get_memory_runtime(self) -> LocalRuntime | None:
+        """
+        Returns the memory runtime if this is a memory connection.
+
+        Returns:
+            LocalRuntime | None: The memory runtime if available.
+            None otherwise.
+        """
+        if not isinstance(self._rt, LocalRuntime):
+            return None
+        return self._rt
+
+    def get_redis_runtime(self) -> RedisConnection:
+        """
+        Returns the redis runtime.
+
+        Raises:
+            ValueError: If this is not a redis connection.
+
+        Returns:
+            RedisConnection: The redis runtime.
+        """
+        res = self.maybe_get_redis_runtime()
+        if res is None:
+            raise ValueError("not a redis runtime")
+        return res
+
+    def get_memory_runtime(self) -> LocalRuntime:
+        """
+        Returns the memory runtime.
+
+        Raises:
+            ValueError: If this is not a memory connection.
+
+        Returns:
+            LocalRuntime: The memory runtime.
+        """
+        res = self.maybe_get_memory_runtime()
+        if res is None:
+            raise ValueError("not a memory runtime")
+        return res
 
     def register_script(self, ctx: FnContext) -> ExecFunction:
         return self._rt.register_script(ctx)

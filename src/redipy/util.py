@@ -1,3 +1,8 @@
+"""
+This module contains various useful functions. The functions in this module are
+not necessarily be considered part of the package API and might change or
+disappear in the future. Use with caution outside of the package internals.
+"""
 import datetime
 import hashlib
 import inspect
@@ -27,11 +32,24 @@ TEST_SALT: dict[str, str] = {}
 
 
 def is_test() -> bool:
+    """
+    Whether we are currently running a test with pytest.
+
+    Returns:
+        bool: Whether the current execution environment is within a pytest.
+    """
     test_id = os.getenv("PYTEST_CURRENT_TEST")
     return test_id is not None
 
 
 def get_test_salt() -> str | None:
+    """
+    Creates a unique salt to be used as redis key prefix for unit tests.
+
+    Returns:
+        str | None: A unique prefix for the current test. None if we are not
+        running inside a pytest environment.
+    """
     test_id = os.getenv("PYTEST_CURRENT_TEST")
     if test_id is None:
         return None
@@ -46,6 +64,16 @@ def get_test_salt() -> str | None:
 
 
 def indent(text: str, amount: int = 0) -> list[str]:
+    """
+    Breaks a string into lines and indents each line by a set amount.
+
+    Args:
+        text (str): The text to break into lines.
+        amount (int, optional): The indentation amount. Defaults to 0.
+
+    Returns:
+        list[str]: The indented lines.
+    """
     istr = " " * amount
     return [
         f"{istr}{line}" for line in text.splitlines()
@@ -53,6 +81,17 @@ def indent(text: str, amount: int = 0) -> list[str]:
 
 
 def deindent(text: str) -> str:
+    """
+    Removes a fixed amount of whitespace in front of each line. The amount is
+    the maximum length of whitespace that is present on every line. The first
+    line and empty lines are treated specially to result in a pleasing output.
+
+    Args:
+        text (str): The text to deindent.
+
+    Returns:
+        str: The deindented text.
+    """
     min_indent = None
     lines = text.rstrip().splitlines()
     if lines and not lines[0]:
@@ -69,37 +108,98 @@ def deindent(text: str) -> str:
 
 
 def lua_fmt(text: str) -> str:
+    """
+    Formats a multi-line string by deindenting and changing the indent size
+    from 4 to 2.
+
+    Args:
+        text (str): The multi-line string.
+
+    Returns:
+        str: A deindented 2-space indented string.
+    """
     return deindent(text).replace("    ", "  ")
 
 
 def code_fmt(lines: list[str]) -> str:
+    """
+    Joins a list of lines.
+
+    Args:
+        lines (list[str]): The list of lines.
+
+    Returns:
+        str: The output as single string.
+    """
     return "".join(f"{line.rstrip()}\n" for line in lines)
 
 
 def get_text_hash(text: str) -> str:
+    """
+    Computes the blake2b hash of the given string.
+
+    Args:
+        text (str): The string.
+
+    Returns:
+        str: The hash of length text_hash_size.
+    """
     blake = hashlib.blake2b(digest_size=32)
     blake.update(text.encode("utf-8"))
     return blake.hexdigest()
 
 
 def text_hash_size() -> int:
+    """
+    The length of the hash produced by get_text_hash.
+
+    Returns:
+        int: The length of the hash.
+    """
     return 64
 
 
 def get_short_hash(text: str) -> str:
+    """
+    Computes a short blake2b hash of the given string.
+
+    Args:
+        text (str): The string.
+
+    Returns:
+        str: The hash of length short_hash_size.
+    """
     blake = hashlib.blake2b(digest_size=4)
     blake.update(text.encode("utf-8"))
     return blake.hexdigest()
 
 
 def short_hash_size() -> int:
+    """
+    The length of the hash produced by get_short_hash.
+
+    Returns:
+        int: The length of the hash.
+    """
     return 8
 
 
 BUFF_SIZE = 65536  # 64KiB
+"""
+The buffer size used to compute file hashes.
+"""
 
 
 def get_file_hash(fname: str) -> str:
+    """
+    Computes the blake2b hash of the given file's content.
+
+    Args:
+        fname (str): The filename.
+
+    Returns:
+        str: The hash of length file_hash_size.
+    """
     blake = hashlib.blake2b(digest_size=32)
     with open(fname, "rb") as fin:
         while True:
@@ -111,15 +211,42 @@ def get_file_hash(fname: str) -> str:
 
 
 def file_hash_size() -> int:
+    """
+    The length of the hash produced by get_file_hash.
+
+    Returns:
+        int: The length of the hash.
+    """
     return 64
 
 
 def is_hex(text: str) -> bool:
+    """
+    Whether the string represents a hexadecimal value.
+
+    Args:
+        text (str): The string to inspect.
+
+    Returns:
+        bool: Whether the string represents a hex value.
+    """
     hex_digits = set(string.hexdigits)
     return all(char in hex_digits for char in text)
 
 
 def only(arr: list[RT]) -> RT:
+    """
+    Extracts the only item of a single item list.
+
+    Args:
+        arr (list[RT]): The single item list.
+
+    Raises:
+        ValueError: If the length of the list is not 1.
+
+    Returns:
+        RT: The single item.
+    """
     if len(arr) != 1:
         raise ValueError(f"array must have exactly one element: {arr}")
     return arr[0]
@@ -132,6 +259,7 @@ ELAPSED_UNITS: list[tuple[int, str]] = [
     (60*60, "h"),
     (60*60*24, "d"),
 ]
+"""Unit conversions for time durations."""
 
 
 def elapsed_time_string(elapsed: float) -> str:
@@ -146,18 +274,48 @@ def elapsed_time_string(elapsed: float) -> str:
 
 
 def now() -> datetime.datetime:
+    """
+    Returns a timestamp representing now.
+
+    Returns:
+        datetime.datetime: The timestamp representing now.
+    """
     return datetime.datetime.now(datetime.timezone.utc).astimezone()
 
 
 def fmt_time(when: datetime.datetime) -> str:
+    """
+    Format a timestamp.
+
+    Args:
+        when (datetime.datetime): The timestamp.
+
+    Returns:
+        str: The formatted time.
+    """
     return when.isoformat()
 
 
 def get_time_str() -> str:
+    """
+    Formatted now.
+
+    Returns:
+        str: Formatted now.
+    """
     return fmt_time(now())
 
 
 def parse_time_str(time_str: str) -> datetime.datetime:
+    """
+    Parses a timestamp formatted via fmt_time.
+
+    Args:
+        time_str (str): The time as string.
+
+    Returns:
+        datetime.datetime: A timestamp.
+    """
     return datetime.datetime.fromisoformat(time_str)
 
 

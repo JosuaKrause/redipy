@@ -1,3 +1,7 @@
+"""
+This module re-exports various scripting functionality. The module exists as
+unified module for all scripting related symbols.
+"""
 from redipy.backend.backend import ExecFunction
 from redipy.graph.expr import JSONType
 from redipy.symbolic.expr import Constant, Strs
