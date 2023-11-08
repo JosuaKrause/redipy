@@ -9,7 +9,7 @@ that implement the same functionality, such as:
 - `redipy.redis`: A backend that connects to an actual Redis instance and
   delegates all operations to it.
 
-![redipy logo](img/redipy_logo.png =x150)
+![redipy logo](img/redipy_logo_small.png)
 
 ### Warning
 
@@ -305,6 +305,9 @@ The current limitations of `redipy` are:
 
 ## License
 `redipy` is licensed under the [Apache License (Version 2.0)](LICENSE).
+
+## Changelog
+The changelog can be found [here](CHANGELOG.md).
 
 ## Contributing
 
