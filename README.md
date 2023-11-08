@@ -9,7 +9,7 @@ that implement the same functionality, such as:
 - `redipy.redis`: A backend that connects to an actual Redis instance and
   delegates all operations to it.
 
-![redipy logo](img/redipy_logo.png)
+![redipy logo](img/redipy_logo.png =x150)
 
 ### Warning
 
