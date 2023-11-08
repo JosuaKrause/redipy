@@ -69,6 +69,7 @@ def indent(text: str, amount: int = 0) -> list[str]:
 
     Args:
         text (str): The text to break into lines.
+
         amount (int, optional): The indentation amount. Defaults to 0.
 
     Returns:

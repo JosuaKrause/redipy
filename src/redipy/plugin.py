@@ -49,7 +49,9 @@ class LocalRedisFunction(GeneralFunction):
 
         Args:
             sm (Machine): The memory redis state.
+
             key (str): The key.
+
             args (list[JSONType]): The rest of the arguments.
 
         Returns:
@@ -125,7 +127,9 @@ class LuaRedisPatch(LuaPatch):
 
         Args:
             expr (CallObj): The function call.
+
             args (list[ExprObj]): The arguments of the function call.
+
             is_expr_stmt (bool): Whether the call is a lua statement. Most
             patches should not be applied in this context as lua doesn't allow
             expressions as statements (whereas function calls can be both).
@@ -150,6 +154,7 @@ class LuaGeneralPatch(LuaPatch):
 
         Args:
             expr (CallObj): The function call.
+
             is_expr_stmt (bool): Whether the call is a lua statement. Most
             patches should not be applied in this context as lua doesn't allow
             expressions as statements (whereas function calls can be both).

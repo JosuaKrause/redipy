@@ -1,3 +1,6 @@
+"""This module defines the basic redis API. All redis functions appear once
+in RedisAPI and once in PipelineAPI. Additional functionality is added via
+RedisClientAPI."""
 import contextlib
 import datetime
 from collections.abc import Iterator
@@ -24,7 +27,8 @@ This is equivalent to the XX flag."""
 
 
 class PipelineAPI:
-    # FIXME: maybe make pipelines just another program
+    """Redis API as pipeline. All methods return None and you have to call
+    execute to retrieve the results of the pipeline commands."""
     def execute(self) -> list:
         """
         Executes the pipeline and returns the result values of each command.
@@ -49,17 +53,23 @@ class PipelineAPI:
 
         Args:
             key (str): The key.
+
             value (str): The value.
+
             mode (RSetMode, optional): Under which condition to set the value
             valid values are RSM_ALWAYS, RSM_MISSING, and RSM_EXISTS.
             RSM_MISSING is the equivalent of setting the NX flag. RSM_EXISTS is
             the equivalent of the XX flag. Defaults to RSM_ALWAYS.
+
             return_previous (bool, optional): Whether to return the previous
             value associated with the key. Defaults to False.
+
             expire_timestamp (datetime.datetime | None, optional): A timestamp
             on when to expire the key. Defaults to None.
+
             expire_in (float | None, optional): A relative time in seconds on
             when to expire the key. Defaults to None.
+
             keep_ttl (bool, optional): Whether to keep previous expiration
             times. Defaults to False.
         """
@@ -144,6 +154,7 @@ class PipelineAPI:
 
 
 class RedisAPI:
+    """The redis API."""
     @overload
     def set(
             self,
@@ -198,17 +209,23 @@ class RedisAPI:
 
         Args:
             key (str): The key.
+
             value (str): The value.
+
             mode (RSetMode, optional): Under which condition to set the value
             valid values are RSM_ALWAYS, RSM_MISSING, and RSM_EXISTS.
             RSM_MISSING is the equivalent of setting the NX flag. RSM_EXISTS is
             the equivalent of the XX flag. Defaults to RSM_ALWAYS.
+
             return_previous (bool, optional): Whether to return the previous
             value associated with the key. Defaults to False.
+
             expire_timestamp (datetime.datetime | None, optional): A timestamp
             on when to expire the key. Defaults to None.
+
             expire_in (float | None, optional): A relative time in seconds on
             when to expire the key. Defaults to None.
+
             keep_ttl (bool, optional): Whether to keep previous expiration
             times. Defaults to False.
 
@@ -325,9 +342,28 @@ class RedisAPI:
 
 
 class RedisClientAPI(RedisAPI):
+    """This class enriches the redis API with pipeline and script
+    functionality."""
     @contextlib.contextmanager
     def pipeline(self) -> Iterator[PipelineAPI]:
+        """
+        Starts a redis pipeline. When leaving the resource block the pipeline
+        is executed automatically and the results are discarded. If you need
+        the results call execute on the pipeline object.
+
+        Yields:
+            Iterator[PipelineAPI]: The pipeline.
+        """
         raise NotImplementedError()
 
     def register_script(self, ctx: FnContext) -> ExecFunction:
+        """
+        Registers a script that can be executed in this redis runtime.
+
+        Args:
+            ctx (FnContext): The script to register.
+
+        Returns:
+            ExecFunction: A python that can be called to execute the script.
+        """
         raise NotImplementedError()
