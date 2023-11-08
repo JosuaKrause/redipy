@@ -9,11 +9,13 @@ that implement the same functionality, such as:
 - `redipy.redis`: A backend that connects to an actual Redis instance and
   delegates all operations to it.
 
+![redipy logo](img/redipy_logo.png)
+
 ### Warning
 
 This library is still early in development and not all redis functions are
 available yet!
-If you need certain functionality have a look at the
+If you need certain functionality or found a bug, have a look at the
 [contributing](#Contributing) section.
 It is easy to add redis functions to the API.
 
@@ -33,12 +35,22 @@ object with the desired backend. For example:
 import redipy
 
 # Create a redipy client using the memory backend
-r = redipy.Redis(backend="memory")
+r = redipy.Redis()
 
 # Create a redipy client using the redis backend
-r = redipy.Redis(backend="redis", host="localhost", port=6379)
+r = redipy.Redis(host="localhost", port=6379)
 
 # Or
+r = redipy.Redis(
+    cfg={
+        "host": "localhost",
+        "port": 6379,
+        "passwd": "",
+        "prefix": "",
+    })
+
+# You can specify the backend explicitly to ensure that the correct parameters
+# are passed to the constructor
 r = redipy.Redis(
     backend="redis",
     cfg={
@@ -77,16 +89,24 @@ The main features of `redipy` are:
 - Flexibility: You can choose from different backends that suit your needs and
   preferences, without changing your code or learning new APIs.
 
-- Performance: You can leverage the high performance of Redis or other backends
-  that offer fast and scalable data storage and retrieval.
-
-- Compatibility: You can use any Redis client or tool with any backend.
-
-- Migration: You can easily migrate data between different backends, or use
-  multiple backends simultaneously.
+- Adaptability: You can start your project small with the memory backend and
+  only switch to a full redis server once the application grows.
 
 - Scripting: You can create backend independent redis scripts without using lua.
   Scripts are written using a symbolic API in python.
+
+- Compatibility: You can use any Redis client or tool with any backend.
+
+- Mockability: You can use redipy in tests that require redis with the memory
+  backend to easily mock the functionality without actually having to run a
+  redis server in the background. Also, this avoids issues that might occur
+  when running tests in parallel with an actual redis server.
+
+- Performance: You can leverage the high performance of Redis or other backends
+  that offer fast and scalable data storage and retrieval.
+
+- Migration: You can easily migrate data between different backends, or use
+  multiple backends simultaneously.
 
 ## Scripts
 
@@ -286,11 +306,30 @@ The current limitations of `redipy` are:
 ## License
 `redipy` is licensed under the [Apache License (Version 2.0)](LICENSE).
 
-## Missing Redis or Lua Functions
+## Contributing
+
+Redipy is currently maintained by one person. Any help, even if it is just
+creating issues for bugs, are much appreciated.
+
+### If You Find a Bug
+
+If you encounter a bug, please open an issue to draw attention to it or give
+a thumbsup if the issue already exists. This helps with prioritizing
+implementation efforts. Even if you cannot solve the bug yourself,
+investigating why it happens or creating a PR to add test cases helps a lot.
+If you have a fix for a bug don't hesistate to open a PR.
+
+### Missing Redis or Lua Functions
 If you encounter a missing redis or lua function please consider adding it
-yourself (see #Contributing). However, if you need it only in your local setup
+yourself (see #Implementing). Here also opening an issue or giving a thumbsup
+to existing issues helps with prioritizing.
+
+However, if you need it only in your local setup
 without API support or support for multiple backends, pipelines, etc. you can
-use the plug-in mechanism.
+use the raw underlying redis connection via
+`redipy.main.Redis.get_redis_runtime` and
+`redipy.redis.conn.RedisConnection.get_connection` or make use of
+the plug-in mechanism.
 
 For the memory backend you can use
 `redipy.memory.rt.LocalRuntime.add_redis_function_plugin` or
@@ -314,14 +353,12 @@ Adding functions as described above is discouraged as it may lead to
 inconsistent support of different backends and inconsistent behavior across
 different backends.
 
-## If You Find a Bug
+### Implementing
 
-TODO
-
-## Contributing
 The easiest way to contribute to `redipy` is to pick some redis API functions
-that have not (or not completely) been implemented in `redipy` yet. For this
-follow these steps:
+that have not (or not completely) been implemented in `redipy` yet.
+It is also much appreciated if you just add test cases or the stubs in a PR.
+For a full implementation follow these steps:
 
 1. Add the signature of the function to `redipy.api.RedisAPI`. Adjust as
   necessary from the redis spec to get a pythonic feel. Also, add the signature
