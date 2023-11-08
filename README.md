@@ -160,6 +160,7 @@ the accessor will recursively go down the stack until a value for the given
 field is found (or the end of the stack is reached).
 
 ```python
+from typing import cast
 from redipy.api import RedisClientAPI
 from redipy.script import (
     ExecFunction,
@@ -195,10 +196,13 @@ class RStack:
     def push_frame(self) -> None:
         self._rt.incrby(self.key("size"), 1)
 
-    def pop_frame(self) -> None:
-        self._pop_frame(
+    def pop_frame(self) -> dict[str, str] | None:
+        res = self._pop_frame(
             keys={"size": self.key("size"), "frame": self.key("frame")},
             args={})
+        if res is None:
+            return None
+        return cast(dict, res)
 
     def set_value(self, field: str, value: str) -> None:
         self._set_value(
@@ -245,9 +249,10 @@ class RStack:
         rsize = RedisVar(ctx.add_key("size"))
         rframe = RedisHash(
             Strs(ctx.add_key("frame"), ":", ToIntStr(rsize.get())))
+        lcl = ctx.add_local(rframe.hgetall())
         ctx.add(rframe.delete())
         ctx.add(rsize.incrby(-1))
-        ctx.set_return_value(None)
+        ctx.set_return_value(lcl)
         return self._rt.register_script(ctx)
 
     def _get_cascading_script(self) -> ExecFunction:
