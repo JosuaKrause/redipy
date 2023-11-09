@@ -3,6 +3,7 @@
 from test.util import get_setup
 
 import pytest
+import redis as redis_lib
 
 
 @pytest.mark.parametrize("rt_lua", [False, True])
@@ -59,6 +60,11 @@ def test_pipe(rt_lua: bool) -> None:
 
     rt.set("value", "5")
     rt.set("third", "3")
+    rt.lpush("lval", "1")
+    rt.hset("hval", {"b": "b"})
+    rt.zadd("zval", {"c": 1.0})
+    rt.lpush("cval", "abc")
+    assert rt.exists("value", "third", "lval", "hval", "zval") == 5
     with rt.pipeline() as pipe:
         pipe.delete("value")
         pipe.exists("value")
@@ -68,19 +74,70 @@ def test_pipe(rt_lua: bool) -> None:
         pipe.set("other", "a")
         pipe.delete("third")
         v_4, v_5 = pipe.execute()
+        pipe.delete("lval")
+        pipe.exists("lval")
+        pipe.lpush("lval", "2")
+        v_6, v_7, v_8 = pipe.execute()
+        pipe.delete("hval")
+        pipe.exists("hval")
+        pipe.hset("hval", {"a": "a"})
+        v_9, v_10, v_11 = pipe.execute()
+        pipe.delete("zval")
+        pipe.exists("zval")
+        pipe.zadd("zval", {"a": 0.5, "b": 1.5})
+        v_12, v_13, v_14 = pipe.execute()
+        pipe.delete("cval")
+        pipe.exists("cval")
+        pipe.hset("cval", {"a": "0", "b": "1", "c": "2"})
+        v_15, v_16, v_17 = pipe.execute()
+        pipe.set("late_val", "a")
+        pipe.delete("late_val")
+        pipe.set("late_val", "b")
+        pipe.delete("late_val")
+        pipe.set("late_val", "c")
+        v_18, v_19, v_20, v_21, v_22 = pipe.execute()
     assert v_0 == True  # noqa
-    assert v_1 == False  # noqa
+    assert v_1 == 0
     assert v_2 == True  # noqa
-    assert v_3 == True  # noqa
-    assert v_4 == False  # noqa
+    assert v_3 == 1
+    assert v_4 == True  # noqa
     assert v_5 == True  # noqa
-    assert rt.exists("value") == True  # noqa
-    assert rt.exists("other") == True  # noqa
-    assert rt.exists("third") == False  # noqa
+    assert v_6 == True  # noqa
+    assert v_7 == 0
+    assert v_8 == 1
+    assert v_9 == True  # noqa
+    assert v_10 == 0
+    assert v_11 == 1
+    assert v_12 == True  # noqa
+    assert v_13 == 0
+    assert v_14 == 2
+    assert v_15 == True  # noqa
+    assert v_16 == 0
+    assert v_17 == 3
+    assert v_18 == True  # noqa
+    assert v_19 == True  # noqa
+    assert v_20 == True  # noqa
+    assert v_21 == True  # noqa
+    assert v_22 == True  # noqa
+    assert rt.exists("value") == 1
+    assert rt.exists("other") == 1
+    assert rt.exists("third") == 0
     assert rt.get("value") == "10"
     assert rt.get("other") == "a"
     assert rt.get("third") is None
-
-    # FIXME test deleting during a pipe and filling fresh (for all key types)
-    # FIXME test deleting and creating a different key during a pipe
-    # FIXME check if value "exists" after deleting in pipe
+    assert rt.lpop("lval") == "2"
+    assert rt.hgetall("hval") == {"a": "a"}
+    assert rt.zpop_max("zval", 3) == [("b", 1.5), ("a", 0.5)]
+    assert rt.hgetall("cval") == {"a": "0", "b": "1", "c": "2"}
+    assert rt.hkeys("cval") == ["a", "b", "c"]
+    assert rt.hvals("cval") == ["0", "1", "2"]
+    if rt_lua:
+        with pytest.raises(
+                redis_lib.exceptions.ResponseError,
+                match="WRONGTYPE Operation against a key holding "
+                "the wrong kind of value"):
+            assert rt.lpop("cval")
+    else:
+        with pytest.raises(ValueError, match="key cval already used as hash"):
+            assert rt.lpop("cval")
+    assert rt.get("late_val") == "c"

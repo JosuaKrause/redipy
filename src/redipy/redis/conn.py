@@ -216,7 +216,7 @@ class PipelineConnection(PipelineAPI):
         self.add_fixup(int)
 
     def zadd(self, key: str, mapping: dict[str, float]) -> None:
-        self._pipe.zadd(self.with_prefix(key), mapping)  # type: ignore
+        self._pipe.zadd(self.with_prefix(key), mapping=mapping)  # type: ignore
         self.add_fixup(int)
 
     def zpop_max(
@@ -254,7 +254,7 @@ class PipelineConnection(PipelineAPI):
         self.add_fixup(int)
 
     def hset(self, key: str, mapping: dict[str, str]) -> None:
-        self._pipe.hset(self.with_prefix(key), mapping)  # type: ignore
+        self._pipe.hset(self.with_prefix(key), mapping=mapping)  # type: ignore
         self.add_fixup(int)
 
     def hdel(self, key: str, *fields: str) -> None:
@@ -660,7 +660,9 @@ class RedisConnection(Runtime[list[str]]):
 
     def hset(self, key: str, mapping: dict[str, str]) -> int:
         with self.get_connection() as conn:
-            return conn.hset(self.with_prefix(key), mapping)  # type: ignore
+            return conn.hset(
+                self.with_prefix(key),
+                mapping=mapping)  # type: ignore
 
     def hdel(self, key: str, *fields: str) -> int:
         with self.get_connection() as conn:
@@ -694,5 +696,5 @@ class RedisConnection(Runtime[list[str]]):
         with self.get_connection() as conn:
             return {
                 to_maybe_str(field): to_maybe_str(val)
-                for field, val in conn.hgetall(self.with_prefix(key))
+                for field, val in conn.hgetall(self.with_prefix(key)).items()
             }

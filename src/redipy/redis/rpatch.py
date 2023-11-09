@@ -101,3 +101,24 @@ class RIncrByPatch(LuaRedisPatch):
         }
         expr["args"][0] = literal
         return expr
+
+
+class RHashGetAllPatch(LuaRedisPatch):
+    @staticmethod
+    def names() -> set[str]:
+        return {"hgetall"}
+
+    def patch(
+            self,
+            expr: CallObj,
+            args: list[ExprObj],
+            *,
+            is_expr_stmt: bool) -> ExprObj:
+        if is_expr_stmt:
+            return expr
+        return {
+            "kind": "call",
+            "name": f"{self.helper_pkg()}.pairlist_dict",
+            "args": [expr],
+            "no_adjust": False,
+        }

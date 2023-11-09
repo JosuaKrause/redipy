@@ -26,6 +26,32 @@ class HPairlistFn(HelperFunction):
         """
 
 
+class HPairlistDictFn(HelperFunction):
+    @staticmethod
+    def name() -> str:
+        return "pairlist_dict"
+
+    @staticmethod
+    def args() -> str:
+        return "arr"
+
+    @staticmethod
+    def body() -> str:
+        return r"""
+            local res = {}
+            local key = nil
+            for _, value in ipairs(arr) do
+                if key ~= nil then
+                    res[key] = value
+                    key = nil
+                else
+                    key = value
+                end
+            end
+            return res
+        """
+
+
 class HNilOrIndexFn(HelperFunction):
     @staticmethod
     def name() -> str:

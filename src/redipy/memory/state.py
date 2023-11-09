@@ -1,7 +1,7 @@
+"""This module handles the internal state of the memory runtime."""
 import collections
 import datetime
 import time
-from collections.abc import Iterable
 from typing import Literal, overload
 
 from redipy.api import RedisAPI, RSetMode, RSM_ALWAYS, RSM_EXISTS, RSM_MISSING
@@ -12,6 +12,19 @@ def compute_expire(
         *,
         expire_timestamp: datetime.datetime | None,
         expire_in: float | None) -> float | None:
+    """
+    Computes the monotonic time point when a key should expire.
+
+    Args:
+        expire_timestamp (datetime.datetime | None): An absolute timestamp.
+        expire_in (float | None): A relative time difference in seconds.
+
+    Raises:
+        ValueError: If both expire_timestamp and expire_in are set.
+
+    Returns:
+        float | None: The monotonic time point.
+    """
     if expire_timestamp is None:
         if expire_in is None:
             return None
@@ -29,10 +42,23 @@ KeyType = Literal[
     "hash",
     "zset",
 ]
+"""The different key types."""
 
 
 class State:
+    """
+    The state holding the actual values of the memory runtime. A state can have
+    a parent state which values it shadows. The parent can be updated by
+    applying all changes.
+    """
     def __init__(self, parent: 'State | None' = None) -> None:
+        """
+        Creates a new state.
+
+        Args:
+            parent (State | None, optional): The optional parent whose values
+            this state shadows. Defaults to None.
+        """
         super().__init__()
         self._parent = parent
         self._vals: dict[str, tuple[str, float | None]] = {}
@@ -43,7 +69,44 @@ class State:
         self._zscores: dict[str, dict[str, float]] = {}
         self._deletes: set[str] = set()
 
+    def key_type(self, key: str) -> KeyType | None:
+        """
+        Computes the type of a given key.
+
+        Args:
+            key (str): The key.
+
+        Returns:
+            KeyType | None: The type of the key or None if it doesn't exist.
+        """
+        if key in self._deletes:
+            return None
+        if key in self._vals:
+            return "value"
+        if key in self._queues:
+            return "list"
+        if key in self._hashes:
+            return "hash"
+        if key in self._zorder:
+            return "zset"
+        if self._parent is not None:
+            return self._parent.key_type(key)
+        return None
+
     def verify_key(self, key_type: KeyType, key: str) -> None:
+        """
+        Ensures that the given key does not already exist with a different
+        type.
+
+        Args:
+            key_type (KeyType): The expected key type.
+            key (str): The key.
+
+        Raises:
+            ValueError: If the key already exists with a different type.
+        """
+        if key in self._deletes:
+            return
         if key_type != "value" and key in self._vals:
             raise ValueError(f"key {key} already used as value")
         if key_type != "list" and key in self._queues:
@@ -56,6 +119,17 @@ class State:
             self._parent.verify_key(key_type, key)
 
     def exists(self, key: str) -> bool:
+        """
+        Checks whether a given key exists.
+
+        Args:
+            key (str): The key.
+
+        Returns:
+            bool: Whether it exists as any type.
+        """
+        if key in self._deletes:
+            return False
         if key in self._vals:
             return True
         if key in self._queues:
@@ -68,8 +142,13 @@ class State:
             return self._parent.exists(key)
         return False
 
-    def delete(self, deletes: Iterable[str]) -> None:
-        # FIXME delete in pipeline and then recreating value doesn't work
+    def delete(self, deletes: set[str]) -> None:
+        """
+        Deletes keys.
+
+        Args:
+            deletes (set[str]): The keys to delete.
+        """
         if self._parent is not None:
             self._deletes.update(deletes)
         for key in deletes:
@@ -80,15 +159,46 @@ class State:
             self._zscores.pop(key, None)
 
     def apply(self, other: 'State') -> None:
-        self._vals.update(other.raw_vals())
-        self._queues.update(other.raw_queues())
-        self._hashes.update(other.raw_hashes())
-        self._zorder.update(other.raw_zorder())
-        self._zscores.update(other.raw_zscores())
+        """
+        Applies the given state. All updates that are different in the other
+        state will be updated in the current state and all deleted keys in
+        the other state will delete corresponding keys in the current state.
+        If a key in the other state has a different type than the key in the
+        current state the type in the current state will be changed. This
+        relies on the invariant that a key can only appear once in the other
+        and once in the current state.
+
+        Args:
+            other (State): The state to be applied to the current state.
+        """
+        raw_vals = other.raw_vals()
+        raw_queues = other.raw_queues()
+        raw_hashes = other.raw_hashes()
+        raw_zorder = other.raw_zorder()
+        raw_zscores = other.raw_zscores()
+
+        new_keys: set[str] = set()  # NOTE: new means new for the given type
+        new_keys.update(set(raw_vals.keys()) - set(self._vals.keys()))
+        new_keys.update(set(raw_queues.keys()) - set(self._queues.keys()))
+        new_keys.update(set(raw_hashes.keys()) - set(self._hashes.keys()))
+        new_keys.update(set(raw_zorder.keys()) - set(self._zorder.keys()))
+        new_keys.update(set(raw_zscores.keys()) - set(self._zscores.keys()))
+        # NOTE: deleting all new keys makes sure they don't exist as a
+        # different type
+        self.delete(new_keys)
+
+        self._vals.update(raw_vals)
+        self._queues.update(raw_queues)
+        self._hashes.update(raw_hashes)
+        self._zorder.update(raw_zorder)
+        self._zscores.update(raw_zscores)
         self._clean_vals()
         self.delete(other.raw_deletes())
 
     def reset(self) -> None:
+        """
+        Completely resets the state.
+        """
         self._vals.clear()
         self._queues.clear()
         self._hashes.clear()
@@ -96,7 +206,39 @@ class State:
         self._zscores.clear()
         self._deletes.clear()
 
+    def _prepare_key_for_write(self, key: str) -> None:
+        """
+        Prepares a key for writing by ensuring that it is not deleted.
+
+        Args:
+            key (str): The key.
+        """
+        self._deletes.discard(key)
+
+    def _is_pending_delete(self, key: str) -> bool:
+        """
+        Whether the given key is marked as deleted. Note, this is not the case
+        after _prepare_key_for_write.
+
+        Args:
+            key (str): The key.
+
+        Returns:
+            bool: Whether the given key is in the delete set.
+        """
+        return key in self._deletes
+
     def _is_alive(self, value: tuple[str, float | None]) -> bool:
+        """
+        Checks whether the given value has expired.
+
+        Args:
+            value (tuple[str, float  |  None]): Tuple of value and optional
+            expiration monotonic time point.
+
+        Returns:
+            bool: Whether the value has expired.
+        """
         _, expire = value
         if expire is None:
             return True
@@ -106,6 +248,9 @@ class State:
         return False
 
     def _clean_vals(self) -> None:
+        """
+        Cleans up expired values by deleting them.
+        """
         if self._parent is not None:
             return
         remove = set()
@@ -116,108 +261,291 @@ class State:
         self.delete(remove)
 
     def raw_vals(self) -> dict[str, tuple[str, float | None]]:
+        """
+        Raw access to the value dictionary.
+
+        Returns:
+            dict[str, tuple[str, float | None]]: The actual value dictionary of
+            this state.
+        """
         return self._vals
 
     def raw_queues(
             self) -> dict[str, collections.deque[str]]:
+        """
+        Raw access to the queues dictionary.
+
+        Returns:
+            dict[str, collections.deque[str]]: The actual queue dictionary of
+            this state.
+        """
         return self._queues
 
     def raw_hashes(self) -> dict[str, dict[str, str]]:
+        """
+        Raw access to the hashes dictionary.
+
+        Returns:
+            dict[str, dict[str, str]]: The actual hashes dictionary of this
+            state.
+        """
         return self._hashes
 
     def raw_zorder(self) -> dict[str, list[str]]:
+        """
+        Raw access to the zorder dictionary.
+
+        Returns:
+            dict[str, list[str]]: The actual zorder dictionary of this state.
+        """
         return self._zorder
 
     def raw_zscores(self) -> dict[str, dict[str, float]]:
+        """
+        Raw access to the zscores dictionary.
+
+        Returns:
+            dict[str, dict[str, float]]: The actual zscores dictionary of this
+            state.
+        """
         return self._zscores
 
     def raw_deletes(self) -> set[str]:
+        """
+        Raw access to the deletes set.
+
+        Returns:
+            set[str]: The actual deletes set of this state.
+        """
         return self._deletes
 
     def set_value(self, key: str, value: str, expire: float | None) -> None:
+        """
+        Sets the value for the given key.
+
+        Args:
+            key (str): The key.
+            value (str): The value.
+            expire (float | None): When the value should expire if at all.
+        """
         if key not in self._vals:
             self.verify_key("value", key)
+        self._prepare_key_for_write(key)
         self._vals[key] = (value, expire)
 
     def get_value(self, key: str) -> tuple[str, float | None] | None:
+        """
+        Retrieves the value associated with the given key.
+
+        Args:
+            key (str): The key.
+
+        Returns:
+            tuple[str, float | None] | None: The value of the key and when it
+            will expire.
+        """
         res = self._vals.get(key)
         if res is not None and not self._is_alive(res):
             self._clean_vals()
             return None
-        if res is None and self._parent is not None:
+        if (
+                res is None
+                and self._parent is not None
+                and not self._is_pending_delete(key)):
             return self._parent.get_value(key)
         return res
 
     def has_value(self, key: str) -> bool:
+        """
+        Whether the given key is associated with a value. Note, this is
+        different from whether the key exists.
+
+        Args:
+            key (str): The key.
+
+        Returns:
+            bool: If the key exists and its type is "value".
+        """
         return self.get_value(key) is not None
 
     def get_queue(self, key: str) -> collections.deque[str]:
+        """
+        Returns a queue for writing. If the queue doesn't exist already it will
+        be created.
+
+        Args:
+            key (str): The key.
+
+        Returns:
+            collections.deque[str]: The queue for writing.
+        """
         res = self._queues.get(key)
         if res is None:
             self.verify_key("list", key)
-            if self._parent is not None:
+            if self._parent is not None and not self._is_pending_delete(key):
                 res = collections.deque(self._parent.get_queue(key))
             else:
                 res = collections.deque()
             self._queues[key] = res
+        self._prepare_key_for_write(key)
+        return res
+
+    def readonly_queue(self, key: str) -> collections.deque[str] | None:
+        """
+        Returns a queue for reading only. If the queue doesn't exist None is
+        returned.
+
+        Args:
+            key (str): The key.
+
+        Returns:
+            collections.deque[str] | None: The readonly queue. Make sure to not
+            modify it as it is not a copy. None if the queue doesn't exist.
+        """
+        res = self._queues.get(key)
+        if res is None:
+            if self._parent is None or self._is_pending_delete(key):
+                return None
+            return self._parent.readonly_queue(key)
         return res
 
     def queue_len(self, key: str) -> int:
-        res = self._queues.get(key)
+        """
+        Computes the length of a queue.
+
+        Args:
+            key (str): The key.
+
+        Returns:
+            int: The length of the queue.
+        """
+        res = self.readonly_queue(key)
         if res is None:
-            if self._parent is not None:
-                return self._parent.queue_len(key)
             return 0
         return len(res)
 
     def get_hash(self, key: str) -> dict[str, str]:
+        """
+        Returns a hash for writing. If the hash doesn't exist already it will
+        be created.
+
+        Args:
+            key (str): The key.
+
+        Returns:
+            dict[str, str]: The hash for writing.
+        """
         res = self._hashes.get(key)
         if res is None:
             self.verify_key("hash", key)
-            if self._parent is not None:
+            if self._parent is not None and not self._is_pending_delete(key):
                 res = dict(self._parent.get_hash(key))
             else:
                 res = {}
             self._hashes[key] = res
+        self._prepare_key_for_write(key)
         return res
 
     def readonly_hash(self, key: str) -> dict[str, str] | None:
+        """
+        Returns a hash for reading only. If the hash doesn't exist None is
+        returned.
+
+        Args:
+            key (str): The key.
+
+        Returns:
+            dict[str, str] | None: The readonly hash. Make sure to not
+            modify it as it is not a copy. None if the hash doesn't exist.
+        """
         res = self._hashes.get(key)
         if res is None:
-            if self._parent is None:
+            if self._parent is None or self._is_pending_delete(key):
                 return None
             return self._parent.readonly_hash(key)
         return res
 
-    def get_zorder(self, key: str) -> list[str]:
+    def get_zset(self, key: str) -> tuple[list[str], dict[str, float]]:
+        """
+        Returns a zset for writing. If the zset doesn't exist already it
+        will be created.
+
+        Args:
+            key (str): The key.
+
+        Returns:
+            tuple[list[str], dict[str, float]]: The tuple of zorder and zscores
+            for writing.
+        """
+        rorder = self._zorder.get(key)
+        rscores = self._zscores.get(key)
+        if rorder is None:
+            self.verify_key("zset", key)
+            if self._parent is not None and not self._is_pending_delete(key):
+                porder, pscores = self._parent.get_zset(key)
+                rorder = list(porder)
+                rscores = dict(pscores)
+            else:
+                rorder = []
+                rscores = {}
+            self._zorder[key] = rorder
+            self._zscores[key] = rscores
+        self._prepare_key_for_write(key)
+        assert rscores is not None
+        return (rorder, rscores)
+
+    def readonly_zorder(self, key: str) -> list[str] | None:
+        """
+        Returns a zorder for reading only. If the zorder doesn't exist None is
+        returned.
+
+        Args:
+            key (str): The key.
+
+        Returns:
+            list[str] | None: The readonly zorder. Make sure to not
+            modify it as it is not a copy. None if the zorder doesn't exist.
+        """
         res = self._zorder.get(key)
         if res is None:
-            self.verify_key("zset", key)
-            if self._parent is not None:
-                res = list(self._parent.get_zorder(key))
-            else:
-                res = []
-            self._zorder[key] = res
+            if self._parent is None or self._is_pending_delete(key):
+                return None
+            return self._parent.readonly_zorder(key)
+        return res
+
+    def readonly_zscores(self, key: str) -> dict[str, float] | None:
+        """
+        Returns a zscores for reading only. If the zscores doesn't exist None
+        is returned.
+
+        Args:
+            key (str): The key.
+
+        Returns:
+            dict[str, float] | None: The readonly zscores. Make sure to not
+            modify it as it is not a copy. None if the zscores doesn't exist.
+        """
+        res = self._zscores.get(key)
+        if res is None:
+            if self._parent is None or self._is_pending_delete(key):
+                return None
+            return self._parent.readonly_zscores(key)
         return res
 
     def zorder_len(self, key: str) -> int:
-        res = self._zorder.get(key)
+        """
+        Computes the length of a zorder.
+
+        Args:
+            key (str): The key.
+
+        Returns:
+            int: The length of the zorder.
+        """
+        res = self.readonly_zorder(key)
         if res is None:
-            if self._parent is not None:
-                return self._parent.zorder_len(key)
             return 0
         return len(res)
-
-    def get_zscores(self, key: str) -> dict[str, float]:
-        res = self._zscores.get(key)
-        if res is None:
-            self.verify_key("zset", key)
-            if self._parent is not None:
-                res = dict(self._parent.get_zscores(key))
-            else:
-                res = {}
-            self._zscores[key] = res
-        return res
 
     def __str__(self) -> str:
         return (
@@ -226,18 +554,35 @@ class State:
             f"queues={dict(self._queues)},"
             f"hashes={dict(self._hashes)},"
             f"zorder={dict(self._zorder)},"
-            f"zscores={dict(self._zscores)}]")
+            f"zscores={dict(self._zscores)},"
+            f"deletes={self._deletes},"
+            f"has_parent={self._parent is not None}]")
 
     def __repr__(self) -> str:
         return self.__str__()
 
 
 class Machine(RedisAPI):
+    """
+    A Machine manages the state of a memory runtime and exposes the redis API.
+    """
     def __init__(self, state: State) -> None:
+        """
+        Creates a Machine.
+
+        Args:
+            state (State): The associated state.
+        """
         super().__init__()
         self._state = state
 
     def get_state(self) -> State:
+        """
+        Returns the managed state.
+
+        Returns:
+            State: The associated state.
+        """
         return self._state
 
     @overload
@@ -405,8 +750,7 @@ class Machine(RedisAPI):
 
     def zadd(self, key: str, mapping: dict[str, float]) -> int:
         count = 0
-        zscores = self._state.get_zscores(key)
-        zorder = self._state.get_zorder(key)
+        zorder, zscores = self._state.get_zset(key)
         for name, score in mapping.items():
             if name not in zscores:
                 zorder.append(name)
@@ -420,8 +764,7 @@ class Machine(RedisAPI):
             key: str,
             count: int = 1,
             ) -> list[tuple[str, float]]:
-        zscores = self._state.get_zscores(key)
-        zorder = self._state.get_zorder(key)
+        zorder, zscores = self._state.get_zset(key)
         res = []
         remain = 1 if count is None else count
         while remain > 0 and zorder:
@@ -436,8 +779,7 @@ class Machine(RedisAPI):
             key: str,
             count: int = 1,
             ) -> list[tuple[str, float]]:
-        zscores = self._state.get_zscores(key)
-        zorder = self._state.get_zorder(key)
+        zorder, zscores = self._state.get_zset(key)
         res = []
         remain = 1 if count is None else count
         while remain > 0 and zorder:
@@ -470,7 +812,7 @@ class Machine(RedisAPI):
 
     def delete(self, *keys: str) -> int:
         res = self.exists(*keys)
-        self._state.delete(keys)
+        self._state.delete(set(keys))
         return res
 
     def hset(self, key: str, mapping: dict[str, str]) -> int:
@@ -527,3 +869,10 @@ class Machine(RedisAPI):
         if res is None:
             return {}
         return dict(res)
+
+    def __str__(self) -> str:
+        return (
+            f"{self.__class__.__name__}[state={self._state}]")
+
+    def __repr__(self) -> str:
+        return self.__str__()

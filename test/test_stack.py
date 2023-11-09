@@ -20,6 +20,9 @@ GET_KEY_0 = "redis.call(\"get\", key_0)"
 RET = "return cjson.encode"
 RC = "redis.call"
 RP = "redipy.asintstr"
+PLD = "redipy.pairlist_dict"
+KEY_1_P = "(key_1) .. (\":\")"
+EMPTY_OBJ = r"{}"
 
 
 LUA_SET_VALUE = f"""
@@ -47,7 +50,7 @@ local arg_1 = cjson.decode(ARGV[2])  -- value
 
 LUA_GET_VALUE = f"""
 -- HELPERS START --
-local redipy = {{}}
+local redipy = {EMPTY_OBJ}
 function redipy.asintstr (val)
     return math.floor(val)
 end
@@ -68,9 +71,22 @@ local arg_0 = cjson.decode(ARGV[1])  -- field
 
 LUA_POP_FRAME = f"""
 -- HELPERS START --
-local redipy = {{}}
+local redipy = {EMPTY_OBJ}
 function redipy.asintstr (val)
     return math.floor(val)
+end
+function redipy.pairlist_dict (arr)
+    local res = {EMPTY_OBJ}
+    local key = nil
+    for _, value in ipairs(arr) do
+        if key ~= nil then
+            res[key] = value
+            key = nil
+        else
+            key = value
+        end
+    end
+    return res
 end
 -- HELPERS END --
 --[[ KEYV
@@ -81,8 +97,10 @@ frame
 ]]
 local key_0 = (KEYS[1])  -- size
 local key_1 = (KEYS[2])  -- frame
-redis.call("del", (key_1) .. (":") .. (redipy.asintstr(({GET_KEY_0} or nil))))
+local var_0 = {PLD}({RC}("hgetall", {KEY_1_P} .. ({RP}(({GET_KEY_0} or nil)))))
+redis.call("del", {KEY_1_P} .. ({RP}(({GET_KEY_0} or nil))))
 redis.call("incrbyfloat", key_0, -1)
+return cjson.encode(var_0)
 """
 
 
@@ -337,10 +355,13 @@ def test_stack(rt_lua: bool) -> None:
     assert stack_bar.get_cascading("d") is None
 
     assert stack_foo.pop_frame() == {
+        "b": "bbb",
+        "c": "ccc",
+    }
+    assert stack_bar.pop_frame() == {
         "b": "3b",
         "c": "3c",
     }
-    stack_bar.pop_frame()
 
     assert stack_foo.get_value("a") is None
     assert stack_foo.get_value("b") == "bb"
@@ -362,8 +383,15 @@ def test_stack(rt_lua: bool) -> None:
     assert stack_bar.get_cascading("c") is None
     assert stack_bar.get_cascading("d") is None
 
-    stack_foo.pop_frame()
-    stack_bar.pop_frame()
+    assert stack_foo.pop_frame() == {
+        "b": "bb",
+        "c": "cc",
+        "d": "dd",
+    }
+    assert stack_bar.pop_frame() == {
+        "a": "2a",
+        "b": "2b",
+    }
 
     assert stack_foo.get_value("a") == "hi"
     assert stack_foo.get_value("b") == "foo"
