@@ -1,3 +1,4 @@
+"""Tests redis values."""
 import json
 import time
 from collections.abc import Callable
@@ -60,6 +61,7 @@ RUN_TESTS: list[tuple[str, JSONType, JSONType]] = [
 
 
 def test_rvar() -> None:
+    """Tests redis values with an additional explicit script."""
     ctx = FnContext()
     a = ctx.add_arg("a")
     k = RedisVar(ctx.add_key("k"))
@@ -80,7 +82,7 @@ def test_rvar() -> None:
 
     lrt.set("pos", "5")
     for (k_in, a_in, expect_out) in RUN_TESTS:
-        is_out = run_lcl({"k": k_in}, {"a": a_in})
+        is_out = run_lcl(keys={"k": k_in}, args={"a": a_in})
         assert is_out == expect_out
     assert lrt.get("foo") == "9"
     assert lrt.get("bar") == "7"
@@ -96,7 +98,7 @@ def test_rvar() -> None:
 
     rrt.set("pos", "5")
     for (k_in, a_in, expect_out) in RUN_TESTS:
-        is_out = run_redis({"k": k_in}, {"a": a_in})
+        is_out = run_redis(keys={"k": k_in}, args={"a": a_in})
         assert is_out == expect_out
     assert rrt.get("foo") == "9"
     assert rrt.get("bar") == "7"
@@ -106,6 +108,12 @@ def test_rvar() -> None:
 
 @pytest.mark.parametrize("rt_lua", [False, True])
 def test_set_ext_args(rt_lua: bool) -> None:
+    """
+    Tests key expiration.
+
+    Args:
+        rt_lua (bool): Whether to use the redis or memory runtime.
+    """
     rt = get_setup(
         "test_set_ext_args", rt_lua, no_compile_hook=True)
 

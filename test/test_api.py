@@ -1,3 +1,4 @@
+"""Tests redis functionality via the main API class."""
 from collections.abc import Callable
 from test.util import get_test_config
 
@@ -16,6 +17,12 @@ from redipy.util import code_fmt, lua_fmt
 
 @pytest.mark.parametrize("rt_lua", [False, True])
 def test_api(rt_lua: bool) -> None:
+    """
+    Tests redis functionality via the main API class.
+
+    Args:
+        rt_lua (bool): Whether to use the redis or memory runtime.
+    """
     # pylint: disable=unnecessary-lambda
     code_name = None
     lua_script = None
@@ -94,6 +101,23 @@ def test_api(rt_lua: bool) -> None:
 
         assert setup(key) == output_setup
         result = fun(keys={"key": key}, args={})
+        assert teardown(key) == output_teardown
+        assert result == output
+
+        assert setup(key) == output_setup
+        result = fun(keys={"key": key}, args={}, client=redis)
+        assert teardown(key) == output_teardown
+        assert result == output
+
+        assert setup(key) == output_setup
+        result = fun(keys={"key": key}, args={}, client=redis.get_runtime())
+        assert teardown(key) == output_teardown
+        assert result == output
+
+        assert setup(key) == output_setup
+        with redis.pipeline() as pipe:
+            assert fun(keys={"key": key}, args={}, client=pipe) is None
+            result, = pipe.execute()
         assert teardown(key) == output_teardown
         assert result == output
 

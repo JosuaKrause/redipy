@@ -1,3 +1,4 @@
+"""Test of basic script functionality."""
 import json
 from test.util import get_test_config
 
@@ -39,6 +40,7 @@ RUN_TESTS: list[tuple[JSONType, JSONType, JSONType]] = [
 
 
 def test_simple() -> None:
+    """Test of basic script functionality."""
     ctx = FnContext()
     a = ctx.add_arg("a")
     b = ctx.add_arg("b")
@@ -59,7 +61,7 @@ def test_simple() -> None:
     run_lcl = lcl.create_executable(lcl_code, lrt)
 
     for (a_in, b_in, out) in RUN_TESTS:
-        res = run_lcl({}, {"a": a_in, "b": b_in})
+        res = run_lcl(keys={}, args={"a": a_in, "b": b_in})
         assert res == out
 
     lua = LuaBackend()
@@ -70,5 +72,5 @@ def test_simple() -> None:
     run_redis = lua.create_executable(lua_code, conn)
 
     for (a_in, b_in, out) in RUN_TESTS:
-        res = run_redis({}, {"a": a_in, "b": b_in})
+        res = run_redis(keys={}, args={"a": a_in, "b": b_in})
         assert res == out

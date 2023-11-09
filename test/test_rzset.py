@@ -1,3 +1,4 @@
+"""Tests sorted sets."""
 from test.util import get_setup, run_code
 
 import pytest
@@ -139,6 +140,12 @@ RUN_TESTS: list[tuple[tuple[str, str], list[str] | None]] = [
 
 @pytest.mark.parametrize("rt_lua", [False, True])
 def test_rzset(rt_lua: bool) -> None:
+    """
+    Tests sorted sets.
+
+    Args:
+        rt_lua (bool): Whether to use the redis or memory runtime.
+    """
     rt = get_setup("test_rzset", rt_lua, lua_script=LUA_SCRIPT)
 
     ctx = FnContext()

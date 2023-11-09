@@ -42,6 +42,9 @@ class LocalRuntime(Runtime[Cmd]):
             LocalGeneralFunction,
             disallowed={"redis.call"})
 
+    def get_machine(self) -> Machine:
+        return self._sm
+
     @classmethod
     def create_backend(cls) -> LocalBackend:
         return LocalBackend()
@@ -57,8 +60,7 @@ class LocalRuntime(Runtime[Cmd]):
                 state.reset()
                 return res
 
-        pipe = LocalPipeline(
-            self._sm.get_state(), exec_call)
+        pipe = LocalPipeline(self, self._sm.get_state(), exec_call)
         yield pipe
         if pipe.has_pending():
             pipe.execute()
@@ -82,7 +84,10 @@ class LocalRuntime(Runtime[Cmd]):
             f"{'at least' if at_least else 'exactly'} {count} got {argc}")
 
     def redis_fn(
-            self, name: str, args: list[JSONType]) -> JSONType:
+            self,
+            sm: Machine,
+            name: str,
+            args: list[JSONType]) -> JSONType:
         key = f"{args[0]}"
         rfun = self._rfuns.get(name)
         if rfun is None:
@@ -94,13 +99,13 @@ class LocalRuntime(Runtime[Cmd]):
         if at_most is not None:
             at_most += 1
         self.require_argc(args, count, at_least=at_least, at_most=at_most)
-        return rfun.call(self._sm, key, args[1:])
+        return rfun.call(sm, key, args[1:])
 
     def call_fn(
-            self, name: str, args: list[JSONType]) -> JSONType:
+            self, sm: Machine, name: str, args: list[JSONType]) -> JSONType:
         if name == "redis.call":
             self.require_argc(args, 2, at_least=True)
-            return self.redis_fn(f"{args[0]}", args[1:])
+            return self.redis_fn(sm, f"{args[0]}", args[1:])
         gfun = self._gfuns.get(name)
         if gfun is None:
             raise ValueError(f"unknown function {name}")
@@ -309,12 +314,17 @@ class LocalRuntime(Runtime[Cmd]):
 class LocalPipeline(PipelineAPI):
     def __init__(
             self,
+            rt: LocalRuntime,
             parent: State,
             exec_call: Callable[[Callable[[], list]], list]) -> None:
         super().__init__()
+        self._rt = rt
         self._sm = Machine(State(parent))
         self._exec_call = exec_call
         self._cmd_queue: list[Callable[[], Any]] = []
+
+    def get_runtime_tuple(self) -> tuple[LocalRuntime, Machine]:
+        return (self._rt, self._sm)
 
     def get_state(self) -> State:
         return self._sm.get_state()

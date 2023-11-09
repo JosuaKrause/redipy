@@ -9,6 +9,7 @@ from redipy.graph.seq import SequenceObj
 
 
 if TYPE_CHECKING:
+    from redipy.api import PipelineAPI, RedisAPI
     from redipy.backend.runtime import Runtime
 
 
@@ -25,8 +26,10 @@ class ExecFunction(Protocol):  # pylint: disable=too-few-public-methods
     """
     def __call__(
             self,
+            *,
             keys: dict[str, str],
-            args: dict[str, JSONType]) -> JSONType:
+            args: dict[str, JSONType],
+            client: 'RedisAPI | PipelineAPI | None' = None) -> JSONType:
         """
         Executes the redis script.
 
@@ -41,6 +44,11 @@ class ExecFunction(Protocol):  # pylint: disable=too-few-public-methods
             args (dict[str, JSONType]): Arguments to the script. The keys of
             this dictionary are the names of the arguments as registered in the
             script.
+
+            client (RedisAPI | PipelineAPI | None): An optionally different
+            execution environment. Note, that the different execution
+            environment has to be of the same runtime type. Setting the client
+            allows scripts to execute inside a pipeline. Defaults to None.
 
         Returns:
             JSONType: The result of the script.

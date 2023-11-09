@@ -132,6 +132,9 @@ class PipelineConnection(PipelineAPI):
         self._fixes: list[Callable[[Any], Any]] = []
         self._prefix = prefix
 
+    def get_pipeline(self) -> Pipeline:
+        return self._pipe
+
     def has_pending(self) -> bool:
         return len(self._fixes) > 0
 

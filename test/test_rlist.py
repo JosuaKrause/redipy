@@ -1,3 +1,4 @@
+"""Tests redis lists."""
 from test.util import get_setup, run_code
 
 import pytest
@@ -57,6 +58,12 @@ RUN_TESTS: list[tuple[tuple[str, str, str, int], tuple[int, int]]] = [
 
 @pytest.mark.parametrize("rt_lua", [False, True])
 def test_rlist(rt_lua: bool) -> None:
+    """
+    Tests redis lists.
+
+    Args:
+        rt_lua (bool): Whether to use the redis or memory runtime.
+    """
     rt = get_setup("test_rlist", rt_lua, lua_script=LUA_SCRIPT)
 
     ctx = FnContext()

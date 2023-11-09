@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - New redis APIs.
 - Inferring backend in Redis constructor.
 - Allow access to raw runtime and redis connections.
+- Executing scripts from a pipeline.
 - Documentation.
 
 ### Fixed
@@ -23,6 +24,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - More info about contributing in the readme.
+- Scripts now need explicit named argument.
 
 ### Removed
 

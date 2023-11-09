@@ -134,8 +134,9 @@ def test_pipe(rt_lua: bool) -> None:
     if rt_lua:
         with pytest.raises(
                 redis_lib.exceptions.ResponseError,
-                match="WRONGTYPE Operation against a key holding "
-                "the wrong kind of value"):
+                match=(
+                    "WRONGTYPE Operation against a key holding "
+                    "the wrong kind of value")):
             assert rt.lpop("cval")
     else:
         with pytest.raises(ValueError, match="key cval already used as hash"):

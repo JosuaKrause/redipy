@@ -2,6 +2,9 @@ import json
 from collections.abc import Iterable
 from typing import Literal, TYPE_CHECKING
 
+import redis as redis_lib
+
+from redipy.api import PipelineAPI, RedisAPI
 from redipy.backend.backend import Backend, ExecFunction
 from redipy.graph.cmd import CommandObj
 from redipy.graph.expr import BinOps, CallObj, ExprObj, get_literal, JSONType
@@ -317,19 +320,51 @@ class LuaBackend(
                 continue
         compute = runtime.get_dynamic_script(code_fmt(code))
 
-        def exec_code(
-                keys: dict[str, str],
-                args: dict[str, JSONType]) -> JSONType:
-            with runtime.get_connection() as client:
-                res = compute(
-                    keys=[runtime.with_prefix(keys[key]) for key in key_order],
-                    args=[json_compact(args[arg]) for arg in arg_order],
-                    client=client)
+        def interpret_result(res: bytes) -> JSONType:
             if res is None:
                 return None
             # NOTE: it is impossible to distinguish between {} and [] in lua
             if res == br"{}":
                 return None
             return json.loads(res)
+
+        def exec_code_fn(
+                *,
+                keys: dict[str, str],
+                args: dict[str, JSONType],
+                conn: redis_lib.Redis) -> bytes:
+            return compute(
+                keys=[runtime.with_prefix(keys[key]) for key in key_order],
+                args=[json_compact(args[arg]) for arg in arg_order],
+                client=conn)
+
+        def exec_code(
+                *,
+                keys: dict[str, str],
+                args: dict[str, JSONType],
+                client: RedisAPI | PipelineAPI | None = None) -> JSONType:
+            active_rt = runtime
+            if client is not None:
+                from redipy.main import Redis
+                from redipy.redis.conn import (
+                    PipelineConnection,
+                    RedisConnection,
+                )
+
+                if isinstance(client, Redis):
+                    active_rt = client.get_redis_runtime()
+                elif isinstance(client, RedisConnection):
+                    active_rt = client
+                elif isinstance(client, PipelineConnection):
+                    exec_code_fn(
+                        keys=keys, args=args, conn=client.get_pipeline())
+                    client.add_fixup(interpret_result)
+                    return None
+                else:
+                    raise ValueError(f"incompatible runtime: {client}")
+
+            with active_rt.get_connection() as conn:
+                res = exec_code_fn(keys=keys, args=args, conn=conn)
+            return interpret_result(res)
 
         return exec_code
