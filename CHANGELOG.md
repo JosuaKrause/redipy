@@ -17,6 +17,8 @@ All notable changes to this project will be documented in this file.
 
 - Ignored set after deleting a key in a pipeline.
 - Error when missing execute call in pipeline.
+- HGETALL returning the wrong result in lua.
+- HSET not working in the redis backend.
 
 ### Changed
 

@@ -1,3 +1,4 @@
+"""Tests a complex example class using redipy scripts."""
 from collections.abc import Callable
 from test.util import get_test_config
 from typing import cast
@@ -135,6 +136,7 @@ return cjson.encode(var_2)
 
 
 class RStack:
+    """An example class that simulates a key value stack."""
     def __init__(
             self,
             rt: RedisClientAPI,
@@ -154,15 +156,36 @@ class RStack:
         set_lua_script(None, None)
 
     def key(self, name: str) -> str:
+        """
+        Compute the key.
+
+        Args:
+            name (str): The name.
+
+        Returns:
+            str: The key associated with the name.
+        """
         return f"{self._base}:{name}"
 
     def init(self) -> None:
+        """
+        Initializes the stack.
+        """
         self._rt.set(self.key("size"), "0")
 
     def push_frame(self) -> None:
+        """
+        Pushes a new stack frame.
+        """
         self._rt.incrby(self.key("size"), 1)
 
     def pop_frame(self) -> dict[str, str] | None:
+        """
+        Pops the current stack frame and returns its values.
+
+        Returns:
+            dict[str, str] | None: The content of the stack frame.
+        """
         res = self._pop_frame(
             keys={"size": self.key("size"), "frame": self.key("frame")},
             args={})
@@ -171,16 +194,43 @@ class RStack:
         return cast(dict, res)
 
     def set_value(self, field: str, value: str) -> None:
+        """
+        Set a value in the current stack frame.
+
+        Args:
+            field (str): The field.
+            value (str): The value.
+        """
         self._set_value(
             keys={"size": self.key("size"), "frame": self.key("frame")},
             args={"field": field, "value": value})
 
     def get_value(self, field: str) -> JSONType:
+        """
+        Returns a value from the current stack frame.
+
+        Args:
+            field (str): The field.
+
+        Returns:
+            JSONType: The value.
+        """
         return self._get_value(
             keys={"size": self.key("size"), "frame": self.key("frame")},
             args={"field": field})
 
     def get_cascading(self, field: str) -> JSONType:
+        """
+        Returns a value from the stack. If the value is not in the current
+        stack frame the value is recursively retrieved from the previous
+        stack frames.
+
+        Args:
+            field (str): The field.
+
+        Returns:
+            JSONType: The value.
+        """
         return self._get_cascading(
             keys={"size": self.key("size"), "frame": self.key("frame")},
             args={"field": field})
@@ -243,6 +293,12 @@ class RStack:
 
 @pytest.mark.parametrize("rt_lua", [False, True])
 def test_stack(rt_lua: bool) -> None:
+    """
+    Tests a complex example class using redipy scripts.
+
+    Args:
+        rt_lua (bool): Whether to use the redis or memory runtime.
+    """
     code_name = None
     lua_script = None
 
