@@ -1,4 +1,5 @@
-"""Base classes for plugin functionality."""
+"""Base classes for plugin functionality. Subclass the appropriate base class
+and register it in the appropriate backend's `add_..._plugin` method."""
 import importlib
 from typing import NotRequired, TypedDict, TypeVar
 

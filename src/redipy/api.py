@@ -257,6 +257,23 @@ class PipelineAPI:
         raise NotImplementedError()
 
     def incrby(self, key: str, inc: float | int) -> None:
+        """
+        Updates the value associated with the given key by a relative amount.
+        The value is interpreted as number. If the value doesn't exist zero is
+        used as starting point.
+
+        See also the redis documentation:
+        https://redis.io/commands/incrby/
+        https://redis.io/commands/incrbyfloat/
+
+        The pipeline value is set to the new value as float.
+        If the value cannot be interpreted as float while executing the
+        pipeline a ValueError exception is raised.
+
+        Args:
+            key (str): The key.
+            inc (float | int): The relative change.
+        """
         raise NotImplementedError()
 
     def exists(self, *keys: str) -> None:
@@ -590,6 +607,25 @@ class RedisAPI:
         raise NotImplementedError()
 
     def incrby(self, key: str, inc: float | int) -> float:
+        """
+        Updates the value associated with the given key by a relative amount.
+        The value is interpreted as number. If the value doesn't exist zero is
+        used as starting point.
+
+        See also the redis documentation:
+        https://redis.io/commands/incrby/
+        https://redis.io/commands/incrbyfloat/
+
+        Args:
+            key (str): The key.
+            inc (float | int): The relative change.
+
+        Raises:
+            ValueError: If the value cannot be interpreted as float.
+
+        Returns:
+            float: The new value as float.
+        """
         raise NotImplementedError()
 
     def exists(self, *keys: str) -> int:

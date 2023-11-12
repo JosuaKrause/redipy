@@ -322,10 +322,34 @@ def parse_time_str(time_str: str) -> datetime.datetime:
 
 def time_diff(
         from_time: datetime.datetime, to_time: datetime.datetime) -> float:
+    """
+    Computes the time difference between time points in seconds.
+
+    Args:
+        from_time (datetime.datetime): The earlier time point.
+        to_time (datetime.datetime): The later time point.
+
+    Returns:
+        float: The time difference in seconds. If `from_time` occurs after
+        `to_time` the value will be negative.
+    """
     return (to_time - from_time).total_seconds()
 
 
 def to_bool(value: bool | float | int | str) -> bool:
+    """
+    Tries converting a given value to a boolean.
+
+    Args:
+        value (bool | float | int | str): The value.
+
+    Raises:
+        ValueError: If the value cannot be interpreted as boolean.
+
+    Returns:
+        bool: The value interpreted as boolean. A string can be 'true' or
+        'false' and numbers are interpreted as True if they're non-zero.
+    """
     value = f"{value}".lower()
     if value == "true":
         return True
@@ -339,12 +363,33 @@ def to_bool(value: bool | float | int | str) -> bool:
 
 
 def to_list(value: Any) -> list[Any]:
+    """
+    Ensures a given value is a list.
+
+    Args:
+        value (Any): The value.
+
+    Raises:
+        ValueError: If it is not a list.
+
+    Returns:
+        list[Any]: The value as list.
+    """
     if not isinstance(value, list):
         raise ValueError(f"{value} is not a list")
     return value
 
 
 def is_int(value: Any) -> bool:
+    """
+    Determines whether a value can be interpreted as integer.
+
+    Args:
+        value (Any): The value.
+
+    Returns:
+        bool: Whether the value can be interpreted as integer.
+    """
     try:
         int(value)
         return True
@@ -353,6 +398,15 @@ def is_int(value: Any) -> bool:
 
 
 def is_float(value: Any) -> bool:
+    """
+    Determines whether a value can be interpreted as float.
+
+    Args:
+        value (Any): The value.
+
+    Returns:
+        bool: Whether the value can be interpreted as float.
+    """
     try:
         float(value)
         return True
@@ -361,6 +415,15 @@ def is_float(value: Any) -> bool:
 
 
 def is_json(value: str) -> bool:
+    """
+    Determines whether a value can be decoded as JSON.
+
+    Args:
+        value (Any): The value.
+
+    Returns:
+        bool: Whether the value can be decoded as JSON.
+    """
     try:
         json.loads(value)
     except json.JSONDecodeError:
@@ -369,6 +432,16 @@ def is_json(value: str) -> bool:
 
 
 def report_json_error(err: json.JSONDecodeError) -> None:
+    """
+    Provides information about JSON decode errors.
+
+    Args:
+        err (json.JSONDecodeError): The JSON decode error.
+
+    Raises:
+        ValueError: The error raised again with more information about the
+        issue.
+    """
     raise ValueError(
         f"JSON parse error ({err.lineno}:{err.colno}): "
         f"{repr(err.doc)}") from err
