@@ -49,7 +49,11 @@ class PipelineAPI:
             expire_in: float | None = None,
             keep_ttl: bool = False) -> None:
         """
-        The redis SET command (https://redis.io/commands/set/).
+        Sets a value for a given key. The value can be scheduled to expire.
+
+        See also the redis documentation: https://redis.io/commands/set/
+
+        The pipeline value depends on the return_previous argument.
 
         Args:
             key (str): The key.
@@ -76,30 +80,122 @@ class PipelineAPI:
         raise NotImplementedError()
 
     def get(self, key: str) -> None:
+        """
+        Retrieves the value for the given key.
+
+        See also the redis documentation: https://redis.io/commands/get/
+
+        The pipeline value is the value or None if the key does not exists or
+        the value has expired.
+
+        Args:
+            key (str): The key.
+        """
         raise NotImplementedError()
 
     def lpush(self, key: str, *values: str) -> None:
+        """
+        Pushes values to the left side of the list associated with the key.
+
+        See also the redis documentation: https://redis.io/commands/lpush/
+
+        The pipeline value is the length of the list after the push.
+
+        Args:
+            key (str): The key.
+
+            *values (str): The values to push.
+        """
         raise NotImplementedError()
 
     def rpush(self, key: str, *values: str) -> None:
+        """
+        Pushes values to the right side of the list associated with the key.
+
+        See also the redis documentation: https://redis.io/commands/rpush/
+
+        The pipeline value is the length of the list after the push.
+
+        Args:
+            key (str): The key.
+
+            *values (str): The values to push.
+        """
         raise NotImplementedError()
 
     def lpop(
             self,
             key: str,
             count: int | None = None) -> None:
+        """
+        Pops a number of values from the left side of the list associated with
+        the key.
+
+        See also the redis documentation: https://redis.io/commands/lpop/
+
+        The pipeline value is None if the key doesn't exist. If a count
+        is set a list with values in pop order is set as pipeline value (even
+        if it is set to one). If count is not set (default or None) the single
+        value that got popped is set as pipeline value.
+
+        Args:
+            key (str): The key.
+
+            count (int | None, optional): The number values to pop.
+            Defaults to a single value.
+        """
         raise NotImplementedError()
 
     def rpop(
             self,
             key: str,
             count: int | None = None) -> None:
+        """
+        Pops a number of values from the right side of the list associated with
+        the key.
+
+        See also the redis documentation: https://redis.io/commands/rpop/
+
+        The pipeline value is None if the key doesn't exist. If a count
+        is set a list with values in pop order is set as pipeline value (even
+        if it is set to one). If count is not set (default or None) the single
+        value that got popped is set as pipeline value.
+
+        Args:
+            key (str): The key.
+
+            count (int | None, optional): The number values to pop.
+            Defaults to a single value.
+        """
         raise NotImplementedError()
 
     def llen(self, key: str) -> None:
+        """
+        Computes the length of the list associated with the key.
+
+        See also the redis documentation: https://redis.io/commands/llen/
+
+        The length of the list is set as pipeline value.
+
+        Args:
+            key (str): The key.
+        """
         raise NotImplementedError()
 
     def zadd(self, key: str, mapping: dict[str, float]) -> None:
+        """
+        Adds elements to the sorted set associated with the key.
+
+        See also the redis documentation: https://redis.io/commands/zadd/
+
+        NOTE: not all setting modes are implemented yet.
+
+        The number of new members is set as pipeline value.
+
+        Args:
+            key (str): The key.
+            mapping (dict[str, float]): A dictionary with values and scores.
+        """
         raise NotImplementedError()
 
     def zpop_max(
@@ -107,6 +203,21 @@ class PipelineAPI:
             key: str,
             count: int = 1,
             ) -> None:
+        """
+        Pops a number of members of the sorted set associated with the given
+        key with the highest scores.
+
+        See also the redis documentation: https://redis.io/commands/zpopmax/
+
+        The members with their associated scores in pop order is set as
+        pipeline value.
+
+        Args:
+            key (str): The key.
+
+            count (int, optional): The number of members to remove.
+            Defaults to 1.
+        """
         raise NotImplementedError()
 
     def zpop_min(
@@ -114,9 +225,35 @@ class PipelineAPI:
             key: str,
             count: int = 1,
             ) -> None:
+        """
+        Pops a number of members of the sorted set associated with the given
+        key with the lowest scores.
+
+        See also the redis documentation: https://redis.io/commands/zpopmin/
+
+        The members with their associated scores in pop order is set as
+        pipeline value.
+
+        Args:
+            key (str): The key.
+
+            count (int, optional): The number of members to remove.
+            Defaults to 1.
+        """
         raise NotImplementedError()
 
     def zcard(self, key: str) -> None:
+        """
+        Computes the cardinality of the sorted set associated with the given
+        key.
+
+        See also the redis documentation: https://redis.io/commands/zcard/
+
+        The number of members in the set is set as pipeline value.
+
+        Args:
+            key (str): The key.
+        """
         raise NotImplementedError()
 
     def incrby(self, key: str, inc: float | int) -> None:
@@ -205,7 +342,9 @@ class RedisAPI:
             expire_in: float | None = None,
             keep_ttl: bool = False) -> str | bool | None:
         """
-        The redis SET command (https://redis.io/commands/set/).
+        Sets a value for a given key. The value can be scheduled to expire.
+
+        See also the redis documentation: https://redis.io/commands/set/
 
         Args:
             key (str): The key.
@@ -236,12 +375,50 @@ class RedisAPI:
         raise NotImplementedError()
 
     def get(self, key: str) -> str | None:
+        """
+        Retrieves the value for the given key.
+
+        See also the redis documentation: https://redis.io/commands/get/
+
+        Args:
+            key (str): The key.
+
+        Returns:
+            str | None: The value or None if the key does not exists or the
+            value has expired.
+        """
         raise NotImplementedError()
 
     def lpush(self, key: str, *values: str) -> int:
+        """
+        Pushes values to the left side of the list associated with the key.
+
+        See also the redis documentation: https://redis.io/commands/lpush/
+
+        Args:
+            key (str): The key.
+
+            *values (str): The values to push.
+
+        Returns:
+            int: The length of the list after the push.
+        """
         raise NotImplementedError()
 
     def rpush(self, key: str, *values: str) -> int:
+        """
+        Pushes values to the right side of the list associated with the key.
+
+        See also the redis documentation: https://redis.io/commands/rpush/
+
+        Args:
+            key (str): The key.
+
+            *values (str): The values to push.
+
+        Returns:
+            int: The length of the list after the push.
+        """
         raise NotImplementedError()
 
     @overload
@@ -262,6 +439,24 @@ class RedisAPI:
             self,
             key: str,
             count: int | None = None) -> str | list[str] | None:
+        """
+        Pops a number of values from the left side of the list associated with
+        the key.
+
+        See also the redis documentation: https://redis.io/commands/lpop/
+
+        Args:
+            key (str): The key.
+
+            count (int | None, optional): The number values to pop.
+            Defaults to a single value.
+
+        Returns:
+            str | list[str] | None: None if the key doesn't exist. If a count
+            is set a list with values in pop order is returned (even if it is
+            set to one). If count is not set (default or None) the single value
+            that got popped is returned.
+        """
         raise NotImplementedError()
 
     @overload
@@ -282,12 +477,55 @@ class RedisAPI:
             self,
             key: str,
             count: int | None = None) -> str | list[str] | None:
+        """
+        Pops a number of values from the right side of the list associated with
+        the key.
+
+        See also the redis documentation: https://redis.io/commands/rpop/
+
+        Args:
+            key (str): The key.
+
+            count (int | None, optional): The number values to pop.
+            Defaults to a single value.
+
+        Returns:
+            str | list[str] | None: None if the key doesn't exist. If a count
+            is set a list with values in pop order is returned (even if it is
+            set to one). If count is not set (default or None) the single value
+            that got popped is returned.
+        """
         raise NotImplementedError()
 
     def llen(self, key: str) -> int:
+        """
+        Computes the length of the list associated with the key.
+
+        See also the redis documentation: https://redis.io/commands/llen/
+
+        Args:
+            key (str): The key.
+
+        Returns:
+            int: The length of the list.
+        """
         raise NotImplementedError()
 
     def zadd(self, key: str, mapping: dict[str, float]) -> int:
+        """
+        Adds elements to the sorted set associated with the key.
+
+        See also the redis documentation: https://redis.io/commands/zadd/
+
+        NOTE: not all setting modes are implemented yet.
+
+        Args:
+            key (str): The key.
+            mapping (dict[str, float]): A dictionary with values and scores.
+
+        Returns:
+            int: The number of new members.
+        """
         raise NotImplementedError()
 
     def zpop_max(
@@ -295,6 +533,22 @@ class RedisAPI:
             key: str,
             count: int = 1,
             ) -> list[tuple[str, float]]:
+        """
+        Pops a number of members of the sorted set associated with the given
+        key with the highest scores.
+
+        See also the redis documentation: https://redis.io/commands/zpopmax/
+
+        Args:
+            key (str): The key.
+
+            count (int, optional): The number of members to remove.
+            Defaults to 1.
+
+        Returns:
+            list[tuple[str, float]]: The members with their associated scores
+            in pop order.
+        """
         raise NotImplementedError()
 
     def zpop_min(
@@ -302,9 +556,37 @@ class RedisAPI:
             key: str,
             count: int = 1,
             ) -> list[tuple[str, float]]:
+        """
+        Pops a number of members of the sorted set associated with the given
+        key with the lowest scores.
+
+        See also the redis documentation: https://redis.io/commands/zpopmin/
+
+        Args:
+            key (str): The key.
+
+            count (int, optional): The number of members to remove.
+            Defaults to 1.
+
+        Returns:
+            list[tuple[str, float]]: The members with their associated scores
+            in pop order.
+        """
         raise NotImplementedError()
 
     def zcard(self, key: str) -> int:
+        """
+        Computes the cardinality of the sorted set associated with the given
+        key.
+
+        See also the redis documentation: https://redis.io/commands/zcard/
+
+        Args:
+            key (str): The key.
+
+        Returns:
+            int: The number of members in the set.
+        """
         raise NotImplementedError()
 
     def incrby(self, key: str, inc: float | int) -> float:

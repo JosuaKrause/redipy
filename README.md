@@ -161,7 +161,7 @@ field is found (or the end of the stack is reached).
 
 ```python
 from typing import cast
-from redipy.api import RedisClientAPI
+from redipy import RedisClientAPI
 from redipy.script import (
     ExecFunction,
     FnContext,

@@ -1,10 +1,10 @@
 from redipy.plugin import HelperFunction
 
 
-class HPairlistFn(HelperFunction):
+class HPairlistScoresFn(HelperFunction):
     @staticmethod
     def name() -> str:
-        return "pairlist"
+        return "pairlist_scores"
 
     @staticmethod
     def args() -> str:
@@ -19,7 +19,7 @@ class HPairlistFn(HelperFunction):
                 if ix % 2 == 1 then
                     key = value
                 else
-                    res[#res + 1] = {key, value}
+                    res[#res + 1] = {key, tonumber(value)}
                 end
             end
             return res

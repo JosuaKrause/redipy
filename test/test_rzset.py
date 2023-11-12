@@ -10,23 +10,27 @@ from redipy.symbolic.seq import FnContext
 from redipy.util import lua_fmt
 
 
-LUA_SCRIPT = lua_fmt("""
+EMPTY_OBJ = r"{}"
+PLS = "redipy.pairlist_scores"
+
+
+LUA_SCRIPT = lua_fmt(f"""
 -- HELPERS START --
-local redipy = {}
+local redipy = {EMPTY_OBJ}
 function redipy.nil_or_index (val)
     if val ~= nil then
         val = val - 1
     end
     return val
 end
-function redipy.pairlist (arr)
-    local res = {}
+function redipy.pairlist_scores (arr)
+    local res = {EMPTY_OBJ}
     local key = nil
     for ix, value in ipairs(arr) do
         if ix % 2 == 1 then
             key = value
         else
-            res[#res + 1] = {key, value}
+            res[#res + 1] = {{key, tonumber(value)}}
         end
     end
     return res
@@ -41,7 +45,7 @@ prefix
 local arg_0 = cjson.decode(ARGV[1])  -- prefix
 local key_0 = (KEYS[1])  -- zset
 local var_0 = cjson.decode("[]")
-for ix_0, val_0 in ipairs(redipy.pairlist(redis.call("zpopmin", key_0, 5))) do
+for ix_0, val_0 in ipairs({PLS}(redis.call("zpopmin", key_0, 5))) do
     if (redipy.nil_or_index(string.find(val_0[0 + 1], arg_0)) == 0) then
         var_0[#var_0 + 1] = val_0[0 + 1]
     end

@@ -76,7 +76,7 @@ class RSortedPopPatch(LuaRedisPatch):
             return expr
         return {
             "kind": "call",
-            "name": f"{self.helper_pkg()}.pairlist",
+            "name": f"{self.helper_pkg()}.pairlist_scores",
             "args": [expr],
             "no_adjust": False,
         }
