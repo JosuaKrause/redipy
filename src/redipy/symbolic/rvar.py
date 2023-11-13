@@ -14,6 +14,27 @@ class RedisVar(RedisObj):
             return_previous: bool = False,
             expire_in: float | None = None,
             keep_ttl: bool = False) -> Expr:
+        """
+        Sets the value.
+
+        Args:
+            value (MixedType): The value.
+
+            mode (RSetMode, optional): The condition to set the value. Defaults
+            to RSM_ALWAYS.
+
+            return_previous (bool, optional): Whether to return the previous
+            value. Defaults to False.
+
+            expire_in (float | None, optional): Expires the value in seconds.
+            Defaults to None.
+
+            keep_ttl (bool, optional): Preserve the time to live. Defaults to
+            False.
+
+        Returns:
+            Expr: The expression.
+        """
         args: list[MixedType] = []
         if mode == RSM_EXISTS:
             args.append("XX")
@@ -30,7 +51,26 @@ class RedisVar(RedisObj):
         return self.redis_fn("set", value, *args)
 
     def get(self, *, no_adjust: bool = False) -> Expr:
+        """
+        Returns the value.
+
+        Args:
+            no_adjust (bool, optional): Whether to prevent patching the
+            function call. This should not be neccessary. Defaults to False.
+
+        Returns:
+            Expr: The expression.
+        """
         return self.redis_fn("get", no_adjust=no_adjust)
 
     def incrby(self, inc: MixedType) -> Expr:
+        """
+        Updates the numeric value by a given amount.
+
+        Args:
+            inc (MixedType): The relative amount.
+
+        Returns:
+            Expr: The expression.
+        """
         return self.redis_fn("incrby", inc)
