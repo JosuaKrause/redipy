@@ -25,6 +25,15 @@ class Sequence:
         self._ctx = ctx
         self._seq: list[Compilable] = []
 
+    def compile(self) -> SequenceObj:
+        """
+        Compiles the sequence..
+
+        Returns:
+            SequenceObj: The SequenceObj sequence.
+        """
+        raise NotImplementedError()
+
     def add(
             self,
             term: Compilable | Expr) -> None:
