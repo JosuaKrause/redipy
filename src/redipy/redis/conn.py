@@ -1,3 +1,4 @@
+"""The runtime for the redis backend."""
 import contextlib
 import datetime
 import threading
@@ -47,18 +48,49 @@ RedisConfig = TypedDict('RedisConfig', {
 
 
 class RedisFactory(Protocol):  # pylint: disable=too-few-public-methods
+    """
+    Factory function for creating a redis connection from a redis
+    configuration.
+    """
     def __call__(self, *, cfg: RedisConfig) -> Redis:
-        ...
+        """
+        Creates a redis connection from a redis configuration.
+
+        Args:
+            cfg (RedisConfig): The redis configuration.
+
+        Returns:
+            Redis: The redis connection.
+        """
+        raise NotImplementedError()
 
 
 class RedisFunctionBytes(Protocol):  # pylint: disable=too-few-public-methods
+    """A redis function as it is returned from the redis connection."""
     def __call__(
             self,
             *,
             keys: list[str],
             args: list[Any],
             client: Redis | None) -> bytes:
-        ...
+        """
+        Executes the redis function.
+
+        Args:
+            keys (list[str]): A list of keys used in the
+            script. It is common convention to pass keys used in the script via
+            this parameter but it is not necessary to do so. Importantly, keys
+            can also be generated inside the script.
+
+            args (list[Any]): Arguments to the script.
+
+            client (Redis | None): An optionally different
+            redis connection environment. Defaults to None.
+
+        Returns:
+            bytes: The result of the script.
+        """
+        raise NotImplementedError()
 
 
 CONCURRENT_MODULE_CONN: int = 17

@@ -190,6 +190,12 @@ class KeyVariable(Variable):
         return "key"
 
     def get_key_ref(self) -> KeyObj:
+        """
+        Returns a reference to the key.
+
+        Returns:
+            KeyObj: The key reference.
+        """
         return {
             "kind": "key",
             "name": f"{self.prefix()}_{self.get_index()}",

@@ -126,7 +126,11 @@ class Seq(Sequence):
 
 
 class FnContext(Sequence):
+    """The base context for a script. Arguments, statements, and the return
+    value are set through this class."""
     def __init__(self) -> None:
+        """The base context for a script. Arguments, statements, and the return
+        value are set through this class."""
         super().__init__(self)
         self._args: list[tuple[str, JSONArg]] = []
         self._keys: list[tuple[str, KeyVariable]] = []
@@ -136,6 +140,18 @@ class FnContext(Sequence):
         self._loops: int = 0
 
     def add_arg(self, name: str) -> JSONArg:
+        """
+        Adds a value / JSON argument with the given name.
+
+        Args:
+            name (str): The name.
+
+        Raises:
+            ValueError: If the name already exists.
+
+        Returns:
+            JSONArg: The argument reference.
+        """
         if name in self._anames:
             raise ValueError(f"ambiguous arg name: {name}")
         arg = JSONArg(name)
@@ -146,6 +162,18 @@ class FnContext(Sequence):
         return arg
 
     def add_key(self, name: str) -> KeyVariable:
+        """
+        Adds a key argument with the given name.
+
+        Args:
+            name (str): The name.
+
+        Raises:
+            ValueError: If the name already exists.
+
+        Returns:
+            KeyVariable: The argument reference.
+        """
         if name in self._knames:
             raise ValueError(f"ambiguous key name: {name}")
         key = KeyVariable(name)
@@ -156,6 +184,15 @@ class FnContext(Sequence):
         return key
 
     def add_local(self, init: MixedType) -> LocalVariable:
+        """
+        Adds a local variable.
+
+        Args:
+            init (MixedType): The initial value of the variable.
+
+        Returns:
+            LocalVariable: The reference to the variable.
+        """
         local = LocalVariable(init)
         local.set_index(len(self._locals))
         self._locals.append(local)
@@ -163,11 +200,23 @@ class FnContext(Sequence):
         return local
 
     def add_loop(self) -> int:
+        """
+        Adds a loop. For internal use only.
+
+        Returns:
+            int: The loop number.
+        """
         loop = self._loops
         self._loops += 1
         return loop
 
     def set_return_value(self, value: MixedType) -> None:
+        """
+        Sets the return value of the script.
+
+        Args:
+            value (MixedType): The return value.
+        """
         if value is None:
             self.add(CmdHelper(lambda: {
                 "kind": "return",
@@ -190,15 +239,35 @@ class FnContext(Sequence):
 
 
 class Branch(Compilable):
+    """An if / else block."""
     def __init__(self, ctx: FnContext, condition: MixedType) -> None:
+        """
+        Creates a branch.
+
+        Args:
+            ctx (FnContext): The script context.
+            condition (MixedType): The branch condition.
+        """
         self._condition = lit_helper(condition)
         self._success = Seq(ctx)
         self._failure = Seq(ctx)
 
     def get_success(self) -> Sequence:
+        """
+        The success branch.
+
+        Returns:
+            Sequence: The command sequence if the condition is successful.
+        """
         return self._success
 
     def get_failure(self) -> Sequence:
+        """
+        The failure branch.
+
+        Returns:
+            Sequence: The command sequence if the condition failed.
+        """
         return self._failure
 
     def compile(self) -> CommandObj:
@@ -211,6 +280,7 @@ class Branch(Compilable):
 
 
 class IndexVariable(Variable):
+    """A variable referencing the array index in a for loop."""
     def get_declare_rhs(self) -> Expr:
         raise RuntimeError("must be used in for loop")
 
@@ -218,6 +288,12 @@ class IndexVariable(Variable):
         return "ix"
 
     def get_index_ref(self) -> IndexObj:
+        """
+        Returns a reference to the index.
+
+        Returns:
+            IndexObj: The index reference.
+        """
         return {
             "kind": "index",
             "name": f"{self.prefix()}_{self.get_index()}",
@@ -228,6 +304,7 @@ class IndexVariable(Variable):
 
 
 class ValueVariable(Variable):
+    """A variable referencing the array element value in a for loop."""
     def get_declare_rhs(self) -> Expr:
         raise RuntimeError("must be used in for loop")
 
@@ -235,6 +312,12 @@ class ValueVariable(Variable):
         return "val"
 
     def get_var_ref(self) -> VarObj:
+        """
+        Returns a reference to the element value.
+
+        Returns:
+            VarObj: The element value reference.
+        """
         return {
             "kind": "var",
             "name": f"{self.prefix()}_{self.get_index()}",
@@ -245,7 +328,15 @@ class ValueVariable(Variable):
 
 
 class ForLoop(Compilable):
+    """A for loop over an array."""
     def __init__(self, ctx: FnContext, array: Expr) -> None:
+        """
+        Creates a for loop over the contents of an array.
+
+        Args:
+            ctx (FnContext): The script context.
+            array (Expr): The array.
+        """
         loop_ix = ctx.add_loop()
         self._ix = IndexVariable()
         self._ix.set_index(loop_ix)
@@ -255,12 +346,30 @@ class ForLoop(Compilable):
         self._array = array
 
     def get_index(self) -> Variable:
+        """
+        The index variable.
+
+        Returns:
+            Variable: The index variable.
+        """
         return self._ix
 
     def get_value(self) -> Variable:
+        """
+        The element value variable.
+
+        Returns:
+            Variable: The element value variable.
+        """
         return self._val
 
     def get_loop(self) -> Sequence:
+        """
+        The loop block.
+
+        Returns:
+            Sequence: The loop block.
+        """
         return self._loop
 
     def compile(self) -> CommandObj:
@@ -274,11 +383,20 @@ class ForLoop(Compilable):
 
 
 class WhileLoop(Compilable):
+    """A while loop."""
     def __init__(self, ctx: FnContext, condition: MixedType) -> None:
+        """
+        Creates a loop the repeats while a condition is met.
+
+        Args:
+            ctx (FnContext): The script context.
+            condition (MixedType): The condition.
+        """
         self._condition = lit_helper(condition)
         self._loop = Seq(ctx)
 
     def get_loop(self) -> Sequence:
+        """The loop body."""
         return self._loop
 
     def compile(self) -> CommandObj:
