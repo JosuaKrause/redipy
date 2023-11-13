@@ -1,8 +1,10 @@
+"""Access to redis lists."""
 from redipy.symbolic.expr import Expr, MixedType
 from redipy.symbolic.fun import RedisObj
 
 
 class RedisList(RedisObj):
+    """A redis list."""
     def lpush(self, *values: MixedType) -> Expr:
         return self.redis_fn("lpush", *values)
 

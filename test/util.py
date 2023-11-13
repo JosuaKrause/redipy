@@ -43,6 +43,24 @@ def get_setup(
         lua_script: str | None = None,
         no_compile_hook: bool = False,
         ) -> Runtime:
+    """
+    Creates a redipy runtime.
+
+    Args:
+        test_name (str): The name of the test.
+
+        rt_lua (bool): Whether the runtime should be redis (True) or memory
+        (False).
+
+        lua_script (str | None, optional): If set the compiled lua code must
+        match exactly. Defaults to None.
+
+        no_compile_hook (bool, optional): If set no compilation info will be
+        printed to stdout. Defaults to False.
+
+    Returns:
+        Runtime: The runtime.
+    """
     if rt_lua:
         res: Runtime = RedisConnection(test_name, cfg=get_test_config())
         if lua_script is not None:
@@ -70,6 +88,21 @@ def run_code(
         *,
         tests: list[tuple[BT, BR]],
         tester: Callable[[ExecFunction, BT], BR]) -> None:
+    """
+    Executes tests on the given script and verifies their outputs.
+
+    Args:
+        rt (Runtime): The runtime.
+
+        ctx (FnContext): The script.
+
+        tests (list[tuple[BT, BR]]): A list of input values and expected
+        values.
+
+        tester (Callable[[ExecFunction, BT], BR]): A function that takes the
+        script callback and an input variable and outputs the results of the
+        script.
+    """
     runner = rt.register_script(ctx)
 
     for (t_values, t_expect) in tests:

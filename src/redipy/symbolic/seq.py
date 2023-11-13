@@ -1,3 +1,4 @@
+"""Provides core functionality of sequences."""
 from redipy.graph.cmd import CommandObj, StmtObj
 from redipy.graph.expr import IndexObj, RefIdObj, VarObj
 from redipy.graph.seq import SequenceObj
@@ -13,13 +14,27 @@ from redipy.symbolic.expr import Expr, lit_helper, MixedType
 
 
 class Sequence:
+    """A sequence groups together statements."""
     def __init__(self, ctx: 'FnContext') -> None:
+        """
+        Creates a sequence. You probably shouldn't instantiate it yourself.
+
+        Args:
+            ctx (FnContext): The base script context.
+        """
         self._ctx = ctx
         self._seq: list[Compilable] = []
 
     def add(
             self,
             term: Compilable | Expr) -> None:
+        """
+        Adds a new statement to the sequence.
+
+        Args:
+            term (Compilable | Expr): The statement. Expressions will
+            automatically be converted appropriately.
+        """
         if isinstance(term, Compilable):
             self._seq.append(term)
         else:
@@ -30,28 +45,70 @@ class Sequence:
             self._seq.append(CmdHelper(lambda: stmt))
 
     def is_empty(self) -> bool:
+        """
+        Whether the sequence is empty.
+
+        Returns:
+            bool: If True, the sequence has no elements in it.
+        """
         return not self._seq
 
     def get_cmds(self) -> list[CommandObj]:
+        """
+        Returns all statements in this sequence.
+
+        Returns:
+            list[CommandObj]: The commands.
+        """
         return [stmt.compile() for stmt in self._seq]
 
     def for_(self, array: Expr) -> tuple['Sequence', Variable, Variable]:
+        """
+        Creates a for loop.
+
+        Returns:
+            tuple[Sequence, Variable, Variable]: The first element is the
+            sequence of the body of the for loop. The second element is the
+            item index variable and the third is the item value variable.
+        """
         loop = ForLoop(self._ctx, array)
         self.add(loop)
         return loop.get_loop(), loop.get_index(), loop.get_value()
 
     def if_(self, condition: MixedType) -> tuple['Sequence', 'Sequence']:
+        """
+        Creates an if branch.
+
+        Args:
+            condition (MixedType): The condition to continue the loop.
+
+        Returns:
+            tuple[Sequence, Sequence]: The first sequence is the body of the
+            successful branch. The second sequence is the body of the
+            unsuccessful branch.
+        """
         branch = Branch(self._ctx, condition)
         self.add(branch)
         return branch.get_success(), branch.get_failure()
 
     def while_(self, condition: MixedType) -> 'Sequence':
+        """
+        Creates a while loop.
+
+        Args:
+            condition (MixedType): The condition.
+
+        Returns:
+            Sequence: The body of the loop. It is executed until `condition` is
+            False.
+        """
         loop = WhileLoop(self._ctx, condition)
         self.add(loop)
         return loop.get_loop()
 
 
 class Seq(Sequence):
+    """A standard sequence that does not add a stack frame."""
     def compile(self) -> SequenceObj:
         return {
             "kind": "seq",

@@ -1,8 +1,10 @@
+"""Access to redis sorted sets."""
 from redipy.symbolic.expr import Expr, MixedType
 from redipy.symbolic.fun import RedisObj
 
 
 class RedisSortedSet(RedisObj):
+    """A redis sorted set."""
     def add(self, score: MixedType, value: MixedType) -> Expr:
         # TODO add all arguments
         return self.redis_fn("zadd", score, value)

@@ -1,9 +1,11 @@
+"""Access to redis variables."""
 from redipy.api import RSetMode, RSM_ALWAYS, RSM_EXISTS, RSM_MISSING
 from redipy.symbolic.expr import Expr, MixedType
 from redipy.symbolic.fun import RedisObj
 
 
 class RedisVar(RedisObj):
+    """A redis variable."""
     def set(
             self,
             value: MixedType,
