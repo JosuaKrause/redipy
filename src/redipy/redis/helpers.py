@@ -1,7 +1,9 @@
+"""Lua helper functions for patching lua function calls."""
 from redipy.plugin import HelperFunction
 
 
 class HPairlistScoresFn(HelperFunction):
+    """Converts an alternating list of keys and values into a list of pairs."""
     @staticmethod
     def name() -> str:
         return "pairlist_scores"
@@ -27,6 +29,7 @@ class HPairlistScoresFn(HelperFunction):
 
 
 class HPairlistDictFn(HelperFunction):
+    """Converts an alternating list of keys and values into a dictionary."""
     @staticmethod
     def name() -> str:
         return "pairlist_dict"
@@ -53,6 +56,8 @@ class HPairlistDictFn(HelperFunction):
 
 
 class HNilOrIndexFn(HelperFunction):
+    """Updates an index from 1-based (lua) to 0-based (python) if the value is
+    not None (nil)."""
     @staticmethod
     def name() -> str:
         return "nil_or_index"
@@ -72,6 +77,7 @@ class HNilOrIndexFn(HelperFunction):
 
 
 class HAsIntStrFn(HelperFunction):
+    """Returns the integer value of a number."""
     @staticmethod
     def name() -> str:
         return "asintstr"

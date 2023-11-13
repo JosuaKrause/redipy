@@ -1,3 +1,4 @@
+"""Implements redis functionality for the memory backend."""
 from typing import cast
 
 from redipy.api import RSetMode, RSM_ALWAYS, RSM_EXISTS, RSM_MISSING
@@ -7,6 +8,7 @@ from redipy.plugin import ArgcSpec, LocalRedisFunction
 
 
 class RSetFn(LocalRedisFunction):
+    """Implements the set function."""
     @staticmethod
     def name() -> str:
         return "set"
@@ -51,6 +53,7 @@ class RSetFn(LocalRedisFunction):
 
 
 class RGetFn(LocalRedisFunction):
+    """Implements the get function."""
     @staticmethod
     def name() -> str:
         return "get"
@@ -67,6 +70,7 @@ class RGetFn(LocalRedisFunction):
 
 
 class RIncrBy(LocalRedisFunction):
+    """Implements the incrby and incrbyfloat functions."""
     @staticmethod
     def name() -> str:
         return "incrby"
@@ -83,6 +87,7 @@ class RIncrBy(LocalRedisFunction):
 
 
 class RLPushFn(LocalRedisFunction):
+    """Implements lpush."""
     @staticmethod
     def name() -> str:
         return "lpush"
@@ -100,6 +105,7 @@ class RLPushFn(LocalRedisFunction):
 
 
 class RRPushFn(LocalRedisFunction):
+    """Implements rpush."""
     @staticmethod
     def name() -> str:
         return "rpush"
@@ -117,6 +123,7 @@ class RRPushFn(LocalRedisFunction):
 
 
 class RLPopFn(LocalRedisFunction):
+    """Implements lpop."""
     @staticmethod
     def name() -> str:
         return "lpop"
@@ -135,6 +142,7 @@ class RLPopFn(LocalRedisFunction):
 
 
 class RRPopFn(LocalRedisFunction):
+    """Implements rpop."""
     @staticmethod
     def name() -> str:
         return "rpop"
@@ -153,6 +161,7 @@ class RRPopFn(LocalRedisFunction):
 
 
 class RLLenFn(LocalRedisFunction):
+    """Implements the llen function."""
     @staticmethod
     def name() -> str:
         return "llen"
@@ -169,6 +178,7 @@ class RLLenFn(LocalRedisFunction):
 
 
 class RZAddFn(LocalRedisFunction):
+    """Implements the zadd function."""
     @staticmethod
     def name() -> str:
         return "zadd"
@@ -185,6 +195,7 @@ class RZAddFn(LocalRedisFunction):
 
 
 class RZPopMaxFn(LocalRedisFunction):
+    """Implements zpopmax."""
     @staticmethod
     def name() -> str:
         return "zpopmax"
@@ -203,6 +214,7 @@ class RZPopMaxFn(LocalRedisFunction):
 
 
 class RZPopMinFn(LocalRedisFunction):
+    """Implements zpopmin."""
     @staticmethod
     def name() -> str:
         return "zpopmin"
@@ -221,6 +233,7 @@ class RZPopMinFn(LocalRedisFunction):
 
 
 class RZCard(LocalRedisFunction):
+    """Implements the zcard function."""
     @staticmethod
     def name() -> str:
         return "zcard"
@@ -237,6 +250,7 @@ class RZCard(LocalRedisFunction):
 
 
 class RExists(LocalRedisFunction):
+    """Implements the exists function."""
     @staticmethod
     def name() -> str:
         return "exists"
@@ -253,6 +267,7 @@ class RExists(LocalRedisFunction):
 
 
 class RDel(LocalRedisFunction):
+    """Implements the del function."""
     @staticmethod
     def name() -> str:
         return "del"
@@ -269,6 +284,7 @@ class RDel(LocalRedisFunction):
 
 
 class RHSet(LocalRedisFunction):
+    """Implements the hset function."""
     @staticmethod
     def name() -> str:
         return "hset"
@@ -296,6 +312,7 @@ class RHSet(LocalRedisFunction):
 
 
 class RHDel(LocalRedisFunction):
+    """Implements the hdel function."""
     @staticmethod
     def name() -> str:
         return "hdel"
@@ -313,6 +330,7 @@ class RHDel(LocalRedisFunction):
 
 
 class RHGet(LocalRedisFunction):
+    """Implements the hget function."""
     @staticmethod
     def name() -> str:
         return "hget"
@@ -329,6 +347,7 @@ class RHGet(LocalRedisFunction):
 
 
 class RHMGet(LocalRedisFunction):
+    """Implements the hmget function."""
     @staticmethod
     def name() -> str:
         return "hmget"
@@ -346,6 +365,7 @@ class RHMGet(LocalRedisFunction):
 
 
 class RHIncrBy(LocalRedisFunction):
+    """Implements the hincrby and hincrbyfloat functions."""
     @staticmethod
     def name() -> str:
         return "hincrby"
@@ -362,6 +382,7 @@ class RHIncrBy(LocalRedisFunction):
 
 
 class RHKeys(LocalRedisFunction):
+    """Implements the hkeys function."""
     @staticmethod
     def name() -> str:
         return "hkeys"
@@ -378,6 +399,7 @@ class RHKeys(LocalRedisFunction):
 
 
 class RHVals(LocalRedisFunction):
+    """Implements the hvals function."""
     @staticmethod
     def name() -> str:
         return "hvals"
@@ -394,6 +416,7 @@ class RHVals(LocalRedisFunction):
 
 
 class RHGetAll(LocalRedisFunction):
+    """Implements the hgetall function."""
     @staticmethod
     def name() -> str:
         return "hgetall"

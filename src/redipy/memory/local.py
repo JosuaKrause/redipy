@@ -28,31 +28,55 @@ ExecState = tuple[
     dict[str, str],  # keys
     dict[str, JSONType],  # args
 ]
+"""The execution state of the script. For fast access this is a tuple instead
+of a dictionary. Use the `STATE_*` constants to access the individual fields
+by copying the value into a local variable first (local variables are index
+lookups in python while global variables are dictionary lookups)."""
 
 
 STATE_KEYV: Literal[0] = 0
+"""The list of key arguments to the script."""
 STATE_ARGV: Literal[1] = 1
+"""The list of value arguments to the script."""
 STATE_ARG_NAMES: Literal[2] = 2
+"""Mapping of script argument names to their values."""
 STATE_KEY_NAMES: Literal[3] = 3
+"""Mapping of script key argument names to their values."""
 STATE_STACK: Literal[4] = 4
+"""The local variable stack of the script. Each stack frame is a list for fast
+variable access via index. The last stack frame in the list is the current one.
+"""
 STATE_FNS: Literal[5] = 5
+"""An interface for function calls."""
 STATE_SM: Literal[6] = 6
+"""An interface for raw memory access (redis-like memory)."""
 STATE_RETURN: Literal[7] = 7
+"""The return value stack. The rightmost value is the current return value of
+the script or function."""
 STATE_KEYS: Literal[8] = 8
+"""The actual key arguments to the script. This value is filled before the
+script starts executing."""
 STATE_ARGS: Literal[9] = 9
+"""The actual arguments to the script. This value is filled before the
+script starts executing."""
 
 
 Cmd = Callable[[ExecState], None]
+"""A command callback executing a statement."""
 ExprCmd = Callable[[ExecState], JSONType]
+"""A command callback executing an expression."""
 
 
 CmdContext = TypedDict('CmdContext', {
     "local_count": int,
     "local_names": dict[str, int],
 })
+"""Command context to keep track of local variables."""
 
 
 class _Uninit():
+    """An uninitialized variable. When a stack frame is created during
+    execution values are initialized with this singleton value."""
     def __str__(self) -> str:
         return "UNINIT"
 

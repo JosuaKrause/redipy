@@ -1,3 +1,4 @@
+"""Module for patching lua redis function calls."""
 from redipy.graph.expr import (
     CallObj,
     ExprObj,
@@ -9,6 +10,7 @@ from redipy.plugin import LuaRedisPatch
 
 
 class RSetPatch(LuaRedisPatch):
+    """Converts the output of SET into a proper boolean value."""
     @staticmethod
     def names() -> set[str]:
         return {"set"}
@@ -37,6 +39,8 @@ class RSetPatch(LuaRedisPatch):
 
 
 class RGetPatch(LuaRedisPatch):
+    """Ensures GET-like operations return None (nil) if the key or value is
+    missing."""
     @staticmethod
     def names() -> set[str]:
         return {"get", "lpop", "rpop", "hget"}
@@ -62,6 +66,7 @@ class RGetPatch(LuaRedisPatch):
 
 
 class RSortedPopPatch(LuaRedisPatch):
+    """Converts the output of sorted set list functions into pair lists."""
     @staticmethod
     def names() -> set[str]:
         return {"zpopmax", "zpopmin"}
@@ -83,6 +88,7 @@ class RSortedPopPatch(LuaRedisPatch):
 
 
 class RIncrByPatch(LuaRedisPatch):
+    """Uses the float variant for INCRBY-like functions."""
     @staticmethod
     def names() -> set[str]:
         return {"incrby", "hincrby"}
@@ -104,6 +110,7 @@ class RIncrByPatch(LuaRedisPatch):
 
 
 class RHashGetAllPatch(LuaRedisPatch):
+    """Converts an alternating key value list into a dictionary."""
     @staticmethod
     def names() -> set[str]:
         return {"hgetall"}

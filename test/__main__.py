@@ -1,9 +1,18 @@
+"""Offers functionality for organizing test timings. Tests get assigned to
+continuous integration nodes based on their timings. The goal is to have a
+roughly equal test runtime on all nodes."""
 import argparse
 
 from .mng import merge_results, split_tests
 
 
 def parse_args_split_tests(parser: argparse.ArgumentParser) -> None:
+    """
+    Add splitting tests arguments to the argument parser.
+
+    Args:
+        parser (argparse.ArgumentParser): The argument parser.
+    """
     parser.add_argument(
         "--filepath",
         default="test-results/results.xml",
@@ -20,6 +29,12 @@ def parse_args_split_tests(parser: argparse.ArgumentParser) -> None:
 
 
 def parse_args_merge_results(parser: argparse.ArgumentParser) -> None:
+    """
+    Add merging tests arguments to the argument parser.
+
+    Args:
+        parser (argparse.ArgumentParser): The argument parser.
+    """
     parser.add_argument(
         "--dir",
         default="test-results",
@@ -34,6 +49,12 @@ def parse_args_merge_results(parser: argparse.ArgumentParser) -> None:
 
 
 def parse_args() -> argparse.Namespace:
+    """
+    Parses the command line arguments.
+
+    Returns:
+        argparse.Namespace: The parse result.
+    """
     parser = argparse.ArgumentParser(
         description="Test Utilities")
     subparser = parser.add_subparsers(title="Commands")
@@ -60,6 +81,9 @@ def parse_args() -> argparse.Namespace:
 
 
 def run() -> None:
+    """
+    Runs the functionality.
+    """
     args = parse_args()
     args.func(args)
 

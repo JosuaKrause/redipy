@@ -205,6 +205,23 @@ def add_plugin(
         target: dict[str, T],
         clazz: type[T],
         disallowed: set[str] | None = None) -> None:
+    """
+    Adds eligible elements of the given module as plugins to the target.
+
+    Args:
+        module (str): The module to read the plugins from.
+
+        target (dict[str, T]): The destination to store the plugins.
+
+        clazz (type[T]): Only elements of this class are loaded as plugins.
+
+        disallowed (set[str] | None, optional): A set of invalid names.
+        If a plugin attempts to use one of those names an error is raised.
+        Defaults to None.
+
+    Raises:
+        RuntimeError: If a plugin cannot be loaded.
+    """
     if disallowed is None:
         disallowed = set()
     mod = importlib.import_module(module)
@@ -234,6 +251,24 @@ def add_patch_plugin(
         target: dict[str, U],
         clazz: type[U],
         disallowed: set[str] | None = None) -> None:
+    """
+    Adds eligible elements of the given module as plugins to the target.
+    The elements must be lua patches.
+
+    Args:
+        module (str): The module to read the plugins from.
+
+        target (dict[str, U]): The destination to store the plugins.
+
+        clazz (type[U]): Only elements of this class are loaded as plugins.
+
+        disallowed (set[str] | None, optional): A set of invalid names.
+        If a plugin attempts to use one of those names an error is raised.
+        Defaults to None.
+
+    Raises:
+        RuntimeError: If a plugin cannot be loaded.
+    """
     if disallowed is None:
         disallowed = set()
     mod = importlib.import_module(module)

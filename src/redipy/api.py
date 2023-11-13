@@ -272,14 +272,35 @@ class PipelineAPI:
 
         Args:
             key (str): The key.
+
             inc (float | int): The relative change.
         """
         raise NotImplementedError()
 
     def exists(self, *keys: str) -> None:
+        """
+        Determines whether specified keys exist.
+
+        See also the redis documentation: https://redis.io/commands/exists/
+
+        The pipeline value is set to the number of keys that exist.
+
+        Args:
+            *keys (str): The keys.
+        """
         raise NotImplementedError()
 
     def delete(self, *keys: str) -> None:
+        """
+        Deletes keys.
+
+        See also the redis documentation: https://redis.io/commands/del/
+
+        The pipeline value is set to the number of keys that got removed.
+
+        Args:
+            *keys (str): The keys.
+        """
         raise NotImplementedError()
 
     def hset(self, key: str, mapping: dict[str, str]) -> None:
@@ -618,6 +639,7 @@ class RedisAPI:
 
         Args:
             key (str): The key.
+
             inc (float | int): The relative change.
 
         Raises:
@@ -629,9 +651,31 @@ class RedisAPI:
         raise NotImplementedError()
 
     def exists(self, *keys: str) -> int:
+        """
+        Determines whether specified keys exist.
+
+        See also the redis documentation: https://redis.io/commands/exists/
+
+        Args:
+            *keys (str): The keys.
+
+        Returns:
+            int: The number of keys that exist.
+        """
         raise NotImplementedError()
 
     def delete(self, *keys: str) -> int:
+        """
+        Deletes keys.
+
+        See also the redis documentation: https://redis.io/commands/del/
+
+        Args:
+            *keys (str): The keys.
+
+        Returns:
+            int: The number of keys that got removed.
+        """
         raise NotImplementedError()
 
     def hset(self, key: str, mapping: dict[str, str]) -> int:
@@ -670,7 +714,7 @@ class RedisClientAPI(RedisAPI):
         the results call execute on the pipeline object.
 
         Yields:
-            Iterator[PipelineAPI]: The pipeline.
+            PipelineAPI: The pipeline.
         """
         raise NotImplementedError()
 

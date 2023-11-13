@@ -8,8 +8,8 @@ import pytest
 from redipy.api import PipelineAPI
 from redipy.graph.expr import JSONType
 from redipy.main import Redis
+from redipy.symbolic.core import KeyVariable
 from redipy.symbolic.expr import Expr
-from redipy.symbolic.fun import KeyVariable
 from redipy.symbolic.rlist import RedisList
 from redipy.symbolic.rvar import RedisVar
 from redipy.symbolic.rzset import RedisSortedSet

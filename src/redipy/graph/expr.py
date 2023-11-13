@@ -1,11 +1,16 @@
+"""Defines all execution graph node types of expressions. An expression cannot
+be executed alone and usually has no side-effects."""
 from typing import Literal, TypedDict
 
 
 LiteralValueType = str | int | float | bool | list | None
+"""A literal value."""
 JSONType = str | int | float | list | dict | None
+"""A literal value that can be converted to JSON."""
 
 
 ValueType = Literal["str", "int", "float", "bool", "list", "none"]
+"""Named literal value types."""
 
 
 BinOps = Literal[
@@ -20,6 +25,7 @@ BinOps = Literal[
     "le",
     "ge",
 ]
+"""Binary operations."""
 
 
 ArgObj = TypedDict('ArgObj', {
@@ -27,65 +33,81 @@ ArgObj = TypedDict('ArgObj', {
     "name": str,
     "readable": str,
 })
+"""Reads a script argument."""
 KeyObj = TypedDict('KeyObj', {
     "kind": Literal["key"],
     "name": str,
     "readable": str,
 })
+"""Reads a script key argument."""
 VarObj = TypedDict('VarObj', {
     "kind": Literal["var"],
     "name": str,
 })
+"""Reads a local variable."""
 IndexObj = TypedDict('IndexObj', {
     "kind": Literal["index"],
     "name": str,
 })
+"""Reads an index variable."""
 RefIdObj = ArgObj | KeyObj | VarObj | IndexObj
+"""References some variable."""
 
 
 LoadArg = TypedDict('LoadArg', {
     "kind": Literal["load_json_arg", "load_key_arg"],
     "index": int,
 })
+"""Loads a (key or value) argument. Usually used to assign to an argument
+variable."""
 LiteralValObj = TypedDict('LiteralValObj', {
     "kind": Literal["val"],
     "value": LiteralValueType,
     "type": ValueType,
 })
+"""Loads a literal value."""
 ConstantObj = TypedDict('ConstantObj', {
     "kind": Literal["constant"],
     "raw": str,
 })
+"""Loads a named constant."""
 UnaryOpObj = TypedDict('UnaryOpObj', {
     "kind": Literal["unary"],
     "op": Literal["not"],
     "arg": 'ExprObj',
 })
+"""Performs a unary operation."""
 BinaryOpObj = TypedDict('BinaryOpObj', {
     "kind": Literal["binary"],
     "op": BinOps,
     "left": 'ExprObj',
     "right": 'ExprObj',
 })
+"""Performs a binary operation."""
 ArrayAtObj = TypedDict('ArrayAtObj', {
     "kind": Literal["array_at"],
     "var": RefIdObj,
     "index": 'ExprObj',
 })
+"""Reads an index from an array."""
 ArrayLengthObj = TypedDict('ArrayLengthObj', {
     "kind": Literal["array_len"],
     "var": RefIdObj,
 })
+"""Reads the length of an array."""
 ConcatObj = TypedDict('ConcatObj', {
     "kind": Literal["concat"],
     "strings": 'list[ExprObj]',
 })
+"""String concatenates a sequence of expressions. The expressions should be
+strings."""
 CallObj = TypedDict('CallObj', {
     "kind": Literal["call"],
     "name": str,
     "args": 'list[ExprObj]',
     "no_adjust": bool,
 })
+"""Calls a function."""
 ExprObj = (
     RefIdObj
     | LoadArg
@@ -98,9 +120,23 @@ ExprObj = (
     | ConcatObj
     | CallObj
 )
+"""An expression evaluates to a value."""
 
 
 def get_literal(obj: ExprObj, vtype: ValueType | None = None) -> JSONType:
+    """
+    Returns the literal value of a literal expression object.
+
+    Args:
+        obj (ExprObj): The literal expression.
+
+        vtype (ValueType | None, optional): The expected type.
+        Defaults to None.
+
+    Returns:
+        JSONType: The literal value if the expression is a literal and the
+        value has the correct type.
+    """
     if obj["kind"] != "val":
         return None
     if vtype is not None and obj["type"] != vtype:
@@ -109,6 +145,15 @@ def get_literal(obj: ExprObj, vtype: ValueType | None = None) -> JSONType:
 
 
 def is_none_literal(obj: ExprObj) -> bool:
+    """
+    Whether a literal expression is None.
+
+    Args:
+        obj (ExprObj): The literal expression.
+
+    Returns:
+        bool: Whether it contains None as literal.
+    """
     if obj["kind"] != "val":
         return False
     if obj["type"] != "none":
@@ -122,6 +167,24 @@ def find_literal(
         *,
         vtype: ValueType | None = None,
         no_case: bool = False) -> tuple[int, JSONType] | None:
+    """
+    Searches for a specified literal in a list of expressions.
+
+    Args:
+        objs (list[ExprObj]): The list of expressions.
+
+        value (JSONType): The value to look for.
+
+        vtype (ValueType | None, optional): The type of the value to look for.
+        Defaults to None.
+
+        no_case (bool, optional): Whether the value should be search without
+        considering case (only for strings). Defaults to False.
+
+    Returns:
+        tuple[int, JSONType] | None: If found, the index and the literal.
+        Otherwise None.
+    """
     if vtype != "none" and value is not None:
 
         def value_check(obj: ExprObj) -> tuple[bool, JSONType]:

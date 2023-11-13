@@ -1,3 +1,4 @@
+"""Tests for redipy."""
 import pytest
 
 

@@ -3,7 +3,7 @@ engine."""
 from collections.abc import Callable
 
 from redipy.graph.cmd import AssignmentObj, CommandObj
-from redipy.graph.expr import ArgObj, ExprObj, RefIdObj, VarObj
+from redipy.graph.expr import ArgObj, ExprObj, KeyObj, RefIdObj, VarObj
 from redipy.symbolic.expr import Expr, ExprHelper, lit_helper, MixedType
 
 
@@ -167,13 +167,46 @@ class Variable(Expr):
             })
 
 
+class KeyVariable(Variable):
+    """A key argument variable."""
+    def __init__(self, name: str) -> None:
+        """
+        A key argument variable. Do not call this directly.
+
+        Args:
+            name (str): The name of the key argument.
+        """
+        super().__init__()
+        self._name = name
+
+    def get_declare_rhs(self) -> Expr:
+        return ExprHelper(
+            lambda: {
+                "kind": "load_key_arg",
+                "index": self.get_index(),
+            })
+
+    def prefix(self) -> str:
+        return "key"
+
+    def get_key_ref(self) -> KeyObj:
+        return {
+            "kind": "key",
+            "name": f"{self.prefix()}_{self.get_index()}",
+            "readable": self._name,
+        }
+
+    def get_ref(self) -> RefIdObj:
+        return self.get_key_ref()
+
+
 class JSONArg(Variable):
     """An argument to the script. This can contain any value that can be
     converted to JSON. Any value is converted to JSON for transport to the
     function and automatically converted back inside the script."""
     def __init__(self, name: str) -> None:
         """
-        Creates a JSON argument.
+        Creates a JSON argument. Do not call this directly.
 
         Args:
             name (str): The name of the argument.
@@ -192,6 +225,12 @@ class JSONArg(Variable):
         return "arg"
 
     def get_arg_ref(self) -> ArgObj:
+        """
+        Get a reference to the argument.
+
+        Returns:
+            ArgObj: The reference expression.
+        """
         return {
             "kind": "arg",
             "name": f"{self.prefix()}_{self.get_index()}",
@@ -203,7 +242,14 @@ class JSONArg(Variable):
 
 
 class LocalVariable(Variable):
+    """A local variable."""
     def __init__(self, init: MixedType) -> None:
+        """
+        Creates a local variable. Do not call this directly.
+
+        Args:
+            init (MixedType): The initial value of the variable.
+        """
         super().__init__()
         self._init = lit_helper(init)
 
@@ -214,6 +260,12 @@ class LocalVariable(Variable):
         return "var"
 
     def get_var_ref(self) -> VarObj:
+        """
+        Get a reference to the variable.
+
+        Returns:
+            VarObj: The reference expression.
+        """
         return {
             "kind": "var",
             "name": f"{self.prefix()}_{self.get_index()}",
@@ -224,7 +276,15 @@ class LocalVariable(Variable):
 
 
 class ArrayAt(Expr):
+    """Accesses an array at a given index."""
     def __init__(self, array: Variable, index: MixedType) -> None:
+        """
+        Accesses an array at the given index.
+
+        Args:
+            array (Variable): The array.
+            index (MixedType): The index.
+        """
         super().__init__()
         self._array = array
         self._index = lit_helper(index)
@@ -238,7 +298,14 @@ class ArrayAt(Expr):
 
 
 class ArrayLen(Expr):
+    """Computes the length of an array."""
     def __init__(self, array: Variable) -> None:
+        """
+        Computes the length of an array.
+
+        Args:
+            array (Variable): The array.
+        """
         super().__init__()
         self._array = array
 

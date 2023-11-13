@@ -5,11 +5,11 @@ from redipy.symbolic.core import (
     CmdHelper,
     Compilable,
     JSONArg,
+    KeyVariable,
     LocalVariable,
     Variable,
 )
 from redipy.symbolic.expr import Expr, lit_helper, MixedType
-from redipy.symbolic.fun import KeyVariable
 
 
 class Sequence:

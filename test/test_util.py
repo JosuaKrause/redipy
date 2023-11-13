@@ -1,9 +1,11 @@
+"""Tests utility functions."""
 from typing import Any
 
 from redipy.util import escape, indent, lua_fmt, retain_some, unescape
 
 
 def test_retain_some() -> None:
+    """Tests the function `retain_some`."""
 
     def test_rs(
             input_arr: list[int],
@@ -89,6 +91,7 @@ def test_retain_some() -> None:
 
 
 def test_escape() -> None:
+    """Tests the functions `escape` and `unescape`."""
 
     def test(text: str, subs: dict[str, str]) -> None:
         rsubs = {
@@ -114,6 +117,7 @@ def test_escape() -> None:
 
 
 def test_indent() -> None:
+    """Test indentation functions."""
     fmt_str = lua_fmt(r"""
         local res = {}
         local key = nil

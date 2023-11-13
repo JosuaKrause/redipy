@@ -1,3 +1,4 @@
+"""Utilities for the test module."""
 import json
 import os
 from collections.abc import Callable
@@ -15,6 +16,12 @@ from redipy.util import code_fmt, get_test_salt
 
 
 def get_test_config() -> RedisConfig:
+    """
+    Returns the test configuration for redis.
+
+    Returns:
+        RedisConfig: The test redis connection information.
+    """
     return {
         "host": "localhost",
         "port": 6380,
@@ -71,6 +78,15 @@ def run_code(
 
 
 def to_bool(text: str | None) -> bool:
+    """
+    Converts a value into boolean.
+
+    Args:
+        text (str | None): The value.
+
+    Returns:
+        bool: The boolean.
+    """
     if text is None:
         return False
     try:
@@ -84,6 +100,12 @@ IS_GH_ACTION: bool | None = None
 
 
 def is_github_action() -> bool:
+    """
+    Whether the code is running in a GitHub Action.
+
+    Returns:
+        bool: Whether the code is running in a GitHub Action.
+    """
     global IS_GH_ACTION
 
     if IS_GH_ACTION is None:
@@ -92,5 +114,13 @@ def is_github_action() -> bool:
 
 
 def skip_on_gha_if(condition: bool, reason: str) -> None:
+    """
+    Skip a test on GitHub Actions if a given condition is met.
+
+    Args:
+        condition (bool): The condition.
+
+        reason (str): The reason for skipping.
+    """
     if is_github_action() and condition:
         pytest.skip(reason)

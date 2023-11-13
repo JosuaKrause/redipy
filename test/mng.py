@@ -1,3 +1,4 @@
+"""Provides functionality to split and merge test result XML files."""
 import collections
 import os
 import re
@@ -11,16 +12,42 @@ DEFAULT_TEST_DURATION = 10.0
 
 
 def listdir(folder: str) -> Iterable[str]:
+    """
+    Lists the files in the given directory.
+
+    Args:
+        folder (str): The directory.
+
+    Yields:
+        str: The filenames.
+    """
     yield from sorted(os.listdir(folder))
 
 
 def find_tests(folder: str) -> Iterable[str]:
+    """
+    Finds files containing pytests.
+
+    Args:
+        folder (str): The test folder.
+
+    Yields:
+        str: The full path to each test file.
+    """
     for item in listdir(folder):
         if not os.path.isdir(item) and TEST_FILE_PATTERN.match(item):
             yield os.path.join(folder, item)
 
 
 def merge_results(base_folder: str, out_filename: str) -> None:
+    """
+    Merges test result XML files into a unified file.
+
+    Args:
+        base_folder (str): The folder containing the XML files.
+
+        out_filename (str): The output XML file.
+    """
     testsuites = ET.Element("testsuites")
     combined = ET.SubElement(testsuites, "testsuite")
     parts_folder = os.path.join(base_folder, "parts")
@@ -58,6 +85,19 @@ def merge_results(base_folder: str, out_filename: str) -> None:
 
 
 def split_tests(filepath: str, total_nodes: int, cur_node: int) -> None:
+    """
+    Assigns tests to nodes. The results are printed directly to stdout.
+
+    Args:
+        filepath (str): The XML file containing the test timings.
+
+        total_nodes (int): The total number of nodes available.
+
+        cur_node (int): The index of the current node.
+
+    Raises:
+        ValueError: If some information is incorrect.
+    """
     _, fname = os.path.split(filepath)
     base = "test"
     if not fname.endswith(XML_EXT):

@@ -1,3 +1,4 @@
+"""Tests to verify unintuitive redis or lua behavior."""
 from test.util import get_test_config
 
 import pytest
@@ -7,6 +8,7 @@ from redipy.redis.conn import RedisConnection
 
 
 def test_sanity() -> None:
+    """Test to verify unintuitive redis or lua behavior."""
     redis = RedisConnection("test_sanity", cfg=get_test_config())
 
     def check_expression(
@@ -133,6 +135,8 @@ def test_sanity() -> None:
 
 
 def test_ensure_name_available() -> None:
+    """Verifies that new top level functions introduced in redipy do not exist
+    already in redis or lua and would cause a name clash."""
     redis = RedisConnection(
         "test_ensure_name_available", cfg=get_test_config())
 

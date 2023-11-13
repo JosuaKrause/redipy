@@ -13,7 +13,7 @@ import string
 import threading
 import uuid
 from collections.abc import Callable, Iterable
-from typing import Any, IO, overload, TypeVar
+from typing import Any, IO, NoReturn, overload, TypeVar
 
 import pytz
 
@@ -431,7 +431,7 @@ def is_json(value: str) -> bool:
     return True
 
 
-def report_json_error(err: json.JSONDecodeError) -> None:
+def report_json_error(err: json.JSONDecodeError) -> NoReturn:
     """
     Provides information about JSON decode errors.
 
@@ -448,6 +448,15 @@ def report_json_error(err: json.JSONDecodeError) -> None:
 
 
 def json_maybe_read(data: str) -> Any | None:
+    """
+    Maybe read a JSON.
+
+    Args:
+        data (str): The data that might contain a JSON.
+
+    Returns:
+        Any | None: The JSON or None if it is not a JSON decodable input.
+    """
     try:
         return json.loads(data)
     except json.JSONDecodeError:
@@ -455,22 +464,58 @@ def json_maybe_read(data: str) -> Any | None:
 
 
 def json_load(fin: IO[str]) -> Any:
+    """
+    Load a JSON document from a file-like object.
+
+    Args:
+        fin (IO[str]): The file-like input.
+
+    Raises:
+        e (ValueError): If the document cannot be parsed as JSON.
+
+    Returns:
+        Any: The JSON.
+    """
     try:
         return json.load(fin)
     except json.JSONDecodeError as e:
         report_json_error(e)
-        raise e
 
 
 def json_dump(obj: Any, fout: IO[str]) -> None:
+    """
+    Writes the given object as JSON to the given file-like object.
+
+    Args:
+        obj (Any): The object to dump as JSON.
+        fout (IO[str]): The file-like output.
+    """
     print(json_pretty(obj), file=fout)
 
 
 def json_pretty(obj: Any) -> str:
+    """
+    Dumps the given object as pretty JSON string.
+
+    Args:
+        obj (Any): The object to dump.
+
+    Returns:
+        str: The pretty JSON string.
+    """
     return json.dumps(obj, sort_keys=True, indent=2)
 
 
 def json_compact(obj: Any) -> bytes:
+    """
+    Dumps the given object as compact JSON bytes.
+
+    Args:
+        obj (Any): The object to dump.
+
+    Returns:
+        bytes: The compact JSON bytes.
+    """
     return json.dumps(
         obj,
         sort_keys=True,
@@ -479,14 +524,38 @@ def json_compact(obj: Any) -> bytes:
 
 
 def json_read(data: bytes) -> Any:
+    """
+    Parses the given bytes as JSON.
+
+    Args:
+        data (bytes): The byte input.
+
+    Raises:
+        e (ValueError): If the document cannot be parsed as JSON.
+
+    Returns:
+        Any: The JSON.
+    """
     try:
         return json.loads(data.decode("utf-8"))
     except json.JSONDecodeError as e:
         report_json_error(e)
-        raise e
 
 
 def read_jsonl(fin: IO[str]) -> Iterable[Any]:
+    """
+    Reads a JSONL from a file-like object. Each line in the file is interpreted
+    as JSON. Each JSON cannot contain a newline character.
+
+    Args:
+        fin (IO[str]): The file-like input.
+
+    Raises:
+        e (ValueError): If any line cannot be parsed as JSON.
+
+    Yields:
+        Any: One JSON object for each line in the input.
+    """
     for line in fin:
         line = line.rstrip()
         if not line:
@@ -495,22 +564,56 @@ def read_jsonl(fin: IO[str]) -> Iterable[Any]:
             yield json.loads(line)
         except json.JSONDecodeError as e:
             report_json_error(e)
-            raise e
 
 
 def from_timestamp(timestamp: float) -> datetime.datetime:
+    """
+    Converts a float POSIX-timestamp to a datetime object.
+
+    Args:
+        timestamp (float): The float POSIX-timestamp.
+
+    Returns:
+        datetime.datetime: The datetime object.
+    """
     return datetime.datetime.fromtimestamp(timestamp, pytz.utc)
 
 
 def to_timestamp(time: datetime.datetime) -> float:
+    """
+    Converts a datetime object into a float POSIX-timestamp.
+
+    Args:
+        time (datetime.datetime): The datetime object.
+
+    Returns:
+        float: The float POSIX-timestamp.
+    """
     return time.timestamp()
 
 
 def now_ts() -> datetime.datetime:
+    """
+    Returns a datetime object representing the current time.
+
+    Returns:
+        datetime.datetime: The datetime object.
+    """
     return datetime.datetime.now(pytz.utc)
 
 
 def get_function_info(*, clazz: type) -> tuple[str, int, str]:
+    """
+    Computes where in the current execution stack the instruction pointer was
+    in the given class.
+
+    Args:
+        clazz (type): The class of interest.
+
+    Returns:
+        tuple[str, int, str]: At which file, line, and function the execution
+        is when walking down the stack.
+    """
     stack = inspect.stack()
 
     def get_method(cur_clazz: type) -> tuple[str, int, str] | None:
@@ -533,6 +636,16 @@ def get_function_info(*, clazz: type) -> tuple[str, int, str]:
 
 def get_relative_function_info(
         depth: int) -> tuple[str, int, str, dict[str, Any]]:
+    """
+    Computes the execution position of the stack frame `depth` levels down.
+
+    Args:
+        depth (int): The depth of the stack to inspect.
+
+    Returns:
+        tuple[str, int, str, dict[str, Any]]: The filename, line number,
+        function name, and local variables.
+    """
     depth += 1
     stack = inspect.stack()
     if depth >= len(stack):
@@ -542,20 +655,41 @@ def get_relative_function_info(
 
 
 def identity(obj: RT) -> RT:
+    """
+    A generic identity function.
+
+    Args:
+        obj (RT): The object.
+
+    Returns:
+        RT: The same object.
+    """
     return obj
 
 
 NUMBER_PATTERN = re.compile(r"\d+")
+"""Regex to extract numbers."""
 
 
 def extract_list(
         arr: Iterable[str],
         prefix: str | None = None,
         postfix: str | None = None) -> Iterable[tuple[str, str]]:
-    if not arr:
-        yield from []
-        return
+    """
+    Extract substrings from a stream of strings.
 
+    Args:
+        arr (Iterable[str]): The stream of input strings.
+
+        prefix (str | None, optional): The prefix to match. Defaults to None.
+
+        postfix (str | None, optional): The postfix to match. Defaults to None.
+
+    Yields:
+        tuple[str, str]: Returns each matching string.
+        The first element of the tuple is the full string. The second element
+        is only the substring after removing the matching prefix and postfix.
+    """
     for elem in arr:
         text = elem
         if prefix is not None:
@@ -573,6 +707,24 @@ def extract_number(
         arr: Iterable[str],
         prefix: str | None = None,
         postfix: str | None = None) -> Iterable[tuple[str, int]]:
+    """
+    Extract numbers from a stream of strings. The numbers are extracted from
+    the substring excluding the prefix and postfix (if set). Additional
+    non-numeric characters are allowed.
+
+    Args:
+        arr (Iterable[str]): The stream of strings.
+
+        prefix (str | None, optional): The prefix must match. Defaults to None.
+
+        postfix (str | None, optional): The postfix must match.
+        Defaults to None.
+
+    Yields:
+        tuple[str, int]: The matching strings and the extracted
+        numbers. The first element of the tuple is the full string. The second
+        element is the extracted number.
+    """
 
     def get_num(text: str) -> int | None:
         match = re.search(NUMBER_PATTERN, text)
@@ -594,6 +746,24 @@ def highest_number(
         arr: Iterable[str],
         prefix: str | None = None,
         postfix: str | None = None) -> tuple[str, int] | None:
+    """
+    Retrieves the highest number extracted from a stream of strings. The
+    numbers are extracted from the substring excluding the prefix and postfix
+    (if set). Additional non-numeric characters are allowed. Only the match
+    with the highest number is returned.
+
+    Args:
+        arr (Iterable[str]): The stream of strings.
+
+        prefix (str | None, optional): The prefix to match. Defaults to None.
+
+        postfix (str | None, optional): The postfix to match. Defaults to None.
+
+    Returns:
+        tuple[str, int] | None: The matching element with the highest number.
+        The first element of the tuple is the matching string. The second
+        element is the extracted number.
+    """
     res = None
     res_num = 0
     for elem, num in extract_number(arr, prefix=prefix, postfix=postfix):
@@ -610,6 +780,27 @@ def retain_some(
         key: Callable[[VT], Any],
         reverse: bool = False,
         keep_last: bool = True) -> tuple[list[VT], list[VT]]:
+    """
+    Retains up to `count` elements from `arr`.
+
+    Args:
+        arr (Iterable[VT]): The stream of elements.
+
+        count (int): The number of elements to retain.
+
+        key (Callable[[VT], Any]): The key for elements to define an order.
+
+        reverse (bool, optional): Whether to reverse the order. Defaults to
+        False.
+
+        keep_last (bool, optional): Whether to retain the last
+        elements. Defaults to True.
+
+    Returns:
+        tuple[list[VT], list[VT]]: The first element of the tuple is the list
+        of elements to retain. The second element is the list of elements to
+        remove.
+    """
     res: list[VT] = []
     to_delete: list[VT] = []
     if keep_last:
@@ -634,6 +825,15 @@ def retain_some(
 
 
 def python_module() -> str:
+    """
+    Computes the caller's python module.
+
+    Raises:
+        ValueError: If the module cannot be found.
+
+    Returns:
+        str: The full name of the module.
+    """
     stack = inspect.stack()
     module = inspect.getmodule(stack[1][0])
     if module is None:
@@ -655,6 +855,16 @@ def python_module() -> str:
 
 
 def parent_python_module(p_module: str) -> str:
+    """
+    Computes the parent module of a given module.
+
+    Args:
+        p_module (str): The module.
+
+    Returns:
+        str: The parent module or `""` if the module was already a top level
+        module.
+    """
     dot_ix = p_module.rfind(".")
     if dot_ix < 0:
         return ""
@@ -662,6 +872,15 @@ def parent_python_module(p_module: str) -> str:
 
 
 def check_pid_exists(pid: int) -> bool:
+    """
+    Checks whether a given pid exists.
+
+    Args:
+        pid (int): The process id.
+
+    Returns:
+        bool: Whether a process with the given id exists.
+    """
     try:
         os.kill(pid, 0)
         return True
@@ -670,6 +889,12 @@ def check_pid_exists(pid: int) -> bool:
 
 
 def ideal_thread_count() -> int:
+    """
+    Computes the ideal thread count for the given machine.
+
+    Returns:
+        int: The ideal number of threads.
+    """
     res = os.cpu_count()
     if res is None:
         return 4
@@ -677,6 +902,18 @@ def ideal_thread_count() -> int:
 
 
 def escape(text: str, subs: dict[str, str]) -> str:
+    """
+    Escapes characters in the text according to the substitution dictionary.
+
+    Args:
+        text (str): The text.
+
+        subs (dict[str, str]): The substitution dictionary. For example,
+        `{"\\n", "n"}` would replace all newlines with `\\n` in the text.
+
+    Returns:
+        str: The escaped text.
+    """
     text = text.replace("\\", "\\\\")
     for key, repl in subs.items():
         text = text.replace(key, f"\\{repl}")
@@ -684,6 +921,19 @@ def escape(text: str, subs: dict[str, str]) -> str:
 
 
 def unescape(text: str, subs: dict[str, str]) -> str:
+    """
+    Unescapes characters in the text according to the substitution dictionary.
+
+    Args:
+        text (str): The text.
+
+        subs (dict[str, str]): The substitution dictionary. For example,
+        `{"n": "\\n"}` would replace all `\\n` sequences in the text with
+        newlines.
+
+    Returns:
+        str: The unescaped text.
+    """
     res: list[str] = []
     in_escape = False
     for c in text:
@@ -718,6 +968,16 @@ def to_maybe_str(res: None) -> None:
 
 
 def to_maybe_str(res: bytes | None) -> str | None:
+    """
+    Converts bytes to a string. If the input is None then only None will be
+    returned.
+
+    Args:
+        res (bytes | None): The bytes.
+
+    Returns:
+        str | None: The string from the bytes or None if the input was None.
+    """
     if res is None:
         return res
     return res.decode("utf-8")
@@ -734,12 +994,33 @@ def to_list_str(res: None) -> None:
 
 
 def to_list_str(res: Iterable[bytes] | None) -> list[str] | None:
+    """
+    Converts a list of bytes into a list of strings. If the input is None
+    then only None is returned.
+
+    Args:
+        res (Iterable[bytes] | None): The list of bytes.
+
+    Returns:
+        list[str] | None: The list of strings. If the input was None then None
+        is returned.
+    """
     if res is None:
         return res
     return [val.decode("utf-8") for val in res]
 
 
 def normalize_values(res: Any) -> Any:
+    """
+    Converts all bytes into string in the data structure.
+
+    Args:
+        res (Any): The data structure. Can be plain bytes, lists, tuples,
+        dictionaries, and other literal values.
+
+    Returns:
+        Any: Returns the data structure with all bytes converted to strings.
+    """
     if res is None:
         return None
     if isinstance(res, bytes):

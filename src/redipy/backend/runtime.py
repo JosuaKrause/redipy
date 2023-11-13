@@ -30,7 +30,7 @@ class Runtime(Generic[T], RedisClientAPI):
         a script backend.
 
         Yields:
-            Iterator[None]: Inside the block the lock is held.
+            None: Inside the block the lock is held.
         """
         with self._lock:
             yield
