@@ -76,4 +76,4 @@ class RedisList(RedisObj):
         """
         return self.redis_fn("llen")
 
-    # TODO implement lrange
+    # FIXME implement lrange

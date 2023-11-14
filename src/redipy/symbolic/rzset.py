@@ -16,7 +16,7 @@ class RedisSortedSet(RedisObj):
         Returns:
             Expr: The expression.
         """
-        # TODO add all arguments
+        # FIXME add all arguments
         return self.redis_fn("zadd", score, value)
 
     def pop_max(self, count: MixedType = None) -> Expr:
