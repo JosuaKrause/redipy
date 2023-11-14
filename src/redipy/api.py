@@ -304,27 +304,126 @@ class PipelineAPI:
         raise NotImplementedError()
 
     def hset(self, key: str, mapping: dict[str, str]) -> None:
+        """
+        Sets a mapping for the given hash.
+
+        See also the redis documentation: https://redis.io/commands/hset/
+
+        The pipeline value is set to the number of fields added.
+
+        Args:
+            key (str): The key.
+
+            mapping (dict[str, str]): The field value pairs to be set.
+        """
         raise NotImplementedError()
 
     def hdel(self, key: str, *fields: str) -> None:
+        """
+        Deletes fields from the given hash.
+
+        See also the redis documentation: https://redis.io/commands/hdel/
+
+        The pipeline value is set to the number of fields that got deleted
+        (excluding fields that did not exist).
+
+        Args:
+            key (str): The key.
+
+            *fields (str): The fields to delete.
+        """
         raise NotImplementedError()
 
     def hget(self, key: str, field: str) -> None:
+        """
+        Retrieves the value associated with a field of a hash.
+
+        See also the redis documentation: https://redis.io/commands/hget/
+
+        The pipeline value is set to the value of the field or None if the
+        field doesn't exist.
+
+        Args:
+            key (str): The key.
+
+            field (str): The field.
+        """
         raise NotImplementedError()
 
     def hmget(self, key: str, *fields: str) -> None:
+        """
+        Retrieves the values associated with given fields of a hash.
+
+        See also the redis documentation: https://redis.io/commands/hmget/
+
+        The pipeline value is set to a dictionary with fields mapping to their
+        values. If a field doesn't exist in the hash the value is returned
+        as None.
+
+        Args:
+            key (str): The key.
+
+            *fields (str): The fields to retrieve.
+        """
         raise NotImplementedError()
 
     def hincrby(self, key: str, field: str, inc: float | int) -> None:
+        """
+        Interprets a field value of a hash as number and updates the value.
+
+        See also the redis documentation:
+        https://redis.io/commands/hincrby/
+        https://redis.io/commands/hincrbyfloat/
+
+        The pipeline value is set to the new value of the field.
+
+        Args:
+            key (str): The key.
+
+            field (str): The field to interpret as number.
+
+            inc (float | int): The relative numerical change.
+        """
         raise NotImplementedError()
 
     def hkeys(self, key: str) -> None:
+        """
+        Retrieves the fields of a hash.
+
+        See also the redis documentation: https://redis.io/commands/hkeys/
+
+        The pipeline value is set to a list of all fields of the given hash.
+
+        Args:
+            key (str): The key.
+        """
         raise NotImplementedError()
 
     def hvals(self, key: str) -> None:
+        """
+        Retrieves the values of a hash.
+
+        See also the redis documentation: https://redis.io/commands/hvals/
+
+        The pipeline value is set to a list of all values of the given hash.
+
+        Args:
+            key (str): The key.
+        """
         raise NotImplementedError()
 
     def hgetall(self, key: str) -> None:
+        """
+        Retrieves all fields and values of a hash.
+
+        See also the redis documentation: https://redis.io/commands/hgetall/
+
+        The pipeline value is set to a dictionary with fields mapping to their
+        values.
+
+        Args:
+            key (str): The key.
+        """
         raise NotImplementedError()
 
 
@@ -679,27 +778,133 @@ class RedisAPI:
         raise NotImplementedError()
 
     def hset(self, key: str, mapping: dict[str, str]) -> int:
+        """
+        Sets a mapping for the given hash.
+
+        See also the redis documentation: https://redis.io/commands/hset/
+
+        Args:
+            key (str): The key.
+
+            mapping (dict[str, str]): The field value pairs to be set.
+
+        Returns:
+            int: The number of fields added.
+        """
         raise NotImplementedError()
 
     def hdel(self, key: str, *fields: str) -> int:
+        """
+        Deletes fields from the given hash.
+
+        See also the redis documentation: https://redis.io/commands/hdel/
+
+        Args:
+            key (str): The key.
+
+            *fields (str): The fields to delete.
+
+        Returns:
+            int: The number of fields that got deleted (excluding fields that
+            did not exist).
+        """
         raise NotImplementedError()
 
     def hget(self, key: str, field: str) -> str | None:
+        """
+        Retrieves the value associated with a field of a hash.
+
+        See also the redis documentation: https://redis.io/commands/hget/
+
+        Args:
+            key (str): The key.
+
+            field (str): The field.
+
+        Returns:
+            str | None: The value of the field or None if the field doesn't
+            exist.
+        """
         raise NotImplementedError()
 
     def hmget(self, key: str, *fields: str) -> dict[str, str | None]:
+        """
+        Retrieves the values associated with given fields of a hash.
+
+        See also the redis documentation: https://redis.io/commands/hmget/
+
+        Args:
+            key (str): The key.
+
+            *fields (str): The fields to retrieve.
+
+        Returns:
+            dict[str, str | None]: A dictionary with fields mapping to their
+            values. If a field doesn't exist in the hash the value is returned
+            as None.
+        """
         raise NotImplementedError()
 
     def hincrby(self, key: str, field: str, inc: float | int) -> float:
+        """
+        Interprets a field value of a hash as number and updates the value.
+
+        See also the redis documentation:
+        https://redis.io/commands/hincrby/
+        https://redis.io/commands/hincrbyfloat/
+
+        Args:
+            key (str): The key.
+
+            field (str): The field to interpret as number.
+
+            inc (float | int): The relative numerical change.
+
+        Returns:
+            float: The new value of the field.
+        """
         raise NotImplementedError()
 
     def hkeys(self, key: str) -> list[str]:
+        """
+        Retrieves the fields of a hash.
+
+        See also the redis documentation: https://redis.io/commands/hkeys/
+
+        Args:
+            key (str): The key.
+
+        Returns:
+            list[str]: All fields of the given hash.
+        """
         raise NotImplementedError()
 
     def hvals(self, key: str) -> list[str]:
+        """
+        Retrieves the values of a hash.
+
+        See also the redis documentation: https://redis.io/commands/hvals/
+
+        Args:
+            key (str): The key.
+
+        Returns:
+            list[str]: All values of the given hash.
+        """
         raise NotImplementedError()
 
     def hgetall(self, key: str) -> dict[str, str]:
+        """
+        Retrieves all fields and values of a hash.
+
+        See also the redis documentation: https://redis.io/commands/hgetall/
+
+        Args:
+            key (str): The key.
+
+        Returns:
+            dict[str, str]: A dictionary with fields mapping to their values.
+        """
         raise NotImplementedError()
 
 
