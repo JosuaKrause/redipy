@@ -227,7 +227,7 @@ def test_api(rt_lua: bool) -> None:
             key, {"a": "0", "b": "1", "c": "2"}),
         pipeline=lambda pipe, key: pipe.hget(key, "b"),
         lua=lambda ctx, key: RedisHash(key).hget("b"),
-        code="redis.call(\"hget\", key_0)",
+        code="(redis.call(\"hget\", key_0, \"b\") or nil)",
         teardown=lambda key: [
             redis.exists(key),
             redis.hdel(key, "a"),
@@ -247,7 +247,10 @@ def test_api(rt_lua: bool) -> None:
             key, {"d": "3", "e": "4", "f": "5"}),
         pipeline=lambda pipe, key: pipe.hmget(key, "b", "c", "d", "e"),
         lua=lambda ctx, key: RedisHash(key).hmget("b", "c", "d", "e"),
-        code="redis.call(\"hget\", key_0, \"b\", \"c\", \"d\", \"e\")",
+        code=(
+            "redipy.keyval_dict(redis.call(\"hmget\", "
+            "key_0, \"b\", \"c\", \"d\", \"e\"), \"b\", \"c\", \"d\", \"e\")"
+        ),
         teardown=lambda key: [
             redis.exists(key),
             redis.delete(key),

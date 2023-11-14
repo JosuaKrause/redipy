@@ -459,14 +459,11 @@ class LuaBackend(
                 client: RedisAPI | PipelineAPI | None = None) -> JSONType:
             active_rt = runtime
             if client is not None:
-                import redipy.main as rmain
                 from redipy.redis.conn import (
                     PipelineConnection,
                     RedisConnection,
                 )
 
-                if isinstance(client, rmain.Redis):
-                    active_rt = client.get_redis_runtime()
                 if isinstance(client, RedisConnection):
                     active_rt = client
                 elif isinstance(client, PipelineConnection):
@@ -475,7 +472,12 @@ class LuaBackend(
                     client.add_fixup(interpret_result)
                     return None
                 else:
-                    raise ValueError(f"incompatible runtime: {client}")
+                    # FIXME: we could handle any runtime if we keep the
+                    # intermediate representation around
+                    get_rt = getattr(client, "get_redis_runtime")
+                    if get_rt is None:
+                        raise ValueError(f"incompatible runtime: {client}")
+                    active_rt = get_rt()
 
             with active_rt.get_connection() as conn:
                 res = exec_code_fn(keys=keys, args=args, conn=conn)

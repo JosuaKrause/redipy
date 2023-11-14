@@ -55,6 +55,27 @@ class HPairlistDictFn(HelperFunction):
         """
 
 
+class HKeyValDictFn(HelperFunction):
+    """Constructs a dictionary from values and variadic keys."""
+    @staticmethod
+    def name() -> str:
+        return "keyval_dict"
+
+    @staticmethod
+    def args() -> str:
+        return "values, ..."
+
+    @staticmethod
+    def body() -> str:
+        return r"""
+            local res = {}
+            for ix, key in ipairs(arg) do
+                res[key] = values[ix] or cjson.null
+            end
+            return res
+        """
+
+
 class HNilOrIndexFn(HelperFunction):
     """Updates an index from 1-based (lua) to 0-based (python) if the value is
     not None (nil)."""

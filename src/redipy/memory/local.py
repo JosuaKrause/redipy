@@ -497,12 +497,9 @@ class LocalBackend(
                 client: RedisAPI | PipelineAPI | None = None) -> JSONType:
             active_rt = runtime
             if client is not None:
-                import redipy.main as rmain
                 from redipy.memory.rt import LocalPipeline, LocalRuntime
 
-                if isinstance(client, rmain.Redis):
-                    active_rt = client.get_memory_runtime()
-                elif isinstance(client, LocalRuntime):
+                if isinstance(client, LocalRuntime):
                     active_rt = client
                 elif isinstance(client, LocalPipeline):
                     pipe = cast(LocalPipeline, client)
@@ -515,7 +512,12 @@ class LocalBackend(
                             sm=p_sm))
                     return None
                 else:
-                    raise ValueError(f"incompatible runtime: {client}")
+                    # FIXME: we could handle any runtime if we keep the
+                    # intermediate representation around
+                    get_rt = getattr(client, "get_memory_runtime")
+                    if get_rt is None:
+                        raise ValueError(f"incompatible runtime: {client}")
+                    active_rt = get_rt()
             sm = active_rt.get_machine()
             return exec_code_fn(
                 keys=keys, args=args, active_rt=active_rt, sm=sm)

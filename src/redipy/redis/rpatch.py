@@ -109,6 +109,28 @@ class RIncrByPatch(LuaRedisPatch):
         return expr
 
 
+class RHashGetSomePatch(LuaRedisPatch):
+    """Uses keys and values to build a dictionary."""
+    @staticmethod
+    def names() -> set[str]:
+        return {"hmget"}
+
+    def patch(
+            self,
+            expr: CallObj,
+            args: list[ExprObj],
+            *,
+            is_expr_stmt: bool) -> ExprObj:
+        if is_expr_stmt:
+            return expr
+        return {
+            "kind": "call",
+            "name": f"{self.helper_pkg()}.keyval_dict",
+            "args": [expr, *args[1:]],
+            "no_adjust": False,
+        }
+
+
 class RHashGetAllPatch(LuaRedisPatch):
     """Converts an alternating key value list into a dictionary."""
     @staticmethod
