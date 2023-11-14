@@ -825,7 +825,7 @@ class Machine(RedisAPI):
         obj = self._state.get_hash(key)
         res = 0
         for field in fields:
-            if obj.pop(field, None) is None:
+            if obj.pop(field, None) is not None:
                 res += 1
         if not obj:
             self._state.delete({key})

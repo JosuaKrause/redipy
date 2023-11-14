@@ -10,6 +10,7 @@ from redipy.graph.expr import JSONType
 from redipy.main import Redis
 from redipy.symbolic.core import KeyVariable
 from redipy.symbolic.expr import Expr
+from redipy.symbolic.rhash import RedisHash
 from redipy.symbolic.rlist import RedisList
 from redipy.symbolic.rvar import RedisVar
 from redipy.symbolic.rzset import RedisSortedSet
@@ -217,3 +218,41 @@ def test_api(rt_lua: bool) -> None:
         output_setup=3,
         output=[("a", 0.25), ("b", 0.5)],
         output_teardown=[1, True, 0])
+
+    check(
+        "hget",
+        setup=lambda key: redis.hset(key, {"a": "0", "b": "1", "c": "2"}),
+        normal=lambda key: redis.hget(key, "b"),
+        setup_pipe=lambda pipe, key: pipe.hset(
+            key, {"a": "0", "b": "1", "c": "2"}),
+        pipeline=lambda pipe, key: pipe.hget(key, "b"),
+        lua=lambda ctx, key: RedisHash(key).hget("b"),
+        code="redis.call(\"hget\", key_0)",
+        teardown=lambda key: [
+            redis.exists(key),
+            redis.hdel(key, "a"),
+            redis.exists(key),
+            redis.hdel(key, "b", "c"),
+            redis.exists(key),
+        ],
+        output_setup=3,
+        output="1",
+        output_teardown=[1, 1, 1, 2, 0])
+
+    check(
+        "hmget",
+        setup=lambda key: redis.hset(key, {"d": "3", "e": "4", "f": "5"}),
+        normal=lambda key: redis.hmget(key, "b", "c", "d", "e"),
+        setup_pipe=lambda pipe, key: pipe.hset(
+            key, {"d": "3", "e": "4", "f": "5"}),
+        pipeline=lambda pipe, key: pipe.hmget(key, "b", "c", "d", "e"),
+        lua=lambda ctx, key: RedisHash(key).hmget("b", "c", "d", "e"),
+        code="redis.call(\"hget\", key_0, \"b\", \"c\", \"d\", \"e\")",
+        teardown=lambda key: [
+            redis.exists(key),
+            redis.delete(key),
+            redis.hgetall(key),
+        ],
+        output_setup=3,
+        output={"b": None, "c": None, "d": "3", "e": "4"},
+        output_teardown=[1, 1, {}])

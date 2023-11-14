@@ -497,10 +497,10 @@ class LocalBackend(
                 client: RedisAPI | PipelineAPI | None = None) -> JSONType:
             active_rt = runtime
             if client is not None:
-                from redipy.main import Redis  # pylint: disable=cyclic-import
+                import redipy.main as rmain
                 from redipy.memory.rt import LocalPipeline, LocalRuntime
 
-                if isinstance(client, Redis):
+                if isinstance(client, rmain.Redis):
                     active_rt = client.get_memory_runtime()
                 elif isinstance(client, LocalRuntime):
                     active_rt = client

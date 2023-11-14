@@ -459,13 +459,13 @@ class LuaBackend(
                 client: RedisAPI | PipelineAPI | None = None) -> JSONType:
             active_rt = runtime
             if client is not None:
-                from redipy.main import Redis  # pylint: disable=cyclic-import
+                import redipy.main as rmain
                 from redipy.redis.conn import (
                     PipelineConnection,
                     RedisConnection,
                 )
 
-                if isinstance(client, Redis):
+                if isinstance(client, rmain.Redis):
                     active_rt = client.get_redis_runtime()
                 if isinstance(client, RedisConnection):
                     active_rt = client
