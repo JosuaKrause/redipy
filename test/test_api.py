@@ -259,3 +259,49 @@ def test_api(rt_lua: bool) -> None:
         output_setup=3,
         output={"b": None, "c": None, "d": "3", "e": "4"},
         output_teardown=[1, 1, {}])
+
+    check(
+        "hincrby",
+        setup=lambda key: redis.hset(key, {"d": "3", "e": "4", "f": "5"}),
+        normal=lambda key: redis.hincrby(key, "e", 2),
+        setup_pipe=lambda pipe, key: pipe.hset(
+            key, {"d": "3", "e": "4", "f": "5"}),
+        pipeline=lambda pipe, key: pipe.hincrby(key, "e", 2),
+        lua=lambda ctx, key: RedisHash(key).hincrby("e", 2),
+        code="tonumber(redis.call(\"hincrbyfloat\", key_0, \"e\", 2))",
+        teardown=lambda key: [
+            redis.hgetall(key),
+            redis.delete(key),
+            redis.exists(key),
+        ],
+        output_setup=3,
+        output=6,
+        output_teardown=[{"d": "3", "e": "6", "f": "5"}, 1, 0])
+
+    check(
+        "hkeys",
+        setup=lambda key: redis.hset(key, {"d": "3", "e": "4", "f": "5"}),
+        normal=lambda key: redis.hkeys(key),
+        setup_pipe=lambda pipe, key: pipe.hset(
+            key, {"d": "3", "e": "4", "f": "5"}),
+        pipeline=lambda pipe, key: pipe.hkeys(key),
+        lua=lambda ctx, key: RedisHash(key).hkeys(),
+        code="redis.call(\"hkeys\", key_0)",
+        teardown=lambda key: redis.delete(key),
+        output_setup=3,
+        output=["d", "e", "f"],
+        output_teardown=1)
+
+    check(
+        "hvals",
+        setup=lambda key: redis.hset(key, {"d": "3", "e": "4", "f": "5"}),
+        normal=lambda key: redis.hvals(key),
+        setup_pipe=lambda pipe, key: pipe.hset(
+            key, {"d": "3", "e": "4", "f": "5"}),
+        pipeline=lambda pipe, key: pipe.hvals(key),
+        lua=lambda ctx, key: RedisHash(key).hvals(),
+        code="redis.call(\"hvals\", key_0)",
+        teardown=lambda key: redis.delete(key),
+        output_setup=3,
+        output=["3", "4", "5"],
+        output_teardown=1)

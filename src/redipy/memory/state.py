@@ -5,7 +5,7 @@ import time
 from typing import Literal, overload
 
 from redipy.api import RedisAPI, RSetMode, RSM_ALWAYS, RSM_EXISTS, RSM_MISSING
-from redipy.util import now, time_diff
+from redipy.util import now, time_diff, to_number_str
 
 
 def compute_expire(
@@ -800,7 +800,7 @@ class Machine(RedisAPI):
         else:
             val, expire = res
         num = float(val) + inc
-        self._state.set_value(key, f"{num}", expire)
+        self._state.set_value(key, to_number_str(num), expire)
         return num
 
     def exists(self, *keys: str) -> int:
@@ -849,7 +849,7 @@ class Machine(RedisAPI):
     def hincrby(self, key: str, field: str, inc: float | int) -> float:
         res = self._state.get_hash(key)
         num = float(res.get(field, 0)) + inc
-        res[key] = f"{num}"
+        res[field] = to_number_str(num)
         return num
 
     def hkeys(self, key: str) -> list[str]:

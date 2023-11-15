@@ -414,6 +414,22 @@ def is_float(value: Any) -> bool:
         return False
 
 
+def to_number_str(value: int | float) -> str:
+    """
+    Converts a number into a string. If the number appears as int it will be
+    printed without decimal places even if its type is float.
+
+    Args:
+        value (int | float): The number.
+
+    Returns:
+        str: The string representation.
+    """
+    if int(value) == value:
+        return f"{int(value)}"
+    return f"{value}"
+
+
 def is_json(value: str) -> bool:
     """
     Determines whether a value can be decoded as JSON.

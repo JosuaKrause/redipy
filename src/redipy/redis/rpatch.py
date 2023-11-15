@@ -88,7 +88,8 @@ class RSortedPopPatch(LuaRedisPatch):
 
 
 class RIncrByPatch(LuaRedisPatch):
-    """Uses the float variant for INCRBY-like functions."""
+    """Uses the float variant for INCRBY-like functions and convert the result
+    to a number."""
     @staticmethod
     def names() -> set[str]:
         return {"incrby", "hincrby"}
@@ -106,7 +107,14 @@ class RIncrByPatch(LuaRedisPatch):
             "value": name,
         }
         expr["args"][0] = literal
-        return expr
+        if is_expr_stmt:
+            return expr
+        return {
+            "kind": "call",
+            "name": "tonumber",
+            "args": [expr],
+            "no_adjust": False,
+        }
 
 
 class RHashGetSomePatch(LuaRedisPatch):

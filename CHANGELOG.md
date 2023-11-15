@@ -16,7 +16,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- Ignored set after deleting a key in a pipeline.
+- Ignored assignment after deleting a key in a pipeline.
 - Error when missing execute call in pipeline.
 - HGETALL returning the wrong result in lua.
 - HSET not working in the redis backend.
@@ -28,4 +28,4 @@ All notable changes to this project will be documented in this file.
 
 ### Removed
 
-- TODO
+- Remove usage of nil in lua scripts (in favor of cjson.null).
