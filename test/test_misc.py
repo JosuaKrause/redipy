@@ -1,10 +1,11 @@
 """Tests miscellaneous redis functionality."""
 import io
 from contextlib import redirect_stdout
-from test.util import get_setup
+from test.util import get_setup, get_test_config
 
 import pytest
 
+from redipy import RedisConnection
 from redipy.symbolic.fun import FromJSON, LogFn, ToJSON, ToStr, TypeStr
 from redipy.symbolic.rzset import RedisSortedSet
 from redipy.symbolic.seq import FnContext
@@ -101,3 +102,9 @@ def test_misc(rt_lua: bool) -> None:
         assert pipe.execute() == [3]
         pipe.llen("bar")
         assert pipe.execute() == [3]
+
+
+def test_errors() -> None:
+    """Tests various expected errors."""
+    redis = RedisConnection("test_errors", cfg=get_test_config())
+    redis.get_dynamic_script("()")

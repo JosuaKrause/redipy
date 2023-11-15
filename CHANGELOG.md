@@ -4,28 +4,29 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-## [0.4.0] - 2023-11-07
+### Breaking
+
+- Scripts now need explicit named argument. ([#3](pull/3))
+- Script errors are now `ValueError` instead of `redis.exceptions.ResponseError`. ([#3](pull/3))
 
 ### Added
 
-- New redis APIs.
-- Inferring backend in Redis constructor.
-- Allow access to raw runtime and redis connections.
-- Executing scripts from a pipeline.
-- Documentation.
+- Inferring backend in Redis constructor. ([#3](pull/3))
+- Allow access to raw runtime and redis connections. ([#3](pull/3))
+- Executing scripts from a pipeline. ([#3](pull/3))
+- Documentation. ([#3](pull/3))
 
-### Fixed
+### Bug-Fixes
 
-- Ignored assignment after deleting a key in a pipeline.
-- Error when missing execute call in pipeline.
-- HGETALL returning the wrong result in lua.
-- HSET not working in the redis backend.
+- Ignored assignment after deleting a key in a pipeline. ([#3](pull/3))
+- Error when missing execute call in pipeline. ([#3](pull/3))
+- `HGETALL` returning the wrong result in lua. ([#3](pull/3))
+- `HSET` not working in the redis backend. ([#3](pull/3))
 
 ### Changed
 
-- More info about contributing in the readme.
-- Scripts now need explicit named argument.
+- More info about contributing in the readme. ([#3](pull/3))
 
-### Removed
+### Notable Internal Changes
 
-- Remove usage of nil in lua scripts (in favor of cjson.null).
+- Remove usage of `nil` in lua scripts (in favor of `cjson.null`).

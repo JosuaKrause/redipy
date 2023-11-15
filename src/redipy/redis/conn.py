@@ -8,6 +8,7 @@ from typing import (
     Any,
     cast,
     Literal,
+    NoReturn,
     NotRequired,
     overload,
     Protocol,
@@ -483,11 +484,10 @@ class RedisConnection(Runtime[list[str]]):
                 else:
                     yield client
             except ResponseError as e:
-                # FIXME don't use notes or add error handling in compile step
                 handle_err(e)
-                raise e
 
-        def handle_err(exc: ResponseError) -> None:
+        def handle_err(exc: ResponseError) -> NoReturn:
+            info = None
             if exc.args:
                 msg = exc.args[0]
                 res = get_error(msg)
@@ -495,8 +495,10 @@ class RedisConnection(Runtime[list[str]]):
                     ctx = "\n".join((
                         f"{'>' if ix == context else ' '} {line}"
                         for (ix, line) in enumerate(res[1])))
-                    exc.add_note(
-                        f"Code:\n{code}\n\nContext:\n{ctx}")
+                    info = f"\nCode:\n{code}\n\nContext:\n{ctx}"
+            if info is None:
+                info = f": {exc}"
+            raise ValueError(f"Error while executing script{info}") from exc
 
         def execute_bytes_result(
                 *,

@@ -148,7 +148,7 @@ def test_ensure_name_available() -> None:
         code = f"return {name}({args})"
         run = redis.get_dynamic_script(code)
         with pytest.raises(
-                redis_lib.exceptions.ResponseError,
+                ValueError,
                 match=error_msg) as exc_info:
             with redis.get_connection() as conn:
                 run(
