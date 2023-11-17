@@ -53,6 +53,10 @@ class RGetPatch(LuaRedisPatch):
             is_expr_stmt: bool) -> ExprObj:
         if is_expr_stmt:
             return expr
+        fname = get_literal(expr["args"][0], "str")  # FIXME maybe make arg?
+        # check if 2nd argument exists for lpop or rpop
+        if len(args) > 1 and fname in ["lpop", "rpop"]:
+            return expr
         return {
             "kind": "binary",
             "op": "or",

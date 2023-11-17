@@ -91,5 +91,3 @@ class RedisList(RedisObj):
             Expr: The expression.
         """
         return self.redis_fn("llen")
-
-    # FIXME implement lrange

@@ -389,7 +389,7 @@ class PipelineConnection(PipelineAPI):
         self._pipe.hgetall(self.with_prefix(key))
         self.add_fixup(lambda res: {
             to_maybe_str(field): to_maybe_str(val)
-            for field, val in res
+            for field, val in res.items()
         })
 
 

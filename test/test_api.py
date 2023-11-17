@@ -161,7 +161,7 @@ def test_api(rt_lua: bool) -> None:
         output_teardown=["a", 1])
 
     check(
-        "lpop",
+        "lpop_0",
         setup=lambda key: redis.lpush(key, "a"),
         normal=lambda key: redis.lpop(key),
         setup_pipe=lambda pipe, key: pipe.lpush(key, "a"),
@@ -175,20 +175,48 @@ def test_api(rt_lua: bool) -> None:
         output_teardown=0)
 
     check(
-        "rpop",
+        "lpop_1",
+        setup=lambda key: redis.lpush(key, "a", "b", "c"),
+        normal=lambda key: redis.lpop(key, 2),
+        setup_pipe=lambda pipe, key: pipe.lpush(key, "a", "b", "c"),
+        pipeline=lambda pipe, key: pipe.lpop(key, 2),
+        lua=lambda ctx, key: RedisList(key).lpop(2),
+        code="redis.call(\"lpop\", key_0, 2)",
+        teardown=lambda key: [
+            redis.llen(key), redis.delete(key), redis.exists(key)],
+        output_setup=3,
+        output=["c", "b"],
+        output_teardown=[1, 1, 0])
+
+    check(
+        "rpop_0",
         setup=lambda key: redis.rpush(key, "a"),
         normal=lambda key: redis.rpop(key),
         setup_pipe=lambda pipe, key: pipe.rpush(key, "a"),
         pipeline=lambda pipe, key: pipe.rpop(key),
         lua=lambda ctx, key: RedisList(key).rpop(),
         code="(redis.call(\"rpop\", key_0) or nil)",
-        teardown=lambda key: redis.llen(key),
+        teardown=lambda key: redis.exists(key),
         output_setup=1,
         output="a",
         output_teardown=0)
 
     check(
-        "zpopmax",
+        "rpop_1",
+        setup=lambda key: redis.rpush(key, "a", "b", "c"),
+        normal=lambda key: redis.rpop(key, 2),
+        setup_pipe=lambda pipe, key: pipe.rpush(key, "a", "b", "c"),
+        pipeline=lambda pipe, key: pipe.rpop(key, 2),
+        lua=lambda ctx, key: RedisList(key).rpop(2),
+        code="redis.call(\"rpop\", key_0, 2)",
+        teardown=lambda key: [
+            redis.llen(key), redis.delete(key), redis.exists(key)],
+        output_setup=3,
+        output=["c", "b"],
+        output_teardown=[1, 1, 0])
+
+    check(
+        "zpopmax_0",
         setup=lambda key: redis.zadd(key, {"a": 0.25, "b": 0.5, "c": 0.75}),
         normal=lambda key: redis.zpop_max(key, 2),
         setup_pipe=lambda pipe, key: pipe.zadd(
@@ -204,7 +232,23 @@ def test_api(rt_lua: bool) -> None:
         output_teardown=[1, True, 0])
 
     check(
-        "zpopmin",
+        "zpopmax_1",
+        setup=lambda key: redis.zadd(key, {"a": 0.25, "b": 0.5, "c": 0.75}),
+        normal=lambda key: redis.zpop_max(key),
+        setup_pipe=lambda pipe, key: pipe.zadd(
+            key, {"a": 0.25, "b": 0.5, "c": 0.75}),
+        pipeline=lambda pipe, key: pipe.zpop_max(key),
+        lua=lambda ctx, key: RedisSortedSet(key).pop_max(),
+        code="redipy.pairlist_scores(redis.call(\"zpopmax\", key_0))",
+        lua_patch=lambda res: [tuple(elem) for elem in cast(list, res)],
+        teardown=lambda key: [
+            redis.zcard(key), redis.delete(key), redis.zcard(key)],
+        output_setup=3,
+        output=[("c", 0.75)],
+        output_teardown=[2, True, 0])
+
+    check(
+        "zpopmin_0",
         setup=lambda key: redis.zadd(key, {"a": 0.25, "b": 0.5, "c": 0.75}),
         normal=lambda key: redis.zpop_min(key, 2),
         setup_pipe=lambda pipe, key: pipe.zadd(
@@ -218,6 +262,22 @@ def test_api(rt_lua: bool) -> None:
         output_setup=3,
         output=[("a", 0.25), ("b", 0.5)],
         output_teardown=[1, True, 0])
+
+    check(
+        "zpopmin_1",
+        setup=lambda key: redis.zadd(key, {"a": 0.25, "b": 0.5, "c": 0.75}),
+        normal=lambda key: redis.zpop_min(key),
+        setup_pipe=lambda pipe, key: pipe.zadd(
+            key, {"a": 0.25, "b": 0.5, "c": 0.75}),
+        pipeline=lambda pipe, key: pipe.zpop_min(key),
+        lua=lambda ctx, key: RedisSortedSet(key).pop_min(),
+        code="redipy.pairlist_scores(redis.call(\"zpopmin\", key_0))",
+        lua_patch=lambda res: [tuple(elem) for elem in cast(list, res)],
+        teardown=lambda key: [
+            redis.zcard(key), redis.delete(key), redis.zcard(key)],
+        output_setup=3,
+        output=[("a", 0.25)],
+        output_teardown=[2, True, 0])
 
     check(
         "hget",
@@ -279,6 +339,20 @@ def test_api(rt_lua: bool) -> None:
         output_teardown=[{"d": "3", "e": "6", "f": "5"}, 1, 0])
 
     check(
+        "hdel",
+        setup=lambda key: redis.hset(key, {"d": "3", "e": "4", "f": "5"}),
+        normal=lambda key: redis.hdel(key, "c", "d", "e"),
+        setup_pipe=lambda pipe, key: pipe.hset(
+            key, {"d": "3", "e": "4", "f": "5"}),
+        pipeline=lambda pipe, key: pipe.hdel(key, "c", "d", "e"),
+        lua=lambda ctx, key: RedisHash(key).hdel("c", "d", "e"),
+        code="redis.call(\"hdel\", key_0, \"c\", \"d\", \"e\")",
+        teardown=lambda key: [redis.hgetall(key), redis.delete(key)],
+        output_setup=3,
+        output=2,
+        output_teardown=[{"f": "5"}, 1])
+
+    check(
         "hkeys",
         setup=lambda key: redis.hset(key, {"d": "3", "e": "4", "f": "5"}),
         normal=lambda key: redis.hkeys(key),
@@ -304,6 +378,20 @@ def test_api(rt_lua: bool) -> None:
         teardown=lambda key: redis.delete(key),
         output_setup=3,
         output=["3", "4", "5"],
+        output_teardown=1)
+
+    check(
+        "hgetall",
+        setup=lambda key: redis.hset(key, {"d": "3", "e": "4", "f": "5"}),
+        normal=lambda key: redis.hgetall(key),
+        setup_pipe=lambda pipe, key: pipe.hset(
+            key, {"d": "3", "e": "4", "f": "5"}),
+        pipeline=lambda pipe, key: pipe.hgetall(key),
+        lua=lambda ctx, key: RedisHash(key).hgetall(),
+        code="redipy.pairlist_dict(redis.call(\"hgetall\", key_0))",
+        teardown=lambda key: redis.delete(key),
+        output_setup=3,
+        output={"d": "3", "e": "4", "f": "5"},
         output_teardown=1)
 
     check(
