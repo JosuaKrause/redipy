@@ -119,6 +119,7 @@ class LuaRedisPatch(LuaPatch):
     """Patches a lua redis function call."""
     def patch(
             self,
+            name: str,
             expr: CallObj,
             args: list[ExprObj],
             *,
@@ -127,6 +128,8 @@ class LuaRedisPatch(LuaPatch):
         Applies the patch on the expression graph for the given redis call.
 
         Args:
+            name (str): The redis function name.
+
             expr (CallObj): The function call.
 
             args (list[ExprObj]): The arguments of the function call.

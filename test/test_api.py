@@ -161,6 +161,19 @@ def test_api(rt_lua: bool) -> None:
         output_teardown=["a", 1])
 
     check(
+        "incrby",
+        setup=lambda key: redis.set(key, "0.25"),
+        normal=lambda key: redis.incrby(key, 0.5),
+        setup_pipe=lambda pipe, key: pipe.set(key, "0.25"),
+        pipeline=lambda pipe, key: pipe.incrby(key, 0.5),
+        lua=lambda ctx, key: RedisVar(key).incrby(0.5),
+        code="tonumber(redis.call(\"incrbyfloat\", key_0, 0.5))",
+        teardown=lambda key: [redis.get(key), redis.delete(key)],
+        output_setup=True,
+        output=0.75,
+        output_teardown=["0.75", 1])
+
+    check(
         "lpop_0",
         setup=lambda key: redis.lpush(key, "a"),
         normal=lambda key: redis.lpop(key),

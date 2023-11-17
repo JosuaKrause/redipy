@@ -8,9 +8,11 @@ All notable changes to this project will be documented in this file.
 
 - Scripts now need explicitly named arguments. ([#3])
 - Script errors are now `ValueError` instead of `redis.exceptions.ResponseError`. ([#3])
+- Add name argument to `redipy.plugin.LuaRedisPatch`. ([#7])
 
 ### Added
 
+- Added LRANGE. ([#7])
 - Inferring backend in Redis constructor. ([#3])
 - Allow access to raw runtime and redis connections. ([#3])
 - Executing scripts from a pipeline. ([#3])
@@ -29,6 +31,7 @@ All notable changes to this project will be documented in this file.
 
 ### Notable Internal Changes
 
-- Remove usage of `nil` in lua scripts (in favor of `cjson.null`).
+- Removed some usage of `nil` in lua scripts (in favor of `cjson.null`). ([#3])
 
 [#3]: https://github.com/JosuaKrause/redipy/pull/3
+[#7]: https://github.com/JosuaKrause/redipy/pull/7
