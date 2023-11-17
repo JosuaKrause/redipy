@@ -17,7 +17,7 @@ from redipy.symbolic.seq import FnContext
 from redipy.util import code_fmt, lua_fmt
 
 
-GET_KEY_0 = "redis.call(\"get\", key_0)"
+GET_KEY_0 = "(redis.call(\"get\", key_0) or 0)"
 RET = "return cjson.encode"
 RC = "redis.call"
 RP = "redipy.asintstr"
@@ -28,7 +28,7 @@ EMPTY_OBJ = r"{}"
 
 LUA_SET_VALUE = f"""
 -- HELPERS START --
-local redipy = {{}}
+local redipy = {EMPTY_OBJ}
 function redipy.asintstr (val)
     return math.floor(val)
 end
@@ -98,16 +98,20 @@ frame
 ]]
 local key_0 = (KEYS[1])  -- size
 local key_1 = (KEYS[2])  -- frame
-local var_0 = {PLD}({RC}("hgetall", {KEY_1_P} .. ({RP}(({GET_KEY_0} or nil)))))
-redis.call("del", {KEY_1_P} .. ({RP}(({GET_KEY_0} or nil))))
-redis.call("incrbyfloat", key_0, -1)
+local var_0 = {PLD}({RC}("hgetall", {KEY_1_P} .. ({RP}({GET_KEY_0}))))
+redis.call("del", {KEY_1_P} .. ({RP}({GET_KEY_0})))
+if (tonumber({GET_KEY_0}) > 0) then
+    redis.call("incrbyfloat", key_0, -1)
+else
+    redis.call("del", key_0)
+end
 return cjson.encode(var_0)
 """
 
 
-LUA_GET_CASCADING = """
+LUA_GET_CASCADING = f"""
 -- HELPERS START --
-local redipy = {}
+local redipy = {EMPTY_OBJ}
 function redipy.asintstr (val)
     return math.floor(val)
 end
@@ -123,7 +127,7 @@ local key_0 = (KEYS[1])  -- size
 local key_1 = (KEYS[2])  -- frame
 local var_0 = key_1
 local arg_0 = cjson.decode(ARGV[1])  -- field
-local var_1 = tonumber((redis.call("get", key_0) or nil))
+local var_1 = tonumber({GET_KEY_0})
 local var_2 = nil
 local var_3 = nil
 while ((var_2 == nil) and (var_1 >= 0)) do
@@ -167,15 +171,6 @@ class RStack:
         """
         return f"{base}:{name}"
 
-    def init(self, base: str) -> None:
-        """
-        Initializes the stack.
-
-        Args:
-            base (str): The base key.
-        """
-        self._rt.set(self.key(base, "size"), "0")
-
     def push_frame(self, base: str) -> None:
         """
         Pushes a new stack frame.
@@ -185,7 +180,7 @@ class RStack:
         """
         self._rt.incrby(self.key(base, "size"), 1)
 
-    def pop_frame(self, base: str) -> dict[str, str] | None:
+    def pop_frame(self, base: str) -> dict[str, str]:
         """
         Pops the current stack frame and returns its values.
 
@@ -202,7 +197,7 @@ class RStack:
             },
             args={})
         if res is None:
-            return None
+            return {}
         return cast(dict, res)
 
     def set_value(self, base: str, field: str, value: str) -> None:
@@ -269,7 +264,7 @@ class RStack:
         rframe = RedisHash(Strs(
             ctx.add_key("frame"),
             ":",
-            ToIntStr(rsize.get(no_adjust=True))))
+            ToIntStr(rsize.get(default=0))))
         field = ctx.add_arg("field")
         value = ctx.add_arg("value")
         ctx.add(rframe.hset({
@@ -284,7 +279,7 @@ class RStack:
         rframe = RedisHash(Strs(
             ctx.add_key("frame"),
             ":",
-            ToIntStr(rsize.get(no_adjust=True))))
+            ToIntStr(rsize.get(default=0))))
         field = ctx.add_arg("field")
         ctx.set_return_value(rframe.hget(field))
         return self._rt.register_script(ctx)
@@ -293,10 +288,14 @@ class RStack:
         ctx = FnContext()
         rsize = RedisVar(ctx.add_key("size"))
         rframe = RedisHash(
-            Strs(ctx.add_key("frame"), ":", ToIntStr(rsize.get())))
+            Strs(ctx.add_key("frame"), ":", ToIntStr(rsize.get(default=0))))
         lcl = ctx.add_local(rframe.hgetall())
         ctx.add(rframe.delete())
-        ctx.add(rsize.incrby(-1))
+
+        b_then, b_else = ctx.if_(ToNum(rsize.get(default=0)).gt_(0))
+        b_then.add(rsize.incrby(-1))
+        b_else.add(rsize.delete())
+
         ctx.set_return_value(lcl)
         return self._rt.register_script(ctx)
 
@@ -305,7 +304,7 @@ class RStack:
         rsize = RedisVar(ctx.add_key("size"))
         base = ctx.add_local(ctx.add_key("frame"))
         field = ctx.add_arg("field")
-        pos = ctx.add_local(ToNum(rsize.get()))
+        pos = ctx.add_local(ToNum(rsize.get(default=0)))
         res = ctx.add_local(None)
         cur = ctx.add_local(None)
         rframe = RedisHash(cur)
@@ -358,9 +357,6 @@ def test_stack(rt_lua: bool) -> None:
         cfg=get_test_config() if rt_lua else None,
         lua_code_hook=code_hook)
     stack = RStack(redis, set_lua_script)
-
-    stack.init("foo")
-    stack.init("bar")
 
     stack.set_value("foo", "a", "hi")
     assert stack.get_value("bar", "a") is None
@@ -495,3 +491,43 @@ def test_stack(rt_lua: bool) -> None:
     assert stack.get_cascading("bar", "b") == "bar"
     assert stack.get_cascading("bar", "c") is None
     assert stack.get_cascading("bar", "d") is None
+
+    assert redis.exists("foo:size", "foo:frame:0") == 2
+    assert redis.exists("foo:frame:1") == 0
+    assert redis.exists("bar:size", "bar:frame:0") == 2
+    assert redis.exists("bar:frame:1") == 0
+
+    assert stack.pop_frame("foo") == {
+        "a": "hi",
+        "b": "foo",
+    }
+    assert stack.pop_frame("bar") == {
+        "a": "bye",
+        "b": "bar",
+    }
+
+    assert stack.get_cascading("foo", "a") is None
+    assert stack.get_cascading("foo", "b") is None
+    assert stack.get_cascading("foo", "c") is None
+    assert stack.get_cascading("foo", "d") is None
+
+    assert stack.get_cascading("bar", "a") is None
+    assert stack.get_cascading("bar", "b") is None
+    assert stack.get_cascading("bar", "c") is None
+    assert stack.get_cascading("bar", "d") is None
+
+    assert stack.pop_frame("foo") == {}
+    assert stack.pop_frame("bar") == {}
+
+    assert stack.get_cascading("foo", "a") is None
+    assert stack.get_cascading("foo", "b") is None
+    assert stack.get_cascading("foo", "c") is None
+    assert stack.get_cascading("foo", "d") is None
+
+    assert stack.get_cascading("bar", "a") is None
+    assert stack.get_cascading("bar", "b") is None
+    assert stack.get_cascading("bar", "c") is None
+    assert stack.get_cascading("bar", "d") is None
+
+    assert redis.exists("bar:size", "bar:frame:0") == 0
+    assert redis.exists("bar:frame:1") == 0

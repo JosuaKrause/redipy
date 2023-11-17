@@ -67,6 +67,22 @@ class RedisList(RedisObj):
             return self.redis_fn("rpop", no_adjust=no_adjust)
         return self.redis_fn("rpop", count, no_adjust=no_adjust)
 
+    def lrange(self, start: MixedType, stop: MixedType) -> Expr:
+        """
+        Returns a number of values from the list specified by the given range.
+        Negative numbers are interpreted as index from the back of the list.
+        Out of range indices are ignored, potentially returning an empty list.
+
+        Args:
+            start (MixedType): The start index.
+
+            stop (MixedType): The stop index (inclusive).
+
+        Returns:
+            Expr: The expression.
+        """
+        return self.redis_fn("lrange", start, stop)
+
     def llen(self) -> Expr:
         """
         The length of the list.
@@ -75,5 +91,3 @@ class RedisList(RedisObj):
             Expr: The expression.
         """
         return self.redis_fn("llen")
-
-    # FIXME implement lrange

@@ -198,15 +198,6 @@ class RStack:
         """
         return f"{base}:{name}"
 
-    def init(self, base: str) -> None:
-        """
-        Initializes the stack.
-
-        Args:
-            base (str): The base key.
-        """
-        self._rt.set(self.key(base, "size"), "0")
-
     def push_frame(self, base: str) -> None:
         """
         Pushes a new stack frame.
@@ -216,7 +207,7 @@ class RStack:
         """
         self._rt.incrby(self.key(base, "size"), 1)
 
-    def pop_frame(self, base: str) -> dict[str, str] | None:
+    def pop_frame(self, base: str) -> dict[str, str]:
         """
         Pops the current stack frame and returns its values.
 
@@ -233,7 +224,7 @@ class RStack:
             },
             args={})
         if res is None:
-            return None
+            return {}
         return cast(dict, res)
 
     def set_value(self, base: str, field: str, value: str) -> None:
@@ -300,7 +291,7 @@ class RStack:
         rframe = RedisHash(Strs(
             ctx.add_key("frame"),
             ":",
-            ToIntStr(rsize.get(no_adjust=True))))
+            ToIntStr(rsize.get(default=0))))
         field = ctx.add_arg("field")
         value = ctx.add_arg("value")
         ctx.add(rframe.hset({
@@ -315,7 +306,7 @@ class RStack:
         rframe = RedisHash(Strs(
             ctx.add_key("frame"),
             ":",
-            ToIntStr(rsize.get(no_adjust=True))))
+            ToIntStr(rsize.get(default=0))))
         field = ctx.add_arg("field")
         ctx.set_return_value(rframe.hget(field))
         return self._rt.register_script(ctx)
@@ -324,10 +315,14 @@ class RStack:
         ctx = FnContext()
         rsize = RedisVar(ctx.add_key("size"))
         rframe = RedisHash(
-            Strs(ctx.add_key("frame"), ":", ToIntStr(rsize.get())))
+            Strs(ctx.add_key("frame"), ":", ToIntStr(rsize.get(default=0))))
         lcl = ctx.add_local(rframe.hgetall())
         ctx.add(rframe.delete())
-        ctx.add(rsize.incrby(-1))
+
+        b_then, b_else = ctx.if_(ToNum(rsize.get(default=0)).gt_(0))
+        b_then.add(rsize.incrby(-1))
+        b_else.add(rsize.delete())
+
         ctx.set_return_value(lcl)
         return self._rt.register_script(ctx)
 
@@ -336,7 +331,7 @@ class RStack:
         rsize = RedisVar(ctx.add_key("size"))
         base = ctx.add_local(ctx.add_key("frame"))
         field = ctx.add_arg("field")
-        pos = ctx.add_local(ToNum(rsize.get()))
+        pos = ctx.add_local(ToNum(rsize.get(default=0)))
         res = ctx.add_local(None)
         cur = ctx.add_local(None)
         rframe = RedisHash(cur)
@@ -445,7 +440,8 @@ For a full implementation follow these steps:
 
 1. Add the signature of the function to `redipy.api.RedisAPI`. Adjust as
   necessary from the redis spec to get a pythonic feel. Also, add the signature
-  to `redipy.api.PipelineAPI` but with `None` as return value.
+  to `redipy.api.PipelineAPI` but with `None` as return value. Additionally,
+  add the redirect to the backend in `redipy.main.Redis`.
 2. Implement the function in `redipy.redis.conn.RedisConnection` and
   `redipy.redis.conn.PipelineConnection`. This should
   be straightforward as there are not too many changes expected. Don't forget
@@ -466,9 +462,10 @@ For a full implementation follow these steps:
   a class in `redipy.memory.rfun`.
 7. Add the approriate class or method in the right `redipy.symbolic.r...py`
   file. If it is a new class / file add an import to `redipy.script`.
-8. Add a new test to verify the new function works inside a script for all
-  backends. You can run `make pytest FILE=test/...py` to execute the test and
-  `make coverage-report` to verify that the new code is executed.
+8. Add a new test in `test/test_api.py` to verify the new function works inside
+  a script for all backends. You can run `make pytest FILE=test/test_api.py`
+  to execute the test and `make coverage-report` to verify that the new code
+  is executed.
 9. Make sure `make lint-all` passes, as well as, all tests (`make pytest`)
   run without issue.
 

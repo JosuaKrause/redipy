@@ -1,11 +1,5 @@
 """Module for patching lua redis function calls."""
-from redipy.graph.expr import (
-    CallObj,
-    ExprObj,
-    find_literal,
-    get_literal,
-    LiteralValObj,
-)
+from redipy.graph.expr import CallObj, ExprObj, find_literal, LiteralValObj
 from redipy.plugin import LuaRedisPatch
 
 
@@ -17,6 +11,7 @@ class RSetPatch(LuaRedisPatch):
 
     def patch(
             self,
+            name: str,
             expr: CallObj,
             args: list[ExprObj],
             *,
@@ -47,11 +42,15 @@ class RGetPatch(LuaRedisPatch):
 
     def patch(
             self,
+            name: str,
             expr: CallObj,
             args: list[ExprObj],
             *,
             is_expr_stmt: bool) -> ExprObj:
         if is_expr_stmt:
+            return expr
+        # check if 2nd argument (count) exists for lpop or rpop
+        if len(args) > 1 and name in ["lpop", "rpop"]:
             return expr
         return {
             "kind": "binary",
@@ -73,6 +72,7 @@ class RSortedPopPatch(LuaRedisPatch):
 
     def patch(
             self,
+            name: str,
             expr: CallObj,
             args: list[ExprObj],
             *,
@@ -96,11 +96,12 @@ class RIncrByPatch(LuaRedisPatch):
 
     def patch(
             self,
+            name: str,
             expr: CallObj,
             args: list[ExprObj],
             *,
             is_expr_stmt: bool) -> ExprObj:
-        name = f"{get_literal(expr['args'][0], 'str')}float"
+        name = f"{name}float"
         literal: LiteralValObj = {
             "kind": "val",
             "type": "str",
@@ -125,6 +126,7 @@ class RHashGetSomePatch(LuaRedisPatch):
 
     def patch(
             self,
+            name: str,
             expr: CallObj,
             args: list[ExprObj],
             *,
@@ -147,6 +149,7 @@ class RHashGetAllPatch(LuaRedisPatch):
 
     def patch(
             self,
+            name: str,
             expr: CallObj,
             args: list[ExprObj],
             *,

@@ -164,7 +164,7 @@ class LuaFnHook:
         patch_fn = self._redis_patch_fns.get(name)
         if patch_fn is None:
             return expr
-        return patch_fn.patch(expr, args, is_expr_stmt=is_expr_stmt)
+        return patch_fn.patch(name, expr, args, is_expr_stmt=is_expr_stmt)
 
 
 def indent_str(code: Iterable[str], add_indent: int) -> list[str]:
