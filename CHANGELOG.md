@@ -31,4 +31,4 @@ All notable changes to this project will be documented in this file.
 
 - Remove usage of `nil` in lua scripts (in favor of `cjson.null`).
 
-[(#2)]: https://github.com/JosuaKrause/redipy/pull/3
+[(#3)]: https://github.com/JosuaKrause/redipy/pull/3
