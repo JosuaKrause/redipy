@@ -212,6 +212,12 @@ class Redis(RedisClientAPI):
         with self._rt.pipeline() as pipe:
             yield pipe
 
+    def exists(self, *keys: str) -> int:
+        return self._rt.exists(*keys)
+
+    def delete(self, *keys: str) -> int:
+        return self._rt.delete(*keys)
+
     @overload
     def set(
             self,
@@ -273,6 +279,9 @@ class Redis(RedisClientAPI):
     def get(self, key: str) -> str | None:
         return self._rt.get(key)
 
+    def incrby(self, key: str, inc: float | int) -> float:
+        return self._rt.incrby(key, inc)
+
     def lpush(self, key: str, *values: str) -> int:
         return self._rt.lpush(key, *values)
 
@@ -319,6 +328,9 @@ class Redis(RedisClientAPI):
             count: int | None = None) -> str | list[str] | None:
         return self._rt.rpop(key, count)
 
+    def lrange(self, key: str, start: int, stop: int) -> list[str]:
+        return self._rt.lrange(key, start, stop)
+
     def llen(self, key: str) -> int:
         return self._rt.llen(key)
 
@@ -341,15 +353,6 @@ class Redis(RedisClientAPI):
 
     def zcard(self, key: str) -> int:
         return self._rt.zcard(key)
-
-    def incrby(self, key: str, inc: float | int) -> float:
-        return self._rt.incrby(key, inc)
-
-    def exists(self, *keys: str) -> int:
-        return self._rt.exists(*keys)
-
-    def delete(self, *keys: str) -> int:
-        return self._rt.delete(*keys)
 
     def hset(self, key: str, mapping: dict[str, str]) -> int:
         return self._rt.hset(key, mapping)

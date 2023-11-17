@@ -445,7 +445,8 @@ For a full implementation follow these steps:
 
 1. Add the signature of the function to `redipy.api.RedisAPI`. Adjust as
   necessary from the redis spec to get a pythonic feel. Also, add the signature
-  to `redipy.api.PipelineAPI` but with `None` as return value.
+  to `redipy.api.PipelineAPI` but with `None` as return value. Additionally,
+  add the redirect to the backend in `redipu.main.Redis`.
 2. Implement the function in `redipy.redis.conn.RedisConnection` and
   `redipy.redis.conn.PipelineConnection`. This should
   be straightforward as there are not too many changes expected. Don't forget
@@ -466,9 +467,10 @@ For a full implementation follow these steps:
   a class in `redipy.memory.rfun`.
 7. Add the approriate class or method in the right `redipy.symbolic.r...py`
   file. If it is a new class / file add an import to `redipy.script`.
-8. Add a new test to verify the new function works inside a script for all
-  backends. You can run `make pytest FILE=test/...py` to execute the test and
-  `make coverage-report` to verify that the new code is executed.
+8. Add a new test in `test/test_api.py` to verify the new function works inside
+  a script for all backends. You can run `make pytest FILE=test/test_api.py`
+  to execute the test and `make coverage-report` to verify that the new code
+  is executed.
 9. Make sure `make lint-all` passes, as well as, all tests (`make pytest`)
   run without issue.
 

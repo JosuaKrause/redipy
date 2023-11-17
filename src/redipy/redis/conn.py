@@ -248,6 +248,16 @@ class PipelineConnection(PipelineAPI):
             for val, fixup in zip(res, fixes)
         ]
 
+    def exists(self, *keys: str) -> None:
+        self._pipe.exists(*(
+            self.with_prefix(key) for key in keys))
+        self.add_fixup(int)
+
+    def delete(self, *keys: str) -> None:
+        self._pipe.delete(*(
+            self.with_prefix(key) for key in keys))
+        self.add_fixup(int)
+
     def set(
             self,
             key: str,
@@ -280,6 +290,10 @@ class PipelineConnection(PipelineAPI):
         self._pipe.get(self.with_prefix(key))
         self.add_fixup(to_maybe_str)
 
+    def incrby(self, key: str, inc: float | int) -> None:
+        self._pipe.incrbyfloat(self.with_prefix(key), inc)
+        self.add_fixup(float)
+
     def lpush(self, key: str, *values: str) -> None:
         self._pipe.lpush(self.with_prefix(key), *values)
         self.add_fixup(int)
@@ -308,6 +322,10 @@ class PipelineConnection(PipelineAPI):
         else:
             self.add_fixup(to_list_str)
 
+    def lrange(self, key: str, start: int, stop: int) -> None:
+        self._pipe.lrange(key, start, stop)
+        self.add_fixup(to_list_str)
+
     def llen(self, key: str) -> None:
         self._pipe.llen(self.with_prefix(key))
         self.add_fixup(int)
@@ -334,20 +352,6 @@ class PipelineConnection(PipelineAPI):
 
     def zcard(self, key: str) -> None:
         self._pipe.zcard(self.with_prefix(key))
-        self.add_fixup(int)
-
-    def incrby(self, key: str, inc: float | int) -> None:
-        self._pipe.incrbyfloat(self.with_prefix(key), inc)
-        self.add_fixup(float)
-
-    def exists(self, *keys: str) -> None:
-        self._pipe.exists(*(
-            self.with_prefix(key) for key in keys))
-        self.add_fixup(int)
-
-    def delete(self, *keys: str) -> None:
-        self._pipe.delete(*(
-            self.with_prefix(key) for key in keys))
         self.add_fixup(int)
 
     def hset(self, key: str, mapping: dict[str, str]) -> None:
@@ -680,6 +684,16 @@ class RedisConnection(Runtime[list[str]]):
                 if count < 1000:
                     count = int(min(1000, count * 1.2))
 
+    def exists(self, *keys: str) -> int:
+        with self.get_connection() as conn:
+            return conn.exists(*(
+                self.with_prefix(key) for key in keys))
+
+    def delete(self, *keys: str) -> int:
+        with self.get_connection() as conn:
+            return conn.delete(*(
+                self.with_prefix(key) for key in keys))
+
     @overload
     def set(
             self,
@@ -754,6 +768,10 @@ class RedisConnection(Runtime[list[str]]):
         with self.get_connection() as conn:
             return to_maybe_str(conn.get(self.with_prefix(key)))
 
+    def incrby(self, key: str, inc: float | int) -> float:
+        with self.get_connection() as conn:
+            return conn.incrbyfloat(self.with_prefix(key), inc)
+
     def lpush(self, key: str, *values: str) -> int:
         with self.get_connection() as conn:
             return conn.lpush(self.with_prefix(key), *values)
@@ -810,6 +828,10 @@ class RedisConnection(Runtime[list[str]]):
                 return to_maybe_str(res)
             return to_list_str(res)
 
+    def lrange(self, key: str, start: int, stop: int) -> list[str]:
+        with self.get_connection() as conn:
+            return to_list_str(conn.lrange(key, start, stop))
+
     def llen(self, key: str) -> int:
         with self.get_connection() as conn:
             return conn.llen(self.with_prefix(key))
@@ -846,20 +868,6 @@ class RedisConnection(Runtime[list[str]]):
     def zcard(self, key: str) -> int:
         with self.get_connection() as conn:
             return int(conn.zcard(self.with_prefix(key)))
-
-    def incrby(self, key: str, inc: float | int) -> float:
-        with self.get_connection() as conn:
-            return conn.incrbyfloat(self.with_prefix(key), inc)
-
-    def exists(self, *keys: str) -> int:
-        with self.get_connection() as conn:
-            return conn.exists(*(
-                self.with_prefix(key) for key in keys))
-
-    def delete(self, *keys: str) -> int:
-        with self.get_connection() as conn:
-            return conn.delete(*(
-                self.with_prefix(key) for key in keys))
 
     def hset(self, key: str, mapping: dict[str, str]) -> int:
         with self.get_connection() as conn:

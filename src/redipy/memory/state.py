@@ -1,6 +1,7 @@
 """This module handles the internal state of the memory runtime."""
 import collections
 import datetime
+import itertools
 import time
 from typing import Literal, overload
 
@@ -585,6 +586,18 @@ class Machine(RedisAPI):
         """
         return self._state
 
+    def exists(self, *keys: str) -> int:
+        res = 0
+        for key in keys:
+            if self._state.exists(key):
+                res += 1
+        return res
+
+    def delete(self, *keys: str) -> int:
+        res = self.exists(*keys)
+        self._state.delete(set(keys))
+        return res
+
     @overload
     def set(
             self,
@@ -664,6 +677,17 @@ class Machine(RedisAPI):
             return None
         value, _ = res
         return value
+
+    def incrby(self, key: str, inc: float | int) -> float:
+        res = self._state.get_value(key)
+        if res is None:
+            val = "0"
+            expire = None
+        else:
+            val, expire = res
+        num = float(val) + inc
+        self._state.set_value(key, to_number_str(num), expire)
+        return num
 
     def lpush(self, key: str, *values: str) -> int:
         queue = self._state.get_queue(key)
@@ -745,6 +769,24 @@ class Machine(RedisAPI):
             self.delete(key)
         return res if res else None
 
+    def lrange(self, key: str, start: int, stop: int) -> list[str]:
+        queue = self._state.readonly_queue(key)
+        if queue is None:
+            return []
+        if start >= len(queue):
+            return []
+        if start < 0:
+            start = max(0, start + len(queue))
+        if stop < 0:
+            stop += len(queue)
+            if stop < 0:
+                return []
+        stop += 1
+        queue.rotate(-start)
+        res = list(itertools.islice(queue, 0, stop - start, 1))
+        queue.rotate(start)
+        return res
+
     def llen(self, key: str) -> int:
         return self._state.queue_len(key)
 
@@ -791,29 +833,6 @@ class Machine(RedisAPI):
 
     def zcard(self, key: str) -> int:
         return self._state.zorder_len(key)
-
-    def incrby(self, key: str, inc: float | int) -> float:
-        res = self._state.get_value(key)
-        if res is None:
-            val = "0"
-            expire = None
-        else:
-            val, expire = res
-        num = float(val) + inc
-        self._state.set_value(key, to_number_str(num), expire)
-        return num
-
-    def exists(self, *keys: str) -> int:
-        res = 0
-        for key in keys:
-            if self._state.exists(key):
-                res += 1
-        return res
-
-    def delete(self, *keys: str) -> int:
-        res = self.exists(*keys)
-        self._state.delete(set(keys))
-        return res
 
     def hset(self, key: str, mapping: dict[str, str]) -> int:
         obj = self._state.get_hash(key)

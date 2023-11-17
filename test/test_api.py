@@ -94,16 +94,16 @@ def test_api(rt_lua: bool) -> None:
 
         assert setup(key) == output_setup
         result = normal(key)
-        assert teardown(key) == output_teardown
         assert result == output
+        assert teardown(key) == output_teardown
 
         with redis.pipeline() as pipe:
             assert setup_pipe(pipe, key) is None
             assert pipeline(pipe, key) is None
             setup_result, result = pipe.execute()
-        assert teardown(key) == output_teardown
         assert setup_result == output_setup
         assert result == output
+        assert teardown(key) == output_teardown
 
         ctx = FnContext()
         key_var = ctx.add_key("key")
@@ -125,27 +125,27 @@ def test_api(rt_lua: bool) -> None:
 
         assert setup(key) == output_setup
         result = lua_patch(fun(keys={"key": key}, args={}))
-        assert teardown(key) == output_teardown
         assert result == output
+        assert teardown(key) == output_teardown
 
         assert setup(key) == output_setup
         result = lua_patch(fun(keys={"key": key}, args={}, client=redis))
-        assert teardown(key) == output_teardown
         assert result == output
+        assert teardown(key) == output_teardown
 
         assert setup(key) == output_setup
         result = lua_patch(
             fun(keys={"key": key}, args={}, client=redis.get_runtime()))
-        assert teardown(key) == output_teardown
         assert result == output
+        assert teardown(key) == output_teardown
 
         with redis.pipeline() as pipe:
             assert setup_pipe(pipe, key) is None
             assert fun(keys={"key": key}, args={}, client=pipe) is None
             setup_result, result = pipe.execute()
-        assert teardown(key) == output_teardown
         assert setup_result == output_setup
         assert lua_patch(result) == output
+        assert teardown(key) == output_teardown
 
     check(
         "exists",
@@ -304,4 +304,56 @@ def test_api(rt_lua: bool) -> None:
         teardown=lambda key: redis.delete(key),
         output_setup=3,
         output=["3", "4", "5"],
+        output_teardown=1)
+
+    check(
+        "lrange_0",
+        setup=lambda key: redis.rpush(key, "a", "b", "c"),
+        normal=lambda key: redis.lrange(key, 0, 0),
+        setup_pipe=lambda pipe, key: pipe.rpush(key, "a", "b", "c"),
+        pipeline=lambda pipe, key: pipe.lrange(key, 0, 0),
+        lua=lambda ctx, key: RedisList(key).lrange(0, 0),
+        code="redis.call(\"lrange\", key_0, 0, 0)",
+        teardown=lambda key: redis.delete(key),
+        output_setup=3,
+        output=["a"],
+        output_teardown=1)
+
+    check(
+        "lrange_1",
+        setup=lambda key: redis.rpush(key, "a", "b", "c"),
+        normal=lambda key: redis.lrange(key, -3, 2),
+        setup_pipe=lambda pipe, key: pipe.rpush(key, "a", "b", "c"),
+        pipeline=lambda pipe, key: pipe.lrange(key, -3, 2),
+        lua=lambda ctx, key: RedisList(key).lrange(-3, 2),
+        code="redis.call(\"lrange\", key_0, -3, 2)",
+        teardown=lambda key: redis.delete(key),
+        output_setup=3,
+        output=["a", "b", "c"],
+        output_teardown=1)
+
+    check(
+        "lrange_2",
+        setup=lambda key: redis.rpush(key, "a", "b", "c", "d", "e"),
+        normal=lambda key: redis.lrange(key, 1, -2),
+        setup_pipe=lambda pipe, key: pipe.rpush(key, "a", "b", "c", "d", "e"),
+        pipeline=lambda pipe, key: pipe.lrange(key, 1, -2),
+        lua=lambda ctx, key: RedisList(key).lrange(1, -2),
+        code="redis.call(\"lrange\", key_0, 1, -2)",
+        teardown=lambda key: redis.delete(key),
+        output_setup=5,
+        output=["b", "c", "d"],
+        output_teardown=1)
+
+    check(
+        "lrange_3",
+        setup=lambda key: redis.rpush(key, "a", "b", "c", "d", "e"),
+        normal=lambda key: redis.lrange(key, -100, 100),
+        setup_pipe=lambda pipe, key: pipe.rpush(key, "a", "b", "c", "d", "e"),
+        pipeline=lambda pipe, key: pipe.lrange(key, -100, 100),
+        lua=lambda ctx, key: RedisList(key).lrange(-100, 100),
+        code="redis.call(\"lrange\", key_0, 100, -100)",
+        teardown=lambda key: redis.delete(key),
+        output_setup=5,
+        output=["a", "b", "c", "d", "e"],
         output_teardown=1)

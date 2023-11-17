@@ -38,6 +38,32 @@ class PipelineAPI:
         """
         raise NotImplementedError()
 
+    def exists(self, *keys: str) -> None:
+        """
+        Determines whether specified keys exist.
+
+        See also the redis documentation: https://redis.io/commands/exists/
+
+        The pipeline value is set to the number of keys that exist.
+
+        Args:
+            *keys (str): The keys.
+        """
+        raise NotImplementedError()
+
+    def delete(self, *keys: str) -> None:
+        """
+        Deletes keys.
+
+        See also the redis documentation: https://redis.io/commands/del/
+
+        The pipeline value is set to the number of keys that got removed.
+
+        Args:
+            *keys (str): The keys.
+        """
+        raise NotImplementedError()
+
     def set(
             self,
             key: str,
@@ -90,6 +116,27 @@ class PipelineAPI:
 
         Args:
             key (str): The key.
+        """
+        raise NotImplementedError()
+
+    def incrby(self, key: str, inc: float | int) -> None:
+        """
+        Updates the value associated with the given key by a relative amount.
+        The value is interpreted as number. If the value doesn't exist zero is
+        used as starting point.
+
+        See also the redis documentation:
+        https://redis.io/commands/incrby/
+        https://redis.io/commands/incrbyfloat/
+
+        The pipeline value is set to the new value as float.
+        If the value cannot be interpreted as float while executing the
+        pipeline a ValueError exception is raised.
+
+        Args:
+            key (str): The key.
+
+            inc (float | int): The relative change.
         """
         raise NotImplementedError()
 
@@ -166,6 +213,25 @@ class PipelineAPI:
 
             count (int | None, optional): The number values to pop.
             Defaults to a single value.
+        """
+        raise NotImplementedError()
+
+    def lrange(self, key: str, start: int, stop: int) -> None:
+        """
+        Returns a number of values from the list specified by the given range.
+        Negative numbers are interpreted as index from the back of the list.
+        Out of range indices are ignored, potentially returning an empty list.
+
+        See also the redis documentation: https://redis.io/commands/lrange/
+
+        The pipeline value is the resulting elements.
+
+        Args:
+            key (str): The key.
+
+            start (int): The start index.
+
+            stop (int): The stop index (inclusive).
         """
         raise NotImplementedError()
 
@@ -253,53 +319,6 @@ class PipelineAPI:
 
         Args:
             key (str): The key.
-        """
-        raise NotImplementedError()
-
-    def incrby(self, key: str, inc: float | int) -> None:
-        """
-        Updates the value associated with the given key by a relative amount.
-        The value is interpreted as number. If the value doesn't exist zero is
-        used as starting point.
-
-        See also the redis documentation:
-        https://redis.io/commands/incrby/
-        https://redis.io/commands/incrbyfloat/
-
-        The pipeline value is set to the new value as float.
-        If the value cannot be interpreted as float while executing the
-        pipeline a ValueError exception is raised.
-
-        Args:
-            key (str): The key.
-
-            inc (float | int): The relative change.
-        """
-        raise NotImplementedError()
-
-    def exists(self, *keys: str) -> None:
-        """
-        Determines whether specified keys exist.
-
-        See also the redis documentation: https://redis.io/commands/exists/
-
-        The pipeline value is set to the number of keys that exist.
-
-        Args:
-            *keys (str): The keys.
-        """
-        raise NotImplementedError()
-
-    def delete(self, *keys: str) -> None:
-        """
-        Deletes keys.
-
-        See also the redis documentation: https://redis.io/commands/del/
-
-        The pipeline value is set to the number of keys that got removed.
-
-        Args:
-            *keys (str): The keys.
         """
         raise NotImplementedError()
 
@@ -429,6 +448,34 @@ class PipelineAPI:
 
 class RedisAPI:
     """The redis API."""
+    def exists(self, *keys: str) -> int:
+        """
+        Determines whether specified keys exist.
+
+        See also the redis documentation: https://redis.io/commands/exists/
+
+        Args:
+            *keys (str): The keys.
+
+        Returns:
+            int: The number of keys that exist.
+        """
+        raise NotImplementedError()
+
+    def delete(self, *keys: str) -> int:
+        """
+        Deletes keys.
+
+        See also the redis documentation: https://redis.io/commands/del/
+
+        Args:
+            *keys (str): The keys.
+
+        Returns:
+            int: The number of keys that got removed.
+        """
+        raise NotImplementedError()
+
     @overload
     def set(
             self,
@@ -523,6 +570,29 @@ class RedisAPI:
         Returns:
             str | None: The value or None if the key does not exists or the
             value has expired.
+        """
+        raise NotImplementedError()
+
+    def incrby(self, key: str, inc: float | int) -> float:
+        """
+        Updates the value associated with the given key by a relative amount.
+        The value is interpreted as number. If the value doesn't exist zero is
+        used as starting point.
+
+        See also the redis documentation:
+        https://redis.io/commands/incrby/
+        https://redis.io/commands/incrbyfloat/
+
+        Args:
+            key (str): The key.
+
+            inc (float | int): The relative change.
+
+        Raises:
+            ValueError: If the value cannot be interpreted as float.
+
+        Returns:
+            float: The new value as float.
         """
         raise NotImplementedError()
 
@@ -634,6 +704,26 @@ class RedisAPI:
         """
         raise NotImplementedError()
 
+    def lrange(self, key: str, start: int, stop: int) -> list[str]:
+        """
+        Returns a number of values from the list specified by the given range.
+        Negative numbers are interpreted as index from the back of the list.
+        Out of range indices are ignored, potentially returning an empty list.
+
+        See also the redis documentation: https://redis.io/commands/lrange/
+
+        Args:
+            key (str): The key.
+
+            start (int): The start index.
+
+            stop (int): The stop index (inclusive).
+
+        Returns:
+            list[str]: The elements.
+        """
+        raise NotImplementedError()
+
     def llen(self, key: str) -> int:
         """
         Computes the length of the list associated with the key.
@@ -723,57 +813,6 @@ class RedisAPI:
 
         Returns:
             int: The number of members in the set.
-        """
-        raise NotImplementedError()
-
-    def incrby(self, key: str, inc: float | int) -> float:
-        """
-        Updates the value associated with the given key by a relative amount.
-        The value is interpreted as number. If the value doesn't exist zero is
-        used as starting point.
-
-        See also the redis documentation:
-        https://redis.io/commands/incrby/
-        https://redis.io/commands/incrbyfloat/
-
-        Args:
-            key (str): The key.
-
-            inc (float | int): The relative change.
-
-        Raises:
-            ValueError: If the value cannot be interpreted as float.
-
-        Returns:
-            float: The new value as float.
-        """
-        raise NotImplementedError()
-
-    def exists(self, *keys: str) -> int:
-        """
-        Determines whether specified keys exist.
-
-        See also the redis documentation: https://redis.io/commands/exists/
-
-        Args:
-            *keys (str): The keys.
-
-        Returns:
-            int: The number of keys that exist.
-        """
-        raise NotImplementedError()
-
-    def delete(self, *keys: str) -> int:
-        """
-        Deletes keys.
-
-        See also the redis documentation: https://redis.io/commands/del/
-
-        Args:
-            *keys (str): The keys.
-
-        Returns:
-            int: The number of keys that got removed.
         """
         raise NotImplementedError()
 

@@ -204,6 +204,14 @@ class LocalRuntime(Runtime[Cmd]):
         """
         return CONST[raw]
 
+    def exists(self, *keys: str) -> int:
+        with self.lock():
+            return self._sm.exists(*keys)
+
+    def delete(self, *keys: str) -> int:
+        with self.lock():
+            return self._sm.delete(*keys)
+
     @overload
     def set(
             self,
@@ -267,6 +275,10 @@ class LocalRuntime(Runtime[Cmd]):
         with self.lock():
             return self._sm.get(key)
 
+    def incrby(self, key: str, inc: float | int) -> float:
+        with self.lock():
+            return self._sm.incrby(key, inc)
+
     def lpush(self, key: str, *values: str) -> int:
         with self.lock():
             return self._sm.lpush(key, *values)
@@ -317,6 +329,10 @@ class LocalRuntime(Runtime[Cmd]):
         with self.lock():
             return self._sm.rpop(key, count)
 
+    def lrange(self, key: str, start: int, stop: int) -> list[str]:
+        with self.lock():
+            return self._sm.lrange(key, start, stop)
+
     def llen(self, key: str) -> int:
         with self.lock():
             return self._sm.llen(key)
@@ -344,18 +360,6 @@ class LocalRuntime(Runtime[Cmd]):
     def zcard(self, key: str) -> int:
         with self.lock():
             return self._sm.zcard(key)
-
-    def incrby(self, key: str, inc: float | int) -> float:
-        with self.lock():
-            return self._sm.incrby(key, inc)
-
-    def exists(self, *keys: str) -> int:
-        with self.lock():
-            return self._sm.exists(*keys)
-
-    def delete(self, *keys: str) -> int:
-        with self.lock():
-            return self._sm.delete(*keys)
 
     def hset(self, key: str, mapping: dict[str, str]) -> int:
         with self.lock():
@@ -469,6 +473,12 @@ class LocalPipeline(PipelineAPI):
         """
         self._cmd_queue.append(cb)
 
+    def exists(self, *keys: str) -> None:
+        self.add_cmd(lambda: self._sm.exists(*keys))
+
+    def delete(self, *keys: str) -> None:
+        self.add_cmd(lambda: self._sm.delete(*keys))
+
     def set(
             self,
             key: str,
@@ -491,6 +501,9 @@ class LocalPipeline(PipelineAPI):
     def get(self, key: str) -> None:
         self.add_cmd(lambda: self._sm.get(key))
 
+    def incrby(self, key: str, inc: float | int) -> None:
+        self.add_cmd(lambda: self._sm.incrby(key, inc))
+
     def lpush(self, key: str, *values: str) -> None:
         self.add_cmd(lambda: self._sm.lpush(key, *values))
 
@@ -508,6 +521,9 @@ class LocalPipeline(PipelineAPI):
             key: str,
             count: int | None = None) -> None:
         self.add_cmd(lambda: self._sm.rpop(key, count))
+
+    def lrange(self, key: str, start: int, stop: int) -> None:
+        self.add_cmd(lambda: self._sm.lrange(key, start, stop))
 
     def llen(self, key: str) -> None:
         self.add_cmd(lambda: self._sm.llen(key))
@@ -535,15 +551,6 @@ class LocalPipeline(PipelineAPI):
 
     def zcard(self, key: str) -> None:
         self.add_cmd(lambda: self._sm.zcard(key))
-
-    def incrby(self, key: str, inc: float | int) -> None:
-        self.add_cmd(lambda: self._sm.incrby(key, inc))
-
-    def exists(self, *keys: str) -> None:
-        self.add_cmd(lambda: self._sm.exists(*keys))
-
-    def delete(self, *keys: str) -> None:
-        self.add_cmd(lambda: self._sm.delete(*keys))
 
     def hset(self, key: str, mapping: dict[str, str]) -> None:
         self.add_cmd(lambda: self._sm.hset(key, mapping))

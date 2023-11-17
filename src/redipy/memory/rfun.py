@@ -7,6 +7,40 @@ from redipy.memory.state import Machine
 from redipy.plugin import ArgcSpec, LocalRedisFunction
 
 
+class RExistsFn(LocalRedisFunction):
+    """Implements the exists function."""
+    @staticmethod
+    def name() -> str:
+        return "exists"
+
+    @staticmethod
+    def argc() -> ArgcSpec:
+        return {
+            "count": 0,
+        }
+
+    @staticmethod
+    def call(sm: Machine, key: str, args: list[JSONType]) -> JSONType:
+        return sm.exists(key)
+
+
+class RDelFn(LocalRedisFunction):
+    """Implements the del function."""
+    @staticmethod
+    def name() -> str:
+        return "del"
+
+    @staticmethod
+    def argc() -> ArgcSpec:
+        return {
+            "count": 0,
+        }
+
+    @staticmethod
+    def call(sm: Machine, key: str, args: list[JSONType]) -> JSONType:
+        return sm.delete(key)
+
+
 class RSetFn(LocalRedisFunction):
     """Implements the set function."""
     @staticmethod
@@ -69,7 +103,7 @@ class RGetFn(LocalRedisFunction):
         return sm.get(key)
 
 
-class RIncrBy(LocalRedisFunction):
+class RIncrByFn(LocalRedisFunction):
     """Implements the incrby and incrbyfloat functions."""
     @staticmethod
     def name() -> str:
@@ -160,6 +194,23 @@ class RRPopFn(LocalRedisFunction):
             key, None if len(args) < 1 else int(cast(int, args[0])))
 
 
+class RLRangeFn(LocalRedisFunction):
+    """Implements the lrange function."""
+    @staticmethod
+    def name() -> str:
+        return "lrange"
+
+    @staticmethod
+    def argc() -> ArgcSpec:
+        return {
+            "count": 2,
+        }
+
+    @staticmethod
+    def call(sm: Machine, key: str, args: list[JSONType]) -> JSONType:
+        return sm.lrange(key, int(cast(int, args[0])), int(cast(int, args[1])))
+
+
 class RLLenFn(LocalRedisFunction):
     """Implements the llen function."""
     @staticmethod
@@ -232,7 +283,7 @@ class RZPopMinFn(LocalRedisFunction):
             key, 1 if len(args) < 1 else int(cast(int, args[0]))))
 
 
-class RZCard(LocalRedisFunction):
+class RZCardFn(LocalRedisFunction):
     """Implements the zcard function."""
     @staticmethod
     def name() -> str:
@@ -249,41 +300,7 @@ class RZCard(LocalRedisFunction):
         return sm.zcard(key)
 
 
-class RExists(LocalRedisFunction):
-    """Implements the exists function."""
-    @staticmethod
-    def name() -> str:
-        return "exists"
-
-    @staticmethod
-    def argc() -> ArgcSpec:
-        return {
-            "count": 0,
-        }
-
-    @staticmethod
-    def call(sm: Machine, key: str, args: list[JSONType]) -> JSONType:
-        return sm.exists(key)
-
-
-class RDel(LocalRedisFunction):
-    """Implements the del function."""
-    @staticmethod
-    def name() -> str:
-        return "del"
-
-    @staticmethod
-    def argc() -> ArgcSpec:
-        return {
-            "count": 0,
-        }
-
-    @staticmethod
-    def call(sm: Machine, key: str, args: list[JSONType]) -> JSONType:
-        return sm.delete(key)
-
-
-class RHSet(LocalRedisFunction):
+class RHSetFn(LocalRedisFunction):
     """Implements the hset function."""
     @staticmethod
     def name() -> str:
@@ -311,7 +328,7 @@ class RHSet(LocalRedisFunction):
         return sm.hset(key, mapping)
 
 
-class RHDel(LocalRedisFunction):
+class RHDelFn(LocalRedisFunction):
     """Implements the hdel function."""
     @staticmethod
     def name() -> str:
@@ -329,7 +346,7 @@ class RHDel(LocalRedisFunction):
         return sm.hdel(key, *(f"{arg}" for arg in args))
 
 
-class RHGet(LocalRedisFunction):
+class RHGetFn(LocalRedisFunction):
     """Implements the hget function."""
     @staticmethod
     def name() -> str:
@@ -346,7 +363,7 @@ class RHGet(LocalRedisFunction):
         return sm.hget(key, f"{args[0]}")
 
 
-class RHMGet(LocalRedisFunction):
+class RHMGetFn(LocalRedisFunction):
     """Implements the hmget function."""
     @staticmethod
     def name() -> str:
@@ -364,7 +381,7 @@ class RHMGet(LocalRedisFunction):
         return sm.hmget(key, *(f"{arg}" for arg in args))
 
 
-class RHIncrBy(LocalRedisFunction):
+class RHIncrByFn(LocalRedisFunction):
     """Implements the hincrby and hincrbyfloat functions."""
     @staticmethod
     def name() -> str:
@@ -381,7 +398,7 @@ class RHIncrBy(LocalRedisFunction):
         return sm.hincrby(key, f"{args[0]}", cast(float, args[1]))
 
 
-class RHKeys(LocalRedisFunction):
+class RHKeysFn(LocalRedisFunction):
     """Implements the hkeys function."""
     @staticmethod
     def name() -> str:
@@ -398,7 +415,7 @@ class RHKeys(LocalRedisFunction):
         return sm.hkeys(key)
 
 
-class RHVals(LocalRedisFunction):
+class RHValsFn(LocalRedisFunction):
     """Implements the hvals function."""
     @staticmethod
     def name() -> str:
@@ -415,7 +432,7 @@ class RHVals(LocalRedisFunction):
         return sm.hvals(key)
 
 
-class RHGetAll(LocalRedisFunction):
+class RHGetAllFn(LocalRedisFunction):
     """Implements the hgetall function."""
     @staticmethod
     def name() -> str:
