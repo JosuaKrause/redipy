@@ -351,6 +351,9 @@ class Redis(RedisClientAPI):
             ) -> list[tuple[str, float]]:
         return self._rt.zpop_min(key, count)
 
+    def zrange(self, key: str, start: int, stop: int) -> list[str]:
+        return self._rt.zrange(key, start, stop)
+
     def zcard(self, key: str) -> int:
         return self._rt.zcard(key)
 

@@ -357,6 +357,10 @@ class LocalRuntime(Runtime[Cmd]):
         with self.lock():
             return self._sm.zpop_min(key, count)
 
+    def zrange(self, key: str, start: int, stop: int) -> list[str]:
+        with self.lock():
+            return self._sm.zrange(key, start, stop)
+
     def zcard(self, key: str) -> int:
         with self.lock():
             return self._sm.zcard(key)
@@ -548,6 +552,9 @@ class LocalPipeline(PipelineAPI):
             count: int = 1,
             ) -> None:
         self.add_cmd(lambda: self._sm.zpop_min(key, count))
+
+    def zrange(self, key: str, start: int, stop: int) -> None:
+        self.add_cmd(lambda: self._sm.zrange(key, start, stop))
 
     def zcard(self, key: str) -> None:
         self.add_cmd(lambda: self._sm.zcard(key))

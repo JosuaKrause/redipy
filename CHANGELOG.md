@@ -12,7 +12,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Added LRANGE. ([#7])
+- Added LRANGE and ZRANGE (partially). ([#7])
 - Inferring backend in Redis constructor. ([#3])
 - Allow access to raw runtime and redis connections. ([#3])
 - Executing scripts from a pipeline. ([#3])

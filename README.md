@@ -441,7 +441,7 @@ For a full implementation follow these steps:
 1. Add the signature of the function to `redipy.api.RedisAPI`. Adjust as
   necessary from the redis spec to get a pythonic feel. Also, add the signature
   to `redipy.api.PipelineAPI` but with `None` as return value. Additionally,
-  add the redirect to the backend in `redipu.main.Redis`.
+  add the redirect to the backend in `redipy.main.Redis`.
 2. Implement the function in `redipy.redis.conn.RedisConnection` and
   `redipy.redis.conn.PipelineConnection`. This should
   be straightforward as there are not too many changes expected. Don't forget

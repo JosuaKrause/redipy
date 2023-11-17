@@ -831,6 +831,17 @@ class Machine(RedisAPI):
             remain -= 1
         return res
 
+    def zrange(self, key: str, start: int, stop: int) -> list[str]:
+        zorder = self._state.readonly_zorder(key)
+        if zorder is None:
+            return []
+        astop: int | None = stop
+        if astop == -1 or astop is None:  # NOTE: mypy workaround
+            astop = None
+        else:
+            astop += 1
+        return zorder[start:astop]
+
     def zcard(self, key: str) -> int:
         return self._state.zorder_len(key)
 

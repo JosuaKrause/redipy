@@ -49,6 +49,21 @@ class RedisSortedSet(RedisObj):
             return self.redis_fn("zpopmin")
         return self.redis_fn("zpopmin", count)
 
+    def range(self, start: MixedType, stop: MixedType) -> Expr:
+        """
+        Returns a range of member names.
+
+        Args:
+            start (MixedType): The start index.
+
+            stop (MixedType): The stop index (inclusive).
+
+        Returns:
+            Expr: The expression.
+        """
+        # FIXME add all arguments
+        return self.redis_fn("zrange", start, stop)
+
     def card(self) -> Expr:
         """
         Computes the cardinality of the sorted set.

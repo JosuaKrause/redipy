@@ -283,6 +283,23 @@ class RZPopMinFn(LocalRedisFunction):
             key, 1 if len(args) < 1 else int(cast(int, args[0]))))
 
 
+class RZRangeFn(LocalRedisFunction):
+    """Implements the zrange function."""
+    @staticmethod
+    def name() -> str:
+        return "zrange"
+
+    @staticmethod
+    def argc() -> ArgcSpec:
+        return {
+            "count": 2,
+        }
+
+    @staticmethod
+    def call(sm: Machine, key: str, args: list[JSONType]) -> JSONType:
+        return sm.zrange(key, int(cast(int, args[0])), int(cast(int, args[1])))
+
+
 class RZCardFn(LocalRedisFunction):
     """Implements the zcard function."""
     @staticmethod

@@ -308,6 +308,28 @@ class PipelineAPI:
         """
         raise NotImplementedError()
 
+    def zrange(self, key: str, start: int, stop: int) -> None:
+        """
+        Returns a number of values from the sorted set specified by the given
+        range. As of now the indices are based on the order of the set.
+        Negative numbers are interpreted as index from the back of the set.
+        Out of range indices are ignored, potentially returning an empty set.
+
+        See also the redis documentation: https://redis.io/commands/zrange/
+
+        NOTE: not all modes are implemented yet.
+
+        The members names are set as pipeline value.
+
+        Args:
+            key (str): The key.
+
+            start (int): The start index.
+
+            stop (int): The stop index (inclusive).
+        """
+        raise NotImplementedError()
+
     def zcard(self, key: str) -> None:
         """
         Computes the cardinality of the sorted set associated with the given
@@ -798,6 +820,29 @@ class RedisAPI:
         Returns:
             list[tuple[str, float]]: The members with their associated scores
             in pop order.
+        """
+        raise NotImplementedError()
+
+    def zrange(self, key: str, start: int, stop: int) -> list[str]:
+        """
+        Returns a number of values from the sorted set specified by the given
+        range. As of now the indices are based on the order of the set.
+        Negative numbers are interpreted as index from the back of the set.
+        Out of range indices are ignored, potentially returning an empty set.
+
+        See also the redis documentation: https://redis.io/commands/zrange/
+
+        NOTE: not all modes are implemented yet.
+
+        Args:
+            key (str): The key.
+
+            start (int): The start index.
+
+            stop (int): The stop index (inclusive).
+
+        Returns:
+            list[str]: The members names.
         """
         raise NotImplementedError()
 

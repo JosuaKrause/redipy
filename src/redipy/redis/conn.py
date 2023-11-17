@@ -350,6 +350,10 @@ class PipelineConnection(PipelineAPI):
         self._pipe.zpopmin(self.with_prefix(key), count)
         self.add_fixup(normalize_values)
 
+    def zrange(self, key: str, start: int, stop: int) -> None:
+        self._pipe.zrange(self.with_prefix(key), start, stop)
+        self.add_fixup(to_list_str)
+
     def zcard(self, key: str) -> None:
         self._pipe.zcard(self.with_prefix(key))
         self.add_fixup(int)
@@ -864,6 +868,11 @@ class RedisConnection(Runtime[list[str]]):
                 (name.decode("utf-8"), float(score))
                 for name, score in res
             ]
+
+    def zrange(self, key: str, start: int, stop: int) -> list[str]:
+        with self.get_connection() as conn:
+            res = conn.zrange(self.with_prefix(key), start, stop)
+            return to_list_str(res)
 
     def zcard(self, key: str) -> int:
         with self.get_connection() as conn:

@@ -293,6 +293,34 @@ def test_api(rt_lua: bool) -> None:
         output_teardown=[2, True, 0])
 
     check(
+        "zrange_0",
+        setup=lambda key: redis.zadd(key, {"a": 0.25, "b": 0.5, "c": 0.75}),
+        normal=lambda key: redis.zrange(key, 1, 2),
+        setup_pipe=lambda pipe, key: pipe.zadd(
+            key, {"a": 0.25, "b": 0.5, "c": 0.75}),
+        pipeline=lambda pipe, key: pipe.zrange(key, 1, 2),
+        lua=lambda ctx, key: RedisSortedSet(key).range(1, 2),
+        code="redis.call(\"zrange\", key_0, 1, 2)",
+        teardown=lambda key: [redis.delete(key), redis.zcard(key)],
+        output_setup=3,
+        output=["b", "c"],
+        output_teardown=[True, 0])
+
+    check(
+        "zrange_1",
+        setup=lambda key: redis.zadd(key, {"a": 0.25, "b": 0.5, "c": 0.75}),
+        normal=lambda key: redis.zrange(key, 0, -2),
+        setup_pipe=lambda pipe, key: pipe.zadd(
+            key, {"a": 0.25, "b": 0.5, "c": 0.75}),
+        pipeline=lambda pipe, key: pipe.zrange(key, 0, -2),
+        lua=lambda ctx, key: RedisSortedSet(key).range(0, -2),
+        code="redis.call(\"zrange\", key_0, 0, -2)",
+        teardown=lambda key: [redis.delete(key), redis.zcard(key)],
+        output_setup=3,
+        output=["a", "b"],
+        output_teardown=[True, 0])
+
+    check(
         "hget",
         setup=lambda key: redis.hset(key, {"a": "0", "b": "1", "c": "2"}),
         normal=lambda key: redis.hget(key, "b"),
