@@ -1,3 +1,4 @@
+"""The runtime for the memory backend."""
 import contextlib
 import datetime
 from collections.abc import Callable, Iterator
@@ -21,9 +22,11 @@ CONST: dict[str, JSONType] = {
     "redis.LOG_NOTICE": "NOTICE",
     "redis.LOG_WARNING": "WARNING",
 }
+"""Log severity levels."""
 
 
 class LocalRuntime(Runtime[Cmd]):
+    """The runtime of the memory backend."""
     def __init__(self) -> None:
         super().__init__()
         self._sm = Machine(State())
@@ -33,14 +36,35 @@ class LocalRuntime(Runtime[Cmd]):
         self.add_general_function_plugin("redipy.memory.gfun")
 
     def add_redis_function_plugin(self, module: str) -> None:
+        """Adds all redis functions (LocalRedisFunction) defined in the
+        given module.
+
+        Args:
+            module (str): The module name.
+        """
         add_plugin(module, self._rfuns, LocalRedisFunction)
 
     def add_general_function_plugin(self, module: str) -> None:
+        """Adds all general functions (LocalGeneralFunction) defined in the
+        given module
+
+        Args:
+            module (str): The module name.
+        """
         add_plugin(
             module,
             self._gfuns,
             LocalGeneralFunction,
             disallowed={"redis.call"})
+
+    def get_machine(self) -> Machine:
+        """
+        Returns the internal memory state.
+
+        Returns:
+            Machine: The memory state.
+        """
+        return self._sm
 
     @classmethod
     def create_backend(cls) -> LocalBackend:
@@ -57,11 +81,10 @@ class LocalRuntime(Runtime[Cmd]):
                 state.reset()
                 return res
 
-        pipe = LocalPipeline(
-            self._sm.get_state(), exec_call)
+        pipe = LocalPipeline(self, self._sm.get_state(), exec_call)
         yield pipe
-        if pipe.has_queue():
-            raise ValueError(f"unexecuted commands in pipeline {pipe}")
+        if pipe.has_pending():
+            pipe.execute()
 
     @staticmethod
     def require_argc(
@@ -70,6 +93,27 @@ class LocalRuntime(Runtime[Cmd]):
             *,
             at_least: bool = False,
             at_most: int | None = None) -> None:
+        """
+        Confirms that the passed arguments conform to the argument
+        specification.
+
+        Args:
+            args (list[JSONType]): The arguments to check.
+
+            count (int): The expected number of arguments.
+
+            at_least (bool, optional): If the number of arguments is a minimum.
+            Defaults to False.
+
+            at_most (int | None, optional): Defines an upper bound for the
+            number of arguments. This argument does not define a minimum
+            number of arguments (if at_least is set to True and at_most is
+            set to a value the minimum number of arguments is 0).
+            Defaults to None.
+
+        Raises:
+            ValueError: If the arguments don't conform the specification.
+        """
         argc = len(args)
         if argc == count:
             return
@@ -77,12 +121,33 @@ class LocalRuntime(Runtime[Cmd]):
             return
         if at_least and argc > count:
             return
+        at_most_str = "" if at_most is None else f"up to {at_most} arguments "
         raise ValueError(
             "incorrect number of arguments need "
-            f"{'at least' if at_least else 'exactly'} {count} got {argc}")
+            f"{'at least' if at_least else 'exactly'} {count} "
+            f"{at_most_str}got {argc}")
 
     def redis_fn(
-            self, name: str, args: list[JSONType]) -> JSONType:
+            self,
+            sm: Machine,
+            name: str,
+            args: list[JSONType]) -> JSONType:
+        """
+        Calls a redis function. For internal use only.
+
+        Args:
+            sm (Machine): The state of the memory runtime.
+
+            name (str): The redis function name.
+
+            args (list[JSONType]): The argument list.
+
+        Raises:
+            ValueError: If the function cannot be called.
+
+        Returns:
+            JSONType: The result of the function call.
+        """
         key = f"{args[0]}"
         rfun = self._rfuns.get(name)
         if rfun is None:
@@ -94,13 +159,29 @@ class LocalRuntime(Runtime[Cmd]):
         if at_most is not None:
             at_most += 1
         self.require_argc(args, count, at_least=at_least, at_most=at_most)
-        return rfun.call(self._sm, key, args[1:])
+        return rfun.call(sm, key, args[1:])
 
     def call_fn(
-            self, name: str, args: list[JSONType]) -> JSONType:
+            self, sm: Machine, name: str, args: list[JSONType]) -> JSONType:
+        """
+        Calls a function. For internal use only.
+
+        Args:
+            sm (Machine): The state of the memory runtime.
+
+            name (str): The function name.
+
+            args (list[JSONType]): The arguments.
+
+        Raises:
+            ValueError: If the function cannot be called.
+
+        Returns:
+            JSONType: The result of the function call.
+        """
         if name == "redis.call":
             self.require_argc(args, 2, at_least=True)
-            return self.redis_fn(f"{args[0]}", args[1:])
+            return self.redis_fn(sm, f"{args[0]}", args[1:])
         gfun = self._gfuns.get(name)
         if gfun is None:
             raise ValueError(f"unknown function {name}")
@@ -112,6 +193,15 @@ class LocalRuntime(Runtime[Cmd]):
         return gfun.call(args)
 
     def get_constant(self, raw: str) -> JSONType:
+        """
+        Returns a constant value. For internal use only.
+
+        Args:
+            raw (str): The name of the constant.
+
+        Returns:
+            JSONType: The value.
+        """
         return CONST[raw]
 
     @overload
@@ -307,19 +397,58 @@ class LocalRuntime(Runtime[Cmd]):
 
 
 class LocalPipeline(PipelineAPI):
+    """A pipeline for the memory backend runtime."""
     def __init__(
             self,
+            rt: LocalRuntime,
             parent: State,
             exec_call: Callable[[Callable[[], list]], list]) -> None:
+        """
+        Creates a new pipeline. Do not manually create a pipeline. Use the
+        `pipeline` function of the runtime instead.
+
+        Args:
+            rt (LocalRuntime): The memory backend runtime.
+
+            parent (State): The memory state.
+
+            exec_call (Callable[[Callable[[], list]], list]): Function that is
+            called with the results of the pipeline when calling execute. This
+            can be used to finalize the results before returning them.
+        """
         super().__init__()
+        self._rt = rt
         self._sm = Machine(State(parent))
         self._exec_call = exec_call
         self._cmd_queue: list[Callable[[], Any]] = []
 
+    def get_runtime_tuple(self) -> tuple[LocalRuntime, Machine]:
+        """
+        Returns the access and state of the runtime.
+
+        Returns:
+            tuple[LocalRuntime, Machine]: The runtime object and the internal
+            memory state of the pipeline.
+        """
+        return (self._rt, self._sm)
+
     def get_state(self) -> State:
+        """
+        Returns the raw access to the memory of the pipeline.
+
+        Returns:
+            State: The pipeline memory state.
+        """
         return self._sm.get_state()
 
-    def has_queue(self) -> bool:
+    def has_pending(self) -> bool:
+        """
+        Whether there are commands in the pipeline that have not been executed
+        yet.
+
+        Returns:
+            bool: True if there are unexecuted commands in the pipeline.
+        """
         return len(self._cmd_queue) > 0
 
     def execute(self) -> list:
@@ -332,6 +461,12 @@ class LocalPipeline(PipelineAPI):
         return self._exec_call(executor)
 
     def add_cmd(self, cb: Callable[[], Any]) -> None:
+        """
+        Adds a command to the pipeline.
+
+        Args:
+            cb (Callable[[], Any]): The command.
+        """
         self._cmd_queue.append(cb)
 
     def set(

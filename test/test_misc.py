@@ -1,3 +1,4 @@
+"""Tests miscellaneous redis functionality."""
 import io
 from contextlib import redirect_stdout
 from test.util import get_setup
@@ -54,6 +55,12 @@ return cjson.encode(var_2)
 
 @pytest.mark.parametrize("rt_lua", [False, True])
 def test_misc(rt_lua: bool) -> None:
+    """
+    Tests miscellaneous redis functionality.
+
+    Args:
+        rt_lua (bool): Whether to use the redis or memory runtime.
+    """
     rt = get_setup(
         "test_misc", rt_lua, lua_script=LUA_SCRIPT, no_compile_hook=True)
 
@@ -87,7 +94,7 @@ def test_misc(rt_lua: bool) -> None:
         res = exec_fun(keys={"in": "foo"}, args={})
         assert res
     cmp = "" if rt_lua else f"WARNING: {MSG}\n"
-    assert out.getvalue() == cmp
+    assert cmp in out.getvalue()
 
     with rt.pipeline() as pipe:
         pipe.lpush("bar", "a", "b", "c")

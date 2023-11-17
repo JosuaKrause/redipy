@@ -1,3 +1,4 @@
+"""Module for patching lua redis function calls."""
 from redipy.graph.expr import (
     CallObj,
     ExprObj,
@@ -9,6 +10,7 @@ from redipy.plugin import LuaRedisPatch
 
 
 class RSetPatch(LuaRedisPatch):
+    """Converts the output of SET into a proper boolean value."""
     @staticmethod
     def names() -> set[str]:
         return {"set"}
@@ -37,6 +39,8 @@ class RSetPatch(LuaRedisPatch):
 
 
 class RGetPatch(LuaRedisPatch):
+    """Ensures GET-like operations return None (nil) if the key or value is
+    missing."""
     @staticmethod
     def names() -> set[str]:
         return {"get", "lpop", "rpop", "hget"}
@@ -62,6 +66,7 @@ class RGetPatch(LuaRedisPatch):
 
 
 class RSortedPopPatch(LuaRedisPatch):
+    """Converts the output of sorted set list functions into pair lists."""
     @staticmethod
     def names() -> set[str]:
         return {"zpopmax", "zpopmin"}
@@ -76,13 +81,15 @@ class RSortedPopPatch(LuaRedisPatch):
             return expr
         return {
             "kind": "call",
-            "name": f"{self.helper_pkg()}.pairlist",
+            "name": f"{self.helper_pkg()}.pairlist_scores",
             "args": [expr],
             "no_adjust": False,
         }
 
 
 class RIncrByPatch(LuaRedisPatch):
+    """Uses the float variant for INCRBY-like functions and convert the result
+    to a number."""
     @staticmethod
     def names() -> set[str]:
         return {"incrby", "hincrby"}
@@ -100,4 +107,55 @@ class RIncrByPatch(LuaRedisPatch):
             "value": name,
         }
         expr["args"][0] = literal
-        return expr
+        if is_expr_stmt:
+            return expr
+        return {
+            "kind": "call",
+            "name": "tonumber",
+            "args": [expr],
+            "no_adjust": False,
+        }
+
+
+class RHashGetSomePatch(LuaRedisPatch):
+    """Uses keys and values to build a dictionary."""
+    @staticmethod
+    def names() -> set[str]:
+        return {"hmget"}
+
+    def patch(
+            self,
+            expr: CallObj,
+            args: list[ExprObj],
+            *,
+            is_expr_stmt: bool) -> ExprObj:
+        if is_expr_stmt:
+            return expr
+        return {
+            "kind": "call",
+            "name": f"{self.helper_pkg()}.keyval_dict",
+            "args": [expr, *args[1:]],
+            "no_adjust": False,
+        }
+
+
+class RHashGetAllPatch(LuaRedisPatch):
+    """Converts an alternating key value list into a dictionary."""
+    @staticmethod
+    def names() -> set[str]:
+        return {"hgetall"}
+
+    def patch(
+            self,
+            expr: CallObj,
+            args: list[ExprObj],
+            *,
+            is_expr_stmt: bool) -> ExprObj:
+        if is_expr_stmt:
+            return expr
+        return {
+            "kind": "call",
+            "name": f"{self.helper_pkg()}.pairlist_dict",
+            "args": [expr],
+            "no_adjust": False,
+        }

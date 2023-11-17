@@ -1,7 +1,12 @@
+"""Defines the script backend for the redis runtime. Scripts are converted to
+lua."""
 import json
 from collections.abc import Iterable
 from typing import Literal, TYPE_CHECKING
 
+import redis as redis_lib
+
+from redipy.api import PipelineAPI, RedisAPI
 from redipy.backend.backend import Backend, ExecFunction
 from redipy.graph.cmd import CommandObj
 from redipy.graph.expr import BinOps, CallObj, ExprObj, get_literal, JSONType
@@ -22,11 +27,24 @@ if TYPE_CHECKING:
 
 
 class LuaFnHook:
+    """Hook for compiling general and redis function calls to lua."""
     def __init__(
             self,
             helper_fns: dict[str, HelperFunction],
             general_patch_fns: dict[str, LuaGeneralPatch],
             redis_patch_fns: dict[str, LuaRedisPatch]) -> None:
+        """
+        Creates a hook for compiling lua function calls.
+
+        Args:
+            helper_fns (dict[str, HelperFunction]): Helper function plugins.
+
+            general_patch_fns (dict[str, LuaGeneralPatch]): General function
+            patch plugins.
+
+            redis_patch_fns (dict[str, LuaRedisPatch]): Redis function patch
+            plugins.
+        """
         self._helpers: set[str] = set()
         self._helper_fns = helper_fns
         self._general_patch_fns = general_patch_fns
@@ -34,12 +52,39 @@ class LuaFnHook:
         self._is_expr_stmt = False
 
     def set_expr_stmt(self, is_expr_stmt: bool) -> None:
+        """
+        Sets whether we are currently handling the top expression of an
+        expression statement.
+
+        Args:
+            is_expr_stmt (bool): Whether we are at the top expression of an
+            expression statement.
+        """
         self._is_expr_stmt = is_expr_stmt
 
     def is_expr_stmt(self) -> bool:
+        """
+        Whether the current expression is the top expression of an expression
+        statement. If that is the case we cannot transform the expression into
+        a side-effect free expression as lua will not allow the code to
+        compile.
+
+        Returns:
+            bool: Whether the current expression is the top of an expression
+            statement.
+        """
         return self._is_expr_stmt
 
     def build_helpers(self) -> list[str]:
+        """
+        Compiles all helpers that were requested.
+
+        Raises:
+            RuntimeError: If a helper hasn't been registered.
+
+        Returns:
+            list[str]: All output code lines (without newline characters).
+        """
         res = []
         prefix = f"{HELPER_PKG}."
         for helper in sorted(self._helpers):
@@ -53,6 +98,25 @@ class LuaFnHook:
         return res
 
     def adjust_function(self, expr: CallObj, is_expr_stmt: bool) -> ExprObj:
+        """
+        Patches up a function call by changing the execution graph. This is
+        useful for when a function does not return what we want it to and we
+        need to transform the function result. In order to not patch the
+        function call the `"no_adjust"` field of the call graph object can be
+        set to True. However, this should in general be avoided.
+
+        Args:
+            expr (CallObj): The expression to patch.
+
+            is_expr_stmt (bool): Whether the expression is the top level
+            expression of an expression statement. In most cases lua rejects
+            the patched up version of the function call if it occurs as
+            stand-alone statement. In that case it is better to not execute the
+            patch and just call the function.
+
+        Returns:
+            ExprObj: The patched expression.
+        """
         expr["no_adjust"] = True
         name = expr["name"]
         args = expr["args"]
@@ -76,6 +140,27 @@ class LuaFnHook:
             args: list[ExprObj],
             *,
             is_expr_stmt: bool) -> ExprObj:
+        """
+        Patches up a redis function call by changing the execution graph. This
+        is useful for when a redis function does not return what we want it to
+        and we need to transform the result.
+
+        Args:
+            expr (CallObj): The expression to patch.
+
+            name (str): The name of the redis function.
+
+            args (list[ExprObj]): The argument list of the redis function.
+
+            is_expr_stmt (bool): Whether the expression is the top level
+            expression of an expression statement. In most cases lua rejects
+            the patched up version of the redis function call if it occurs as
+            stand-alone statement. In that case it is better to not execute the
+            patch and just call the redis function.
+
+        Returns:
+            ExprObj: The patched expression.
+        """
         patch_fn = self._redis_patch_fns.get(name)
         if patch_fn is None:
             return expr
@@ -83,17 +168,31 @@ class LuaFnHook:
 
 
 def indent_str(code: Iterable[str], add_indent: int) -> list[str]:
+    """
+    Indents a stream of lines by a certain amount of spaces.
+
+    Args:
+        code (Iterable[str]): The stream of lines.
+        add_indent (int): The indent to add.
+
+    Returns:
+        list[str]: The indented list of lines.
+    """
     ind = " " * add_indent
     return [f"{ind}{exe}" for exe in code]
 
 
 KEYV_HOOK = "--[[ KEYV"
+"""Hook for detecting key argument names."""
 ARGV_HOOK = "--[[ ARGV"
+"""Hook for detecting value argument names."""
 HOOK_END = "]]"
+"""Hook for detecting end of name section."""
 
 
 class LuaBackend(
         Backend[list[str], str, LuaFnHook, LuaFnHook, 'RedisConnection']):
+    """Backend for compiling a script into lua code."""
     def __init__(self) -> None:
         super().__init__()
         self._helper_fns: dict[str, HelperFunction] = {}
@@ -104,9 +203,21 @@ class LuaBackend(
         self.add_redis_patch_plugin("redipy.redis.rpatch")
 
     def add_helper_function_plugin(self, module: str) -> None:
+        """
+        Add lua helper function plugins from the given module.
+
+        Args:
+            module (str): The module.
+        """
         add_plugin(module, self._helper_fns, HelperFunction)
 
     def add_general_patch_plugin(self, module: str) -> None:
+        """
+        Add general function patch plugins from the given module.
+
+        Args:
+            module (str): The module.
+        """
         add_patch_plugin(
             module,
             self._general_patch_fns,
@@ -114,6 +225,12 @@ class LuaBackend(
             disallowed={"redis.call"})
 
     def add_redis_patch_plugin(self, module: str) -> None:
+        """
+        Add redis function patch plugins from the given module.
+
+        Args:
+            module (str): The module.
+        """
         add_patch_plugin(module, self._redis_patch_fns, LuaRedisPatch)
 
     def create_command_context(self) -> LuaFnHook:
@@ -317,19 +434,53 @@ class LuaBackend(
                 continue
         compute = runtime.get_dynamic_script(code_fmt(code))
 
-        def exec_code(
-                keys: dict[str, str],
-                args: dict[str, JSONType]) -> JSONType:
-            with runtime.get_connection() as client:
-                res = compute(
-                    keys=[runtime.with_prefix(keys[key]) for key in key_order],
-                    args=[json_compact(args[arg]) for arg in arg_order],
-                    client=client)
+        def interpret_result(res: bytes) -> JSONType:
             if res is None:
                 return None
             # NOTE: it is impossible to distinguish between {} and [] in lua
             if res == br"{}":
                 return None
             return json.loads(res)
+
+        def exec_code_fn(
+                *,
+                keys: dict[str, str],
+                args: dict[str, JSONType],
+                conn: redis_lib.Redis) -> bytes:
+            return compute(
+                keys=[runtime.with_prefix(keys[key]) for key in key_order],
+                args=[json_compact(args[arg]) for arg in arg_order],
+                client=conn)
+
+        def exec_code(
+                *,
+                keys: dict[str, str],
+                args: dict[str, JSONType],
+                client: RedisAPI | PipelineAPI | None = None) -> JSONType:
+            active_rt = runtime
+            if client is not None:
+                from redipy.redis.conn import (
+                    PipelineConnection,
+                    RedisConnection,
+                )
+
+                if isinstance(client, RedisConnection):
+                    active_rt = client
+                elif isinstance(client, PipelineConnection):
+                    exec_code_fn(
+                        keys=keys, args=args, conn=client.get_pipeline())
+                    client.add_fixup(interpret_result)
+                    return None
+                else:
+                    # FIXME: we could handle any runtime if we keep the
+                    # intermediate representation around
+                    get_rt = getattr(client, "get_redis_runtime")
+                    if get_rt is None:
+                        raise ValueError(f"incompatible runtime: {client}")
+                    active_rt = get_rt()
+
+            with active_rt.get_connection() as conn:
+                res = exec_code_fn(keys=keys, args=args, conn=conn)
+            return interpret_result(res)
 
         return exec_code

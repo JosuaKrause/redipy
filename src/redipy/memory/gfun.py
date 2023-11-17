@@ -1,3 +1,4 @@
+"""Implements general global functions for the memory backend scripts."""
 import json
 from typing import cast
 
@@ -6,6 +7,7 @@ from redipy.plugin import ArgcSpec, LocalGeneralFunction
 
 
 class GStringFindFn(LocalGeneralFunction):
+    """Implements finding a substring in a string."""
     @staticmethod
     def name() -> str:
         return "string.find"
@@ -26,6 +28,7 @@ class GStringFindFn(LocalGeneralFunction):
 
 
 class GCJSONDecodeFn(LocalGeneralFunction):
+    """Implements decoding a JSON."""
     @staticmethod
     def name() -> str:
         return "cjson.decode"
@@ -42,6 +45,7 @@ class GCJSONDecodeFn(LocalGeneralFunction):
 
 
 class GCJSONEncodeFn(LocalGeneralFunction):
+    """Implements encoding a JSON."""
     @staticmethod
     def name() -> str:
         return "cjson.encode"
@@ -62,6 +66,7 @@ class GCJSONEncodeFn(LocalGeneralFunction):
 
 
 class GToNumberFn(LocalGeneralFunction):
+    """Implements converting strings into numbers."""
     @staticmethod
     def name() -> str:
         return "tonumber"
@@ -82,6 +87,7 @@ class GToNumberFn(LocalGeneralFunction):
 
 
 class GAsIntStrFn(LocalGeneralFunction):
+    """Implements converting numbers into integer strings."""
     @staticmethod
     def name() -> str:
         return "asintstr"
@@ -102,6 +108,7 @@ class GAsIntStrFn(LocalGeneralFunction):
 
 
 class GToStringFn(LocalGeneralFunction):
+    """Implements converting a value into a string."""
     @staticmethod
     def name() -> str:
         return "tostring"
@@ -124,6 +131,7 @@ class GToStringFn(LocalGeneralFunction):
 
 
 class GTypeFn(LocalGeneralFunction):
+    """Implements extracting the type of a value."""
     @staticmethod
     def name() -> str:
         return "type"
@@ -149,6 +157,7 @@ class GTypeFn(LocalGeneralFunction):
 
 
 class GRedisLogFn(LocalGeneralFunction):
+    """Implements logging."""
     @staticmethod
     def name() -> str:
         return "redis.log"

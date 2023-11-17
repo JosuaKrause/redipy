@@ -21,7 +21,7 @@ jobs:
       ENV: CI
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
 
     - name: Set up Python ${{ matrix.python }}
       uses: actions/setup-python@v4
@@ -90,7 +90,7 @@ jobs:
       ENV: CI
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
 
     - name: Set up Python ${{ matrix.python }}
       uses: actions/setup-python@v4
@@ -150,7 +150,7 @@ jobs:
       ENV: CI
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
 
     - name: Set up Python ${{ matrix.python }}
       uses: actions/setup-python@v4
@@ -174,7 +174,7 @@ jobs:
         mkdir -p test-results/parts/
 
     - name: Download all results and coverage
-      uses: actions/download-artifact@v2
+      uses: actions/download-artifact@v3
 
     - name: Merge results
       run: |

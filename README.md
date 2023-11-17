@@ -9,11 +9,13 @@ that implement the same functionality, such as:
 - `redipy.redis`: A backend that connects to an actual Redis instance and
   delegates all operations to it.
 
+[![redipy logo](img/redipy_logo_small.png)](img/redipy_logo.png)
+
 ### Warning
 
 This library is still early in development and not all redis functions are
 available yet!
-If you need certain functionality have a look at the
+If you need certain functionality or found a bug, have a look at the
 [contributing](#Contributing) section.
 It is easy to add redis functions to the API.
 
@@ -33,12 +35,22 @@ object with the desired backend. For example:
 import redipy
 
 # Create a redipy client using the memory backend
-r = redipy.Redis(backend="memory")
+r = redipy.Redis()
 
 # Create a redipy client using the redis backend
-r = redipy.Redis(backend="redis", host="localhost", port=6379)
+r = redipy.Redis(host="localhost", port=6379)
 
 # Or
+r = redipy.Redis(
+    cfg={
+        "host": "localhost",
+        "port": 6379,
+        "passwd": "",
+        "prefix": "",
+    })
+
+# You can specify the backend explicitly to ensure that the correct parameters
+# are passed to the constructor
 r = redipy.Redis(
     backend="redis",
     cfg={
@@ -77,16 +89,24 @@ The main features of `redipy` are:
 - Flexibility: You can choose from different backends that suit your needs and
   preferences, without changing your code or learning new APIs.
 
-- Performance: You can leverage the high performance of Redis or other backends
-  that offer fast and scalable data storage and retrieval.
-
-- Compatibility: You can use any Redis client or tool with any backend.
-
-- Migration: You can easily migrate data between different backends, or use
-  multiple backends simultaneously.
+- Adaptability: You can start your project small with the memory backend and
+  only switch to a full redis server once the application grows.
 
 - Scripting: You can create backend independent redis scripts without using lua.
   Scripts are written using a symbolic API in python.
+
+- Compatibility: You can use any Redis client or tool with any backend.
+
+- Mockability: You can use redipy in tests that require redis with the memory
+  backend to easily mock the functionality without actually having to run a
+  redis server in the background. Also, this avoids issues that might occur
+  when running tests in parallel with an actual redis server.
+
+- Performance: You can leverage the high performance of Redis or other backends
+  that offer fast and scalable data storage and retrieval.
+
+- Migration: You can easily migrate data between different backends, or use
+  multiple backends simultaneously.
 
 ## Scripts
 
@@ -140,52 +160,138 @@ the accessor will recursively go down the stack until a value for the given
 field is found (or the end of the stack is reached).
 
 ```python
-from redipy.api import RedisClientAPI
-from redipy.script import Strs, ToIntStr, ToNum, RedisVar, FnContext
-from redipy.backend.backend import ExecFunction  # FIXME fix to script in 0.4.0
-from redipy.graph.expr import JSONType  # FIXME fix to script in 0.4.0
-from redipy.symbolic.rhash import RedisHash  # FIXME fix to script in 0.4.0
+from typing import cast
+from redipy import RedisClientAPI
+from redipy.script import (
+    ExecFunction,
+    FnContext,
+    JSONType,
+    RedisHash,
+    RedisVar,
+    Strs,
+    ToIntStr,
+    ToNum,
+)
 
 
 class RStack:
-    def __init__(
-            self,
-            rt: RedisClientAPI,
-            base: str) -> None:
+    """An example class that simulates a key value stack."""
+    def __init__(self, rt: RedisClientAPI) -> None:
         self._rt = rt
-        self._base = base
 
         self._set_value = self._set_value_script()
         self._get_value = self._get_value_script()
         self._pop_frame = self._pop_frame_script()
         self._get_cascading = self._get_cascading_script()
 
-    def key(self, name: str) -> str:
-        return f"{self._base}:{name}"
+    def key(self, base: str, name: str) -> str:
+        """
+        Compute the key.
 
-    def init(self) -> None:
-        self._rt.set(self.key("size"), "0")
+        Args:
+            base (str): The base key.
 
-    def push_frame(self) -> None:
-        self._rt.incrby(self.key("size"), 1)
+            name (str): The name.
 
-    def pop_frame(self) -> None:
-        self._pop_frame(
-            keys={"size": self.key("size"), "frame": self.key("frame")},
+        Returns:
+            str: The key associated with the name.
+        """
+        return f"{base}:{name}"
+
+    def init(self, base: str) -> None:
+        """
+        Initializes the stack.
+
+        Args:
+            base (str): The base key.
+        """
+        self._rt.set(self.key(base, "size"), "0")
+
+    def push_frame(self, base: str) -> None:
+        """
+        Pushes a new stack frame.
+
+        Args:
+            base (str): The base key.
+        """
+        self._rt.incrby(self.key(base, "size"), 1)
+
+    def pop_frame(self, base: str) -> dict[str, str] | None:
+        """
+        Pops the current stack frame and returns its values.
+
+        Args:
+            base (str): The base key.
+
+        Returns:
+            dict[str, str] | None: The content of the stack frame.
+        """
+        res = self._pop_frame(
+            keys={
+                "size": self.key(base, "size"),
+                "frame": self.key(base, "frame"),
+            },
             args={})
+        if res is None:
+            return None
+        return cast(dict, res)
 
-    def set_value(self, field: str, value: str) -> None:
+    def set_value(self, base: str, field: str, value: str) -> None:
+        """
+        Set a value in the current stack frame.
+
+        Args:
+            base (str): The base key.
+
+            field (str): The field.
+
+            value (str): The value.
+        """
         self._set_value(
-            keys={"size": self.key("size"), "frame": self.key("frame")},
+            keys={
+                "size": self.key(base, "size"),
+                "frame": self.key(base, "frame"),
+            },
             args={"field": field, "value": value})
 
-    def get_value(self, field: str, *, cascade: bool = False) -> JSONType:
-        if cascade:
-            return self._get_cascading(
-                keys={"size": self.key("size"), "frame": self.key("frame")},
-                args={"field": field})
+    def get_value(self, base: str, field: str) -> JSONType:
+        """
+        Returns a value from the current stack frame.
+
+        Args:
+            base (str): The base key.
+
+            field (str): The field.
+
+        Returns:
+            JSONType: The value.
+        """
         return self._get_value(
-            keys={"size": self.key("size"), "frame": self.key("frame")},
+            keys={
+                "size": self.key(base, "size"),
+                "frame": self.key(base, "frame"),
+            },
+            args={"field": field})
+
+    def get_cascading(self, base: str, field: str) -> JSONType:
+        """
+        Returns a value from the stack. If the value is not in the current
+        stack frame the value is recursively retrieved from the previous
+        stack frames.
+
+        Args:
+            base (str): The base key.
+
+            field (str): The field.
+
+        Returns:
+            JSONType: The value.
+        """
+        return self._get_cascading(
+            keys={
+                "size": self.key(base, "size"),
+                "frame": self.key(base, "frame"),
+            },
             args={"field": field})
 
     def _set_value_script(self) -> ExecFunction:
@@ -219,9 +325,10 @@ class RStack:
         rsize = RedisVar(ctx.add_key("size"))
         rframe = RedisHash(
             Strs(ctx.add_key("frame"), ":", ToIntStr(rsize.get())))
+        lcl = ctx.add_local(rframe.hgetall())
         ctx.add(rframe.delete())
         ctx.add(rsize.incrby(-1))
-        ctx.set_return_value(None)
+        ctx.set_return_value(lcl)
         return self._rt.register_script(ctx)
 
     def _get_cascading_script(self) -> ExecFunction:
@@ -265,7 +372,7 @@ The current limitations of `redipy` are:
   script are passed as JSON bytes for the lua backend. Keys are passed as is.
   The return value of the script is also converted into JSON when moving from
   lua to python. Note, that the empty dictionary (`{}`) and the empty list
-  (`[]`) are indistinguishable in lua so `None` is returned instead if setting
+  (`[]`) are indistinguishable in lua so `None` is returned instead of setting
   the return value to either of these.
 
 ## TODOs
@@ -273,18 +380,39 @@ The current limitations of `redipy` are:
 - implement more redis functions
 - `redipy.sql`: A backend that provides the Redis functionality via SQL on
   traditional database systems, such as SQLite, PostgreSQL, or MySQL.
-- switch_backend: dynamically switch backends at runtime which (potentially)
+- switch_backend: dynamically switch backends at runtime which
   migrates data to the new backend
-- documentation
 
 ## License
 `redipy` is licensed under the [Apache License (Version 2.0)](LICENSE).
 
-## Missing Redis or Lua Functions
+## Changelog
+The changelog can be found [here](CHANGELOG.md).
+
+## Contributing
+
+Redipy is currently maintained by one person. Any help, even if it is just
+creating issues for bugs, are much appreciated.
+
+### If You Find a Bug
+
+If you encounter a bug, please open an issue to draw attention to it or give
+a thumbsup if the issue already exists. This helps with prioritizing
+implementation efforts. Even if you cannot solve the bug yourself,
+investigating why it happens or creating a PR to add test cases helps a lot.
+If you have a fix for a bug don't hesistate to open a PR.
+
+### Missing Redis or Lua Functions
 If you encounter a missing redis or lua function please consider adding it
-yourself (see #Contributing). However, if you need it only in your local setup
+yourself (see #Implementing). Here also opening an issue or giving a thumbsup
+to existing issues helps with prioritizing.
+
+However, if you need it only in your local setup
 without API support or support for multiple backends, pipelines, etc. you can
-use the plug-in mechanism.
+use the raw underlying redis connection via
+`redipy.main.Redis.get_redis_runtime` and
+`redipy.redis.conn.RedisConnection.get_connection` or make use of
+the plug-in mechanism.
 
 For the memory backend you can use
 `redipy.memory.rt.LocalRuntime.add_redis_function_plugin` or
@@ -308,10 +436,12 @@ Adding functions as described above is discouraged as it may lead to
 inconsistent support of different backends and inconsistent behavior across
 different backends.
 
-## Contributing
+### Implementing
+
 The easiest way to contribute to `redipy` is to pick some redis API functions
-that have not (or not completely) been implemented in `redipy` yet. For this
-follow these steps:
+that have not (or not completely) been implemented in `redipy` yet.
+It is also much appreciated if you just add test cases or the stubs in a PR.
+For a full implementation follow these steps:
 
 1. Add the signature of the function to `redipy.api.RedisAPI`. Adjust as
   necessary from the redis spec to get a pythonic feel. Also, add the signature

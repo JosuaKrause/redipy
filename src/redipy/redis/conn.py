@@ -1,3 +1,4 @@
+"""The runtime for the redis backend."""
 import contextlib
 import datetime
 import threading
@@ -7,6 +8,7 @@ from typing import (
     Any,
     cast,
     Literal,
+    NoReturn,
     NotRequired,
     overload,
     Protocol,
@@ -47,30 +49,75 @@ RedisConfig = TypedDict('RedisConfig', {
 
 
 class RedisFactory(Protocol):  # pylint: disable=too-few-public-methods
+    """
+    Factory function for creating a redis connection from a redis
+    configuration.
+    """
     def __call__(self, *, cfg: RedisConfig) -> Redis:
-        ...
+        """
+        Creates a redis connection from a redis configuration.
+
+        Args:
+            cfg (RedisConfig): The redis configuration.
+
+        Returns:
+            Redis: The redis connection.
+        """
+        raise NotImplementedError()
 
 
 class RedisFunctionBytes(Protocol):  # pylint: disable=too-few-public-methods
+    """A redis function as it is returned from the redis connection."""
     def __call__(
             self,
             *,
             keys: list[str],
             args: list[Any],
             client: Redis | None) -> bytes:
-        ...
+        """
+        Executes the redis function.
+
+        Args:
+            keys (list[str]): A list of keys used in the
+            script. It is common convention to pass keys used in the script via
+            this parameter but it is not necessary to do so. Importantly, keys
+            can also be generated inside the script.
+
+            args (list[Any]): Arguments to the script.
+
+            client (Redis | None): An optionally different
+            redis connection environment. Defaults to None.
+
+        Returns:
+            bytes: The result of the script.
+        """
+        raise NotImplementedError()
 
 
 CONCURRENT_MODULE_CONN: int = 17
+"""The number of allowed concurrent redis connections across threads."""
 
 
 class RedisWrapper:
+    """Manages redis connections."""
     def __init__(
             self,
             *,
             cfg: RedisConfig,
             redis_factory: RedisFactory | None = None,
             is_caching_enabled: bool = True) -> None:
+        """
+        Creates a redis wrapper for managing redis connections.
+
+        Args:
+            cfg (RedisConfig): The redis connection configuration.
+
+            redis_factory (RedisFactory | None, optional): The redis connection
+            factory. Defaults to None.
+
+            is_caching_enabled (bool, optional): Whether caching of connections
+            is enabled. Defaults to True.
+        """
         self._redis_factory: RedisFactory = (
             self._create_connection
             if redis_factory is None else redis_factory)
@@ -82,6 +129,12 @@ class RedisWrapper:
 
     @staticmethod
     def get_connection_index() -> int:
+        """
+        The connection index for this thread.
+
+        Returns:
+            int: The connection index.
+        """
         return threading.get_ident() % CONCURRENT_MODULE_CONN
 
     @staticmethod
@@ -111,6 +164,12 @@ class RedisWrapper:
 
     @contextlib.contextmanager
     def get_connection(self) -> Iterator[Redis]:
+        """
+        Returns a redis connection.
+
+        Yields:
+            Redis: The redis connection.
+        """
         success = False
         try:
             yield self._get_redis_cached_conn()
@@ -120,22 +179,63 @@ class RedisWrapper:
                 self.reset()
 
     def reset(self) -> None:
+        """
+        Removes all cached connections.
+        """
         with self._lock:
             for ix, _ in enumerate(self._service_conn):
                 self._service_conn[ix] = None
 
 
 class PipelineConnection(PipelineAPI):
+    """A pipeline for the redis backend runtime."""
     def __init__(self, pipe: Pipeline, prefix: str) -> None:
         super().__init__()
         self._pipe = pipe
         self._fixes: list[Callable[[Any], Any]] = []
         self._prefix = prefix
 
+    def get_pipeline(self) -> Pipeline:
+        """
+        Return the underlying redis pipeline.
+
+        Returns:
+            Pipeline: The redis pipeline.
+        """
+        return self._pipe
+
+    def has_pending(self) -> bool:
+        """
+        Whether there are commands in the pipeline that have not been executed
+        yet.
+
+        Returns:
+            bool: True if there are unexecuted commands in the pipeline.
+        """
+        return len(self._fixes) > 0
+
     def with_prefix(self, key: str) -> str:
+        """
+        Computes the actual key value of this redis instance.
+
+        Args:
+            key (str): The key.
+
+        Returns:
+            str: The actual key.
+        """
         return f"{self._prefix}{key}"
 
     def add_fixup(self, fix: Callable[[Any], Any]) -> None:
+        """
+        Adds a fixup callback for the current pipeline command. Every pipeline
+        command must have exactly one fixup callback (even if it is just an
+        identity function).
+
+        Args:
+            fix (Callable[[Any], Any]): A callback to convert the pipeline
+            command result into the correct output value.
+        """
         self._fixes.append(fix)
 
     def execute(self) -> list:
@@ -213,7 +313,7 @@ class PipelineConnection(PipelineAPI):
         self.add_fixup(int)
 
     def zadd(self, key: str, mapping: dict[str, float]) -> None:
-        self._pipe.zadd(self.with_prefix(key), mapping)  # type: ignore
+        self._pipe.zadd(self.with_prefix(key), mapping=mapping)  # type: ignore
         self.add_fixup(int)
 
     def zpop_max(
@@ -251,7 +351,7 @@ class PipelineConnection(PipelineAPI):
         self.add_fixup(int)
 
     def hset(self, key: str, mapping: dict[str, str]) -> None:
-        self._pipe.hset(self.with_prefix(key), mapping)  # type: ignore
+        self._pipe.hset(self.with_prefix(key), mapping=mapping)  # type: ignore
         self.add_fixup(int)
 
     def hdel(self, key: str, *fields: str) -> None:
@@ -290,6 +390,7 @@ class PipelineConnection(PipelineAPI):
 
 
 class RedisConnection(Runtime[list[str]]):
+    """The runtime of the redis backend."""
     def __init__(
             self,
             redis_module: str,
@@ -310,6 +411,12 @@ class RedisConnection(Runtime[list[str]]):
         self._is_print_scripts = verbose_test
 
     def set_print_scripts(self, is_print_scripts: bool) -> None:
+        """
+        Whether to print all lua scripts to stdout before registering.
+
+        Args:
+            is_print_scripts (bool): Whether to print all lua scripts.
+        """
         self._is_print_scripts = is_print_scripts
 
     @classmethod
@@ -320,14 +427,32 @@ class RedisConnection(Runtime[list[str]]):
     def pipeline(self) -> Iterator[PipelineAPI]:
         with self.get_connection() as conn:
             with conn.pipeline() as pipe:
-                yield PipelineConnection(pipe, self._module)
+                pconn = PipelineConnection(pipe, self._module)
+                yield pconn
+                if pconn.has_pending():
+                    pconn.execute()  # drain pending tasks
 
     @contextlib.contextmanager
     def get_connection(self) -> Iterator[Redis]:
+        """
+        Get a raw redis connection.
+
+        Yields:
+            Redis: The redis connection.
+        """
         with self._conn.get_connection() as conn:
             yield conn
 
     def get_dynamic_script(self, code: str) -> RedisFunctionBytes:
+        """
+        Registers a lua script.
+
+        Args:
+            code (str): The lua code.
+
+        Returns:
+            RedisFunctionBytes: An callable script.
+        """
         if is_test() and self._is_print_scripts:
             print(
                 "Compiled script:\n-- SCRIPT START --\n"
@@ -360,9 +485,9 @@ class RedisConnection(Runtime[list[str]]):
                     yield client
             except ResponseError as e:
                 handle_err(e)
-                raise e
 
-        def handle_err(exc: ResponseError) -> None:
+        def handle_err(exc: ResponseError) -> NoReturn:
+            info = None
             if exc.args:
                 msg = exc.args[0]
                 res = get_error(msg)
@@ -370,8 +495,10 @@ class RedisConnection(Runtime[list[str]]):
                     ctx = "\n".join((
                         f"{'>' if ix == context else ' '} {line}"
                         for (ix, line) in enumerate(res[1])))
-                    exc.add_note(
-                        f"Code:\n{code}\n\nContext:\n{ctx}")
+                    info = f"\nCode:\n{code}\n\nContext:\n{ctx}"
+            if info is None:
+                info = f": {exc}"
+            raise ValueError(f"Error while executing script{info}") from exc
 
         def execute_bytes_result(
                 *,
@@ -384,12 +511,37 @@ class RedisConnection(Runtime[list[str]]):
         return execute_bytes_result
 
     def get_prefix(self) -> str:
+        """
+        The key prefix is added to all keys to create a virtual namespace on
+        redis.
+
+        Returns:
+            str: The key prefix.
+        """
         return self._module
 
     def with_prefix(self, key: str) -> str:
+        """
+        Computes the actual key value of this redis instance.
+
+        Args:
+            key (str): The key.
+
+        Returns:
+            str: The actual key.
+        """
         return f"{self.get_prefix()}{key}"
 
     def get_pubsub_key(self, key: str) -> str:
+        """
+        Computes the actual key value for a pubsub key.
+
+        Args:
+            key (str): The key.
+
+        Returns:
+            str: The actual pubsub key.
+        """
         return f"{self.get_prefix()}ps:{key}"
 
     def wait_for(
@@ -397,6 +549,17 @@ class RedisConnection(Runtime[list[str]]):
             key: str,
             predicate: Callable[[], bool],
             granularity: float = 30.0) -> None:
+        """
+        Waits until the condition is met.
+
+        Args:
+            key (str): The key used for the pubsub channel.
+
+            predicate (Callable[[], bool]): The condition.
+
+            granularity (float, optional): Maximum wait between predicate
+            checks in seconds. Defaults to 30.0.
+        """
         if predicate():
             return
         with self.get_connection() as conn:
@@ -413,18 +576,40 @@ class RedisConnection(Runtime[list[str]]):
                     psub.unsubscribe()
 
     def notify_all(self, key: str) -> None:
+        """
+        Notifies a pubsub channel.
+
+        Args:
+            key (str): The key used for the pubsub channel.
+        """
         with self.get_connection() as conn:
             conn.publish(self.get_pubsub_key(key), "notify")
 
     def ping(self) -> None:
+        """
+        Pings the redis server (and checks whether the connection is live).
+        """
         with self.get_connection() as conn:
             conn.ping()
 
     def flush_all(self) -> None:
+        """
+        Removes all keys from the redis database.
+        """
         with self.get_connection() as conn:
             conn.flushall()
 
     def keys_count(self, prefix: str) -> int:
+        """
+        Counts the number of keys with the given prefix. This method operates
+        on raw keys ignoring the `get_prefix()` prefix.
+
+        Args:
+            prefix (str): The prefix.
+
+        Returns:
+            int: The number of keys.
+        """
         full_prefix = f"{prefix}*"
         vals: set[bytes] = set()
         cursor = 0
@@ -441,6 +626,18 @@ class RedisConnection(Runtime[list[str]]):
 
     def keys_str(
             self, prefix: str, postfix: str | None = None) -> Iterable[str]:
+        """
+        Return all keys with the given prefix (and postfix). This method
+        operates on raw keys ignoring the `get_prefix()` prefix.
+
+        Args:
+            prefix (str): The prefix.
+
+            postfix (str | None, optional): The postfix. Defaults to None.
+
+        Returns:
+            Iterable[str]: The raw keys.
+        """
         full_prefix = f"{prefix}*{'' if postfix is None else postfix}"
         vals: set[bytes] = set()
         cursor = 0
@@ -457,6 +654,19 @@ class RedisConnection(Runtime[list[str]]):
 
     def prefix_exists(
             self, prefix: str, postfix: str | None = None) -> bool:
+        """
+        Whether keys exist with the given prefix (and postfix). This method
+        operates on raw keys ignoring the `get_prefix()` prefix.
+
+        Args:
+            prefix (str): The prefix.
+
+            postfix (str | None, optional): The postfix. Defaults to None.
+
+        Returns:
+            bool: Whether there are any keys with the given prefix
+            (and postfix).
+        """
         full_prefix = f"{prefix}*{'' if postfix is None else postfix}"
         cursor = 0
         count = 10
@@ -653,7 +863,9 @@ class RedisConnection(Runtime[list[str]]):
 
     def hset(self, key: str, mapping: dict[str, str]) -> int:
         with self.get_connection() as conn:
-            return conn.hset(self.with_prefix(key), mapping)  # type: ignore
+            return conn.hset(
+                self.with_prefix(key),
+                mapping=mapping)  # type: ignore
 
     def hdel(self, key: str, *fields: str) -> int:
         with self.get_connection() as conn:
@@ -687,5 +899,5 @@ class RedisConnection(Runtime[list[str]]):
         with self.get_connection() as conn:
             return {
                 to_maybe_str(field): to_maybe_str(val)
-                for field, val in conn.hgetall(self.with_prefix(key))
+                for field, val in conn.hgetall(self.with_prefix(key)).items()
             }

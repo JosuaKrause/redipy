@@ -1,7 +1,9 @@
+"""Defines the script backend for the memory runtime."""
 import json
 from collections.abc import Callable
 from typing import Any, cast, Literal, TYPE_CHECKING, TypedDict
 
+from redipy.api import PipelineAPI, RedisAPI
 from redipy.backend.backend import Backend, ExecFunction
 from redipy.graph.cmd import CommandObj
 from redipy.graph.expr import BinOps, ExprObj, JSONType
@@ -11,6 +13,7 @@ from redipy.util import json_compact
 
 if TYPE_CHECKING:
     from redipy.memory.rt import LocalRuntime
+    from redipy.memory.state import Machine
 
 
 ExecState = tuple[
@@ -20,34 +23,60 @@ ExecState = tuple[
     list[dict[str, str]],  # key names
     list[list[JSONType]],  # stack
     'LocalRuntime',  # fns
+    'Machine',  # redis state
     list[JSONType],  # return value
     dict[str, str],  # keys
     dict[str, JSONType],  # args
 ]
+"""The execution state of the script. For fast access this is a tuple instead
+of a dictionary. Use the `STATE_*` constants to access the individual fields
+by copying the value into a local variable first (local variables are index
+lookups in python while global variables are dictionary lookups)."""
 
 
 STATE_KEYV: Literal[0] = 0
+"""The list of key arguments to the script."""
 STATE_ARGV: Literal[1] = 1
+"""The list of value arguments to the script."""
 STATE_ARG_NAMES: Literal[2] = 2
+"""Mapping of script argument names to their values."""
 STATE_KEY_NAMES: Literal[3] = 3
+"""Mapping of script key argument names to their values."""
 STATE_STACK: Literal[4] = 4
+"""The local variable stack of the script. Each stack frame is a list for fast
+variable access via index. The last stack frame in the list is the current one.
+"""
 STATE_FNS: Literal[5] = 5
-STATE_RETURN: Literal[6] = 6
-STATE_KEYS: Literal[7] = 7
-STATE_ARGS: Literal[8] = 8
+"""An interface for function calls."""
+STATE_SM: Literal[6] = 6
+"""An interface for raw memory access (redis-like memory)."""
+STATE_RETURN: Literal[7] = 7
+"""The return value stack. The rightmost value is the current return value of
+the script or function."""
+STATE_KEYS: Literal[8] = 8
+"""The actual key arguments to the script. This value is filled before the
+script starts executing."""
+STATE_ARGS: Literal[9] = 9
+"""The actual arguments to the script. This value is filled before the
+script starts executing."""
 
 
 Cmd = Callable[[ExecState], None]
+"""A command callback executing a statement."""
 ExprCmd = Callable[[ExecState], JSONType]
+"""A command callback executing an expression."""
 
 
 CmdContext = TypedDict('CmdContext', {
     "local_count": int,
     "local_names": dict[str, int],
 })
+"""Command context to keep track of local variables."""
 
 
 class _Uninit():
+    """An uninitialized variable. When a stack frame is created during
+    execution values are initialized with this singleton value."""
     def __str__(self) -> str:
         return "UNINIT"
 
@@ -61,6 +90,7 @@ UNINIT = _Uninit()
 
 class LocalBackend(
         Backend[Cmd, ExprCmd, CmdContext, CmdContext, 'LocalRuntime']):
+    """The script backend for the memory runtime."""
     def create_command_context(self) -> CmdContext:
         return {
             "local_count": 0,
@@ -74,6 +104,7 @@ class LocalBackend(
         state_key_names = STATE_KEY_NAMES
         state_stack = STATE_STACK
         # state_fns = STATE_FNS
+        # state_sm = STATE_SM
         # state_return = STATE_RETURN
         # state_keys = STATE_KEYS
         # state_args = STATE_ARGS
@@ -96,6 +127,7 @@ class LocalBackend(
         # state_key_names = STATE_KEY_NAMES
         # state_stack = STATE_STACK
         # state_fns = STATE_FNS
+        # state_sm = STATE_SM
         # state_return = STATE_RETURN
         state_keys = STATE_KEYS
         state_args = STATE_ARGS
@@ -138,6 +170,7 @@ class LocalBackend(
         state_key_names = STATE_KEY_NAMES
         state_stack = STATE_STACK
         # state_fns = STATE_FNS
+        # state_sm = STATE_SM
         state_return = STATE_RETURN
         # state_keys = STATE_KEYS
         # state_args = STATE_ARGS
@@ -267,6 +300,7 @@ class LocalBackend(
         state_key_names = STATE_KEY_NAMES
         state_stack = STATE_STACK
         state_fns = STATE_FNS
+        state_sm = STATE_SM
         # state_return = STATE_RETURN
         # state_keys = STATE_KEYS
         # state_args = STATE_ARGS
@@ -406,7 +440,7 @@ class LocalBackend(
 
             def exec_call(state: ExecState) -> JSONType:
                 args = [expr_arg(state) for expr_arg in exec_args]
-                return state[state_fns].call_fn(fn_name, args)
+                return state[state_fns].call_fn(state[state_sm], fn_name, args)
 
             return exec_call
         raise ValueError(f"unknown kind {expr['kind']} for expression {expr}")
@@ -418,10 +452,13 @@ class LocalBackend(
             ) -> ExecFunction:
         state_return = STATE_RETURN
 
-        def exec_code(
+        def exec_code_fn(
+                *,
                 keys: dict[str, str],
-                args: dict[str, JSONType]) -> JSONType:
-            with runtime.lock():
+                args: dict[str, JSONType],
+                active_rt: 'LocalRuntime',
+                sm: 'Machine') -> JSONType:
+            with active_rt.lock():
                 success = False
                 try:
                     state: ExecState = (
@@ -430,7 +467,8 @@ class LocalBackend(
                         [],  # arg names
                         [],  # key names
                         [],  # stack
-                        runtime,  # fns
+                        active_rt,  # fns
+                        sm,  # redis state
                         [],  # return value
                         keys,  # keys
                         args,  # args
@@ -451,5 +489,37 @@ class LocalBackend(
                     if not success:
                         print(f"state: {state}")
                 return res
+
+        def exec_code(
+                *,
+                keys: dict[str, str],
+                args: dict[str, JSONType],
+                client: RedisAPI | PipelineAPI | None = None) -> JSONType:
+            active_rt = runtime
+            if client is not None:
+                from redipy.memory.rt import LocalPipeline, LocalRuntime
+
+                if isinstance(client, LocalRuntime):
+                    active_rt = client
+                elif isinstance(client, LocalPipeline):
+                    pipe = cast(LocalPipeline, client)
+                    p_rt, p_sm = pipe.get_runtime_tuple()
+                    pipe.add_cmd(
+                        lambda: exec_code_fn(
+                            keys=keys,
+                            args=args,
+                            active_rt=p_rt,
+                            sm=p_sm))
+                    return None
+                else:
+                    # FIXME: we could handle any runtime if we keep the
+                    # intermediate representation around
+                    get_rt = getattr(client, "get_memory_runtime")
+                    if get_rt is None:
+                        raise ValueError(f"incompatible runtime: {client}")
+                    active_rt = get_rt()
+            sm = active_rt.get_machine()
+            return exec_code_fn(
+                keys=keys, args=args, active_rt=active_rt, sm=sm)
 
         return exec_code

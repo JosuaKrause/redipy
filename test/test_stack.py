@@ -1,5 +1,7 @@
+"""Tests a complex example class using redipy scripts."""
 from collections.abc import Callable
 from test.util import get_test_config
+from typing import cast
 
 import pytest
 
@@ -19,6 +21,9 @@ GET_KEY_0 = "redis.call(\"get\", key_0)"
 RET = "return cjson.encode"
 RC = "redis.call"
 RP = "redipy.asintstr"
+PLD = "redipy.pairlist_dict"
+KEY_1_P = "(key_1) .. (\":\")"
+EMPTY_OBJ = r"{}"
 
 
 LUA_SET_VALUE = f"""
@@ -46,7 +51,7 @@ local arg_1 = cjson.decode(ARGV[2])  -- value
 
 LUA_GET_VALUE = f"""
 -- HELPERS START --
-local redipy = {{}}
+local redipy = {EMPTY_OBJ}
 function redipy.asintstr (val)
     return math.floor(val)
 end
@@ -67,9 +72,22 @@ local arg_0 = cjson.decode(ARGV[1])  -- field
 
 LUA_POP_FRAME = f"""
 -- HELPERS START --
-local redipy = {{}}
+local redipy = {EMPTY_OBJ}
 function redipy.asintstr (val)
     return math.floor(val)
+end
+function redipy.pairlist_dict (arr)
+    local res = {EMPTY_OBJ}
+    local key = nil
+    for _, value in ipairs(arr) do
+        if key ~= nil then
+            res[key] = value
+            key = nil
+        else
+            key = value
+        end
+    end
+    return res
 end
 -- HELPERS END --
 --[[ KEYV
@@ -80,8 +98,10 @@ frame
 ]]
 local key_0 = (KEYS[1])  -- size
 local key_1 = (KEYS[2])  -- frame
-redis.call("del", (key_1) .. (":") .. (redipy.asintstr(({GET_KEY_0} or nil))))
+local var_0 = {PLD}({RC}("hgetall", {KEY_1_P} .. ({RP}(({GET_KEY_0} or nil)))))
+redis.call("del", {KEY_1_P} .. ({RP}(({GET_KEY_0} or nil))))
 redis.call("incrbyfloat", key_0, -1)
+return cjson.encode(var_0)
 """
 
 
@@ -116,13 +136,12 @@ return cjson.encode(var_2)
 
 
 class RStack:
+    """An example class that simulates a key value stack."""
     def __init__(
             self,
             rt: RedisClientAPI,
-            base: str,
             set_lua_script: Callable[[str | None, str | None], None]) -> None:
         self._rt = rt
-        self._base = base
 
         set_lua_script("set_value", LUA_SET_VALUE)
         self._set_value = self._set_value_script()
@@ -134,33 +153,114 @@ class RStack:
         self._get_cascading = self._get_cascading_script()
         set_lua_script(None, None)
 
-    def key(self, name: str) -> str:
-        return f"{self._base}:{name}"
+    def key(self, base: str, name: str) -> str:
+        """
+        Compute the key.
 
-    def init(self) -> None:
-        self._rt.set(self.key("size"), "0")
+        Args:
+            base (str): The base key.
 
-    def push_frame(self) -> None:
-        self._rt.incrby(self.key("size"), 1)
+            name (str): The name.
 
-    def pop_frame(self) -> None:
-        self._pop_frame(
-            keys={"size": self.key("size"), "frame": self.key("frame")},
+        Returns:
+            str: The key associated with the name.
+        """
+        return f"{base}:{name}"
+
+    def init(self, base: str) -> None:
+        """
+        Initializes the stack.
+
+        Args:
+            base (str): The base key.
+        """
+        self._rt.set(self.key(base, "size"), "0")
+
+    def push_frame(self, base: str) -> None:
+        """
+        Pushes a new stack frame.
+
+        Args:
+            base (str): The base key.
+        """
+        self._rt.incrby(self.key(base, "size"), 1)
+
+    def pop_frame(self, base: str) -> dict[str, str] | None:
+        """
+        Pops the current stack frame and returns its values.
+
+        Args:
+            base (str): The base key.
+
+        Returns:
+            dict[str, str] | None: The content of the stack frame.
+        """
+        res = self._pop_frame(
+            keys={
+                "size": self.key(base, "size"),
+                "frame": self.key(base, "frame"),
+            },
             args={})
+        if res is None:
+            return None
+        return cast(dict, res)
 
-    def set_value(self, field: str, value: str) -> None:
+    def set_value(self, base: str, field: str, value: str) -> None:
+        """
+        Set a value in the current stack frame.
+
+        Args:
+            base (str): The base key.
+
+            field (str): The field.
+
+            value (str): The value.
+        """
         self._set_value(
-            keys={"size": self.key("size"), "frame": self.key("frame")},
+            keys={
+                "size": self.key(base, "size"),
+                "frame": self.key(base, "frame"),
+            },
             args={"field": field, "value": value})
 
-    def get_value(self, field: str) -> JSONType:
+    def get_value(self, base: str, field: str) -> JSONType:
+        """
+        Returns a value from the current stack frame.
+
+        Args:
+            base (str): The base key.
+
+            field (str): The field.
+
+        Returns:
+            JSONType: The value.
+        """
         return self._get_value(
-            keys={"size": self.key("size"), "frame": self.key("frame")},
+            keys={
+                "size": self.key(base, "size"),
+                "frame": self.key(base, "frame"),
+            },
             args={"field": field})
 
-    def get_cascading(self, field: str) -> JSONType:
+    def get_cascading(self, base: str, field: str) -> JSONType:
+        """
+        Returns a value from the stack. If the value is not in the current
+        stack frame the value is recursively retrieved from the previous
+        stack frames.
+
+        Args:
+            base (str): The base key.
+
+            field (str): The field.
+
+        Returns:
+            JSONType: The value.
+        """
         return self._get_cascading(
-            keys={"size": self.key("size"), "frame": self.key("frame")},
+            keys={
+                "size": self.key(base, "size"),
+                "frame": self.key(base, "frame"),
+            },
             args={"field": field})
 
     def _set_value_script(self) -> ExecFunction:
@@ -194,9 +294,10 @@ class RStack:
         rsize = RedisVar(ctx.add_key("size"))
         rframe = RedisHash(
             Strs(ctx.add_key("frame"), ":", ToIntStr(rsize.get())))
+        lcl = ctx.add_local(rframe.hgetall())
         ctx.add(rframe.delete())
         ctx.add(rsize.incrby(-1))
-        ctx.set_return_value(None)
+        ctx.set_return_value(lcl)
         return self._rt.register_script(ctx)
 
     def _get_cascading_script(self) -> ExecFunction:
@@ -220,6 +321,12 @@ class RStack:
 
 @pytest.mark.parametrize("rt_lua", [False, True])
 def test_stack(rt_lua: bool) -> None:
+    """
+    Tests a complex example class using redipy scripts.
+
+    Args:
+        rt_lua (bool): Whether to use the redis or memory runtime.
+    """
     code_name = None
     lua_script = None
 
@@ -250,129 +357,141 @@ def test_stack(rt_lua: bool) -> None:
         "redis" if rt_lua else "memory",
         cfg=get_test_config() if rt_lua else None,
         lua_code_hook=code_hook)
-    stack_foo = RStack(redis, "foo", set_lua_script)
-    stack_bar = RStack(redis, "bar", set_lua_script)
+    stack = RStack(redis, set_lua_script)
 
-    stack_foo.init()
-    stack_bar.init()
+    stack.init("foo")
+    stack.init("bar")
 
-    stack_foo.set_value("a", "hi")
-    assert stack_bar.get_value("a") is None
-    assert stack_foo.get_value("a") == "hi"
+    stack.set_value("foo", "a", "hi")
+    assert stack.get_value("bar", "a") is None
+    assert stack.get_value("foo", "a") == "hi"
 
-    stack_foo.set_value("b", "foo")
-    stack_bar.set_value("a", "bye")
-    stack_bar.set_value("b", "bar")
+    stack.set_value("foo", "b", "foo")
+    stack.set_value("bar", "a", "bye")
+    stack.set_value("bar", "b", "bar")
 
-    assert stack_foo.get_value("a") == "hi"
-    assert stack_foo.get_value("b") == "foo"
-    assert stack_foo.get_value("c") is None
-    assert stack_foo.get_value("d") is None
+    assert stack.get_value("foo", "a") == "hi"
+    assert stack.get_value("foo", "b") == "foo"
+    assert stack.get_value("foo", "c") is None
+    assert stack.get_value("foo", "d") is None
 
-    assert stack_bar.get_value("a") == "bye"
-    assert stack_bar.get_value("b") == "bar"
-    assert stack_bar.get_value("c") is None
-    assert stack_bar.get_value("d") is None
+    assert stack.get_value("bar", "a") == "bye"
+    assert stack.get_value("bar", "b") == "bar"
+    assert stack.get_value("bar", "c") is None
+    assert stack.get_value("bar", "d") is None
 
-    stack_foo.push_frame()
-    stack_foo.set_value("b", "bb")
-    stack_foo.set_value("c", "cc")
-    stack_foo.set_value("d", "dd")
+    stack.push_frame("foo")
+    stack.set_value("foo", "b", "bb")
+    stack.set_value("foo", "c", "cc")
+    stack.set_value("foo", "d", "dd")
 
-    stack_bar.push_frame()
-    stack_bar.set_value("a", "2a")
-    stack_bar.set_value("b", "2b")
+    stack.push_frame("bar")
+    stack.set_value("bar", "a", "2a")
+    stack.set_value("bar", "b", "2b")
 
-    assert stack_foo.get_value("a") is None
-    assert stack_foo.get_value("b") == "bb"
-    assert stack_foo.get_value("c") == "cc"
-    assert stack_foo.get_value("d") == "dd"
+    assert stack.get_value("foo", "a") is None
+    assert stack.get_value("foo", "b") == "bb"
+    assert stack.get_value("foo", "c") == "cc"
+    assert stack.get_value("foo", "d") == "dd"
 
-    assert stack_bar.get_value("a") == "2a"
-    assert stack_bar.get_value("b") == "2b"
-    assert stack_bar.get_value("c") is None
-    assert stack_bar.get_value("d") is None
+    assert stack.get_value("bar", "a") == "2a"
+    assert stack.get_value("bar", "b") == "2b"
+    assert stack.get_value("bar", "c") is None
+    assert stack.get_value("bar", "d") is None
 
-    assert stack_foo.get_cascading("a") == "hi"
-    assert stack_foo.get_cascading("b") == "bb"
-    assert stack_foo.get_cascading("c") == "cc"
-    assert stack_foo.get_cascading("d") == "dd"
+    assert stack.get_cascading("foo", "a") == "hi"
+    assert stack.get_cascading("foo", "b") == "bb"
+    assert stack.get_cascading("foo", "c") == "cc"
+    assert stack.get_cascading("foo", "d") == "dd"
 
-    assert stack_bar.get_cascading("a") == "2a"
-    assert stack_bar.get_cascading("b") == "2b"
-    assert stack_bar.get_cascading("c") is None
-    assert stack_bar.get_cascading("d") is None
+    assert stack.get_cascading("bar", "a") == "2a"
+    assert stack.get_cascading("bar", "b") == "2b"
+    assert stack.get_cascading("bar", "c") is None
+    assert stack.get_cascading("bar", "d") is None
 
-    stack_foo.push_frame()
-    stack_foo.set_value("b", "bbb")
-    stack_foo.set_value("c", "ccc")
+    stack.push_frame("foo")
+    stack.set_value("foo", "b", "bbb")
+    stack.set_value("foo", "c", "ccc")
 
-    stack_bar.push_frame()
-    stack_bar.set_value("b", "3b")
-    stack_bar.set_value("c", "3c")
+    stack.push_frame("bar")
+    stack.set_value("bar", "b", "3b")
+    stack.set_value("bar", "c", "3c")
 
-    assert stack_foo.get_value("a") is None
-    assert stack_foo.get_value("b") == "bbb"
-    assert stack_foo.get_value("c") == "ccc"
-    assert stack_foo.get_value("d") is None
+    assert stack.get_value("foo", "a") is None
+    assert stack.get_value("foo", "b") == "bbb"
+    assert stack.get_value("foo", "c") == "ccc"
+    assert stack.get_value("foo", "d") is None
 
-    assert stack_bar.get_value("a") is None
-    assert stack_bar.get_value("b") == "3b"
-    assert stack_bar.get_value("c") == "3c"
-    assert stack_bar.get_value("d") is None
+    assert stack.get_value("bar", "a") is None
+    assert stack.get_value("bar", "b") == "3b"
+    assert stack.get_value("bar", "c") == "3c"
+    assert stack.get_value("bar", "d") is None
 
-    assert stack_foo.get_cascading("a") == "hi"
-    assert stack_foo.get_cascading("b") == "bbb"
-    assert stack_foo.get_cascading("c") == "ccc"
-    assert stack_foo.get_cascading("d") == "dd"
+    assert stack.get_cascading("foo", "a") == "hi"
+    assert stack.get_cascading("foo", "b") == "bbb"
+    assert stack.get_cascading("foo", "c") == "ccc"
+    assert stack.get_cascading("foo", "d") == "dd"
 
-    assert stack_bar.get_cascading("a") == "2a"
-    assert stack_bar.get_cascading("b") == "3b"
-    assert stack_bar.get_cascading("c") == "3c"
-    assert stack_bar.get_cascading("d") is None
+    assert stack.get_cascading("bar", "a") == "2a"
+    assert stack.get_cascading("bar", "b") == "3b"
+    assert stack.get_cascading("bar", "c") == "3c"
+    assert stack.get_cascading("bar", "d") is None
 
-    stack_foo.pop_frame()
-    stack_bar.pop_frame()
+    assert stack.pop_frame("foo") == {
+        "b": "bbb",
+        "c": "ccc",
+    }
+    assert stack.pop_frame("bar") == {
+        "b": "3b",
+        "c": "3c",
+    }
 
-    assert stack_foo.get_value("a") is None
-    assert stack_foo.get_value("b") == "bb"
-    assert stack_foo.get_value("c") == "cc"
-    assert stack_foo.get_value("d") == "dd"
+    assert stack.get_value("foo", "a") is None
+    assert stack.get_value("foo", "b") == "bb"
+    assert stack.get_value("foo", "c") == "cc"
+    assert stack.get_value("foo", "d") == "dd"
 
-    assert stack_bar.get_value("a") == "2a"
-    assert stack_bar.get_value("b") == "2b"
-    assert stack_bar.get_value("c") is None
-    assert stack_bar.get_value("d") is None
+    assert stack.get_value("bar", "a") == "2a"
+    assert stack.get_value("bar", "b") == "2b"
+    assert stack.get_value("bar", "c") is None
+    assert stack.get_value("bar", "d") is None
 
-    assert stack_foo.get_cascading("a") == "hi"
-    assert stack_foo.get_cascading("b") == "bb"
-    assert stack_foo.get_cascading("c") == "cc"
-    assert stack_foo.get_cascading("d") == "dd"
+    assert stack.get_cascading("foo", "a") == "hi"
+    assert stack.get_cascading("foo", "b") == "bb"
+    assert stack.get_cascading("foo", "c") == "cc"
+    assert stack.get_cascading("foo", "d") == "dd"
 
-    assert stack_bar.get_cascading("a") == "2a"
-    assert stack_bar.get_cascading("b") == "2b"
-    assert stack_bar.get_cascading("c") is None
-    assert stack_bar.get_cascading("d") is None
+    assert stack.get_cascading("bar", "a") == "2a"
+    assert stack.get_cascading("bar", "b") == "2b"
+    assert stack.get_cascading("bar", "c") is None
+    assert stack.get_cascading("bar", "d") is None
 
-    stack_foo.pop_frame()
-    stack_bar.pop_frame()
+    assert stack.pop_frame("foo") == {
+        "b": "bb",
+        "c": "cc",
+        "d": "dd",
+    }
+    assert stack.pop_frame("bar") == {
+        "a": "2a",
+        "b": "2b",
+    }
 
-    assert stack_foo.get_value("a") == "hi"
-    assert stack_foo.get_value("b") == "foo"
-    assert stack_foo.get_value("c") is None
-    assert stack_foo.get_value("d") is None
+    assert stack.get_value("foo", "a") == "hi"
+    assert stack.get_value("foo", "b") == "foo"
+    assert stack.get_value("foo", "c") is None
+    assert stack.get_value("foo", "d") is None
 
-    assert stack_bar.get_value("a") == "bye"
-    assert stack_bar.get_value("b") == "bar"
-    assert stack_bar.get_value("c") is None
-    assert stack_bar.get_value("d") is None
+    assert stack.get_value("bar", "a") == "bye"
+    assert stack.get_value("bar", "b") == "bar"
+    assert stack.get_value("bar", "c") is None
+    assert stack.get_value("bar", "d") is None
 
-    assert stack_foo.get_cascading("a") == "hi"
-    assert stack_foo.get_cascading("b") == "foo"
-    assert stack_foo.get_cascading("c") is None
-    assert stack_foo.get_cascading("d") is None
+    assert stack.get_cascading("foo", "a") == "hi"
+    assert stack.get_cascading("foo", "b") == "foo"
+    assert stack.get_cascading("foo", "c") is None
+    assert stack.get_cascading("foo", "d") is None
 
-    assert stack_bar.get_cascading("a") == "bye"
-    assert stack_bar.get_cascading("b") == "bar"
-    assert stack_bar.get_cascading("c") is None
-    assert stack_bar.get_cascading("d") is None
+    assert stack.get_cascading("bar", "a") == "bye"
+    assert stack.get_cascading("bar", "b") == "bar"
+    assert stack.get_cascading("bar", "c") is None
+    assert stack.get_cascading("bar", "d") is None
