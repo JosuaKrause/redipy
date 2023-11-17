@@ -19,14 +19,20 @@ help:
 	@echo "git-check	ensures no git visible files have been altered"
 	@echo "git-check-publish	ensures no git visible files have been altered"
 	@echo "pack	build pypi packages"
-	@echo "clean	clean test data"
+	@echo "publish	build and publish pypi packages"
+	@echo "clean	clean test and build data"
 	@echo "pytest	run all test with pytest (requires a running test redis server)"
+	@echo "pytest-ga	run tests for github actions only with pytest (requires a running test redis server)"
 	@echo "split-test	run test according to the previous result file with pytest"
 	@echo "requirements-check	check whether the env differs from the requirements file"
 	@echo "requirements-complete	check whether the requirements file is complete"
 	@echo "run-redis-test	start redis server for pytest"
 	@echo "coverage-report	show the coverage report for python"
 	@echo "stubgen	create stubs for a package"
+	@echo "allapps	find all python entry points"
+	@echo "version	prints the current version from pyproject.toml"
+	@echo "version-tag	prints the current version from the last deployed tag"
+	@echo "version-next	prints the next version after the last deployed tag (to be used in pyproject.toml)"
 
 export LC_ALL=C
 export LANG=C
