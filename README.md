@@ -198,15 +198,6 @@ class RStack:
         """
         return f"{base}:{name}"
 
-    def init(self, base: str) -> None:
-        """
-        Initializes the stack.
-
-        Args:
-            base (str): The base key.
-        """
-        self._rt.set(self.key(base, "size"), "0")
-
     def push_frame(self, base: str) -> None:
         """
         Pushes a new stack frame.
@@ -216,7 +207,7 @@ class RStack:
         """
         self._rt.incrby(self.key(base, "size"), 1)
 
-    def pop_frame(self, base: str) -> dict[str, str] | None:
+    def pop_frame(self, base: str) -> dict[str, str]:
         """
         Pops the current stack frame and returns its values.
 
@@ -233,7 +224,7 @@ class RStack:
             },
             args={})
         if res is None:
-            return None
+            return {}
         return cast(dict, res)
 
     def set_value(self, base: str, field: str, value: str) -> None:
@@ -300,7 +291,7 @@ class RStack:
         rframe = RedisHash(Strs(
             ctx.add_key("frame"),
             ":",
-            ToIntStr(rsize.get(no_adjust=True))))
+            ToIntStr(rsize.get(default=0))))
         field = ctx.add_arg("field")
         value = ctx.add_arg("value")
         ctx.add(rframe.hset({
@@ -315,7 +306,7 @@ class RStack:
         rframe = RedisHash(Strs(
             ctx.add_key("frame"),
             ":",
-            ToIntStr(rsize.get(no_adjust=True))))
+            ToIntStr(rsize.get(default=0))))
         field = ctx.add_arg("field")
         ctx.set_return_value(rframe.hget(field))
         return self._rt.register_script(ctx)
@@ -324,10 +315,14 @@ class RStack:
         ctx = FnContext()
         rsize = RedisVar(ctx.add_key("size"))
         rframe = RedisHash(
-            Strs(ctx.add_key("frame"), ":", ToIntStr(rsize.get())))
+            Strs(ctx.add_key("frame"), ":", ToIntStr(rsize.get(default=0))))
         lcl = ctx.add_local(rframe.hgetall())
         ctx.add(rframe.delete())
-        ctx.add(rsize.incrby(-1))
+
+        b_then, b_else = ctx.if_(ToNum(rsize.get(default=0)).gt_(0))
+        b_then.add(rsize.incrby(-1))
+        b_else.add(rsize.delete())
+
         ctx.set_return_value(lcl)
         return self._rt.register_script(ctx)
 
@@ -336,7 +331,7 @@ class RStack:
         rsize = RedisVar(ctx.add_key("size"))
         base = ctx.add_local(ctx.add_key("frame"))
         field = ctx.add_arg("field")
-        pos = ctx.add_local(ToNum(rsize.get()))
+        pos = ctx.add_local(ToNum(rsize.get(default=0)))
         res = ctx.add_local(None)
         cur = ctx.add_local(None)
         rframe = RedisHash(cur)

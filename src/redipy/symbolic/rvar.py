@@ -50,17 +50,26 @@ class RedisVar(RedisObj):
             args.append("KEEPTTL")
         return self.redis_fn("set", value, *args)
 
-    def get(self, *, no_adjust: bool = False) -> Expr:
+    def get(
+            self,
+            *,
+            default: MixedType = None,
+            no_adjust: bool = False) -> Expr:
         """
         Returns the value.
 
         Args:
+            default (MixedType, optional): The default value to return if
+            the key does not exist.
+
             no_adjust (bool, optional): Whether to prevent patching the
             function call. This should not be neccessary. Defaults to False.
 
         Returns:
             Expr: The expression.
         """
+        if default is not None:
+            return self.redis_fn("get", no_adjust=True).or_(default)
         return self.redis_fn("get", no_adjust=no_adjust)
 
     def incrby(self, inc: MixedType) -> Expr:
