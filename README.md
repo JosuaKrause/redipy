@@ -175,47 +175,123 @@ from redipy.script import (
 
 
 class RStack:
-    def __init__(
-            self,
-            rt: RedisClientAPI,
-            base: str) -> None:
+    """An example class that simulates a key value stack."""
+    def __init__(self, rt: RedisClientAPI) -> None:
         self._rt = rt
-        self._base = base
 
         self._set_value = self._set_value_script()
         self._get_value = self._get_value_script()
         self._pop_frame = self._pop_frame_script()
         self._get_cascading = self._get_cascading_script()
 
-    def key(self, name: str) -> str:
-        return f"{self._base}:{name}"
+    def key(self, base: str, name: str) -> str:
+        """
+        Compute the key.
 
-    def init(self) -> None:
-        self._rt.set(self.key("size"), "0")
+        Args:
+            base (str): The base key.
 
-    def push_frame(self) -> None:
-        self._rt.incrby(self.key("size"), 1)
+            name (str): The name.
 
-    def pop_frame(self) -> dict[str, str] | None:
+        Returns:
+            str: The key associated with the name.
+        """
+        return f"{base}:{name}"
+
+    def init(self, base: str) -> None:
+        """
+        Initializes the stack.
+
+        Args:
+            base (str): The base key.
+        """
+        self._rt.set(self.key(base, "size"), "0")
+
+    def push_frame(self, base: str) -> None:
+        """
+        Pushes a new stack frame.
+
+        Args:
+            base (str): The base key.
+        """
+        self._rt.incrby(self.key(base, "size"), 1)
+
+    def pop_frame(self, base: str) -> dict[str, str] | None:
+        """
+        Pops the current stack frame and returns its values.
+
+        Args:
+            base (str): The base key.
+
+        Returns:
+            dict[str, str] | None: The content of the stack frame.
+        """
         res = self._pop_frame(
-            keys={"size": self.key("size"), "frame": self.key("frame")},
+            keys={
+                "size": self.key(base, "size"),
+                "frame": self.key(base, "frame"),
+            },
             args={})
         if res is None:
             return None
         return cast(dict, res)
 
-    def set_value(self, field: str, value: str) -> None:
+    def set_value(self, base: str, field: str, value: str) -> None:
+        """
+        Set a value in the current stack frame.
+
+        Args:
+            base (str): The base key.
+
+            field (str): The field.
+
+            value (str): The value.
+        """
         self._set_value(
-            keys={"size": self.key("size"), "frame": self.key("frame")},
+            keys={
+                "size": self.key(base, "size"),
+                "frame": self.key(base, "frame"),
+            },
             args={"field": field, "value": value})
 
-    def get_value(self, field: str, *, cascade: bool = False) -> JSONType:
-        if cascade:
-            return self._get_cascading(
-                keys={"size": self.key("size"), "frame": self.key("frame")},
-                args={"field": field})
+    def get_value(self, base: str, field: str) -> JSONType:
+        """
+        Returns a value from the current stack frame.
+
+        Args:
+            base (str): The base key.
+
+            field (str): The field.
+
+        Returns:
+            JSONType: The value.
+        """
         return self._get_value(
-            keys={"size": self.key("size"), "frame": self.key("frame")},
+            keys={
+                "size": self.key(base, "size"),
+                "frame": self.key(base, "frame"),
+            },
+            args={"field": field})
+
+    def get_cascading(self, base: str, field: str) -> JSONType:
+        """
+        Returns a value from the stack. If the value is not in the current
+        stack frame the value is recursively retrieved from the previous
+        stack frames.
+
+        Args:
+            base (str): The base key.
+
+            field (str): The field.
+
+        Returns:
+            JSONType: The value.
+        """
+        return self._get_cascading(
+            keys={
+                "size": self.key(base, "size"),
+                "frame": self.key(base, "frame"),
+            },
             args={"field": field})
 
     def _set_value_script(self) -> ExecFunction:
@@ -304,9 +380,8 @@ The current limitations of `redipy` are:
 - implement more redis functions
 - `redipy.sql`: A backend that provides the Redis functionality via SQL on
   traditional database systems, such as SQLite, PostgreSQL, or MySQL.
-- switch_backend: dynamically switch backends at runtime which (potentially)
+- switch_backend: dynamically switch backends at runtime which
   migrates data to the new backend
-- documentation
 
 ## License
 `redipy` is licensed under the [Apache License (Version 2.0)](LICENSE).
