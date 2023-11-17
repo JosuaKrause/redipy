@@ -352,7 +352,7 @@ def test_api(rt_lua: bool) -> None:
         setup_pipe=lambda pipe, key: pipe.rpush(key, "a", "b", "c", "d", "e"),
         pipeline=lambda pipe, key: pipe.lrange(key, -100, 100),
         lua=lambda ctx, key: RedisList(key).lrange(-100, 100),
-        code="redis.call(\"lrange\", key_0, 100, -100)",
+        code="redis.call(\"lrange\", key_0, -100, 100)",
         teardown=lambda key: redis.delete(key),
         output_setup=5,
         output=["a", "b", "c", "d", "e"],

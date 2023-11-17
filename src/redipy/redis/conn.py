@@ -323,7 +323,7 @@ class PipelineConnection(PipelineAPI):
             self.add_fixup(to_list_str)
 
     def lrange(self, key: str, start: int, stop: int) -> None:
-        self._pipe.lrange(key, start, stop)
+        self._pipe.lrange(self.with_prefix(key), start, stop)
         self.add_fixup(to_list_str)
 
     def llen(self, key: str) -> None:
@@ -830,7 +830,7 @@ class RedisConnection(Runtime[list[str]]):
 
     def lrange(self, key: str, start: int, stop: int) -> list[str]:
         with self.get_connection() as conn:
-            return to_list_str(conn.lrange(key, start, stop))
+            return to_list_str(conn.lrange(self.with_prefix(key), start, stop))
 
     def llen(self, key: str) -> int:
         with self.get_connection() as conn:
