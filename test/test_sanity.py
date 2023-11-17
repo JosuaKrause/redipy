@@ -143,26 +143,35 @@ def test_ensure_name_available() -> None:
     def check_name(
             name: str,
             args: str,
+            exc_type: type[BaseException],
             error_msg: str,
-            error_notes: list[str]) -> None:
+            error_chain: list[tuple[type[BaseException], str]]) -> None:
         code = f"return {name}({args})"
         run = redis.get_dynamic_script(code)
-        with pytest.raises(
-                ValueError,
-                match=error_msg) as exc_info:
+        with pytest.raises(exc_type, match=error_msg) as exc_info:
             with redis.get_connection() as conn:
                 run(
                     keys=[],
                     args=[],
                     client=conn)
-        assert exc_info.value.__notes__ == error_notes
+        cur_exc = exc_info.value
+        for chain_type, chain_message in error_chain:
+            next_exc = cur_exc.__cause__
+            assert next_exc is not None
+            assert isinstance(next_exc, chain_type)
+            assert chain_message in f"{next_exc}"
+            cur_exc = next_exc
 
     check_name(
         "asintstr",
         "3.2",
-        r"user_script:1: Script attempted to access nonexistent global "
-        r"variable 'asintstr'",
+        ValueError,
+        r"Error while executing script\nCode:\nreturn asintstr\(3\.2\)\n\n"
+        r"Context:\n  \n  \n  \n> return asintstr\(3\.2\)",
         [
-            "Code:\nreturn asintstr(3.2)\n\nContext:\n  \n  \n  \n"
-            "> return asintstr(3.2)",
+            (
+                redis_lib.exceptions.ResponseError,
+                r"user_script:1: Script attempted to access nonexistent "
+                r"global variable 'asintstr'",
+            ),
         ])
