@@ -9,7 +9,7 @@ that implement the same functionality, such as:
 - `redipy.redis`: A backend that connects to an actual Redis instance and
   delegates all operations to it.
 
-[![redipy logo](img/redipy_logo_small.png)](img/redipy_logo.png)
+[![redipy logo](https://raw.githubusercontent.com/JosuaKrause/redipy/v0.4.0/img/redipy_logo_small.png)](https://raw.githubusercontent.com/JosuaKrause/redipy/v0.4.0/img/redipy_logo.png)
 
 ### Warning
 
@@ -155,7 +155,7 @@ r.lpop("big", 4)  # ["3", "4"]
 
 Here, we are implementing and object stack with fall-through lookup. Each frame
 in the stack has its own fields. If the user tries to access a field that
-doesn't exist in the current stack frame (and they are setting `cascade=True`)
+doesn't exist in the current stack frame (and they are setting `get_cascading`)
 the accessor will recursively go down the stack until a value for the given
 field is found (or the end of the stack is reached).
 
@@ -370,21 +370,13 @@ The current limitations of `redipy` are:
   (`[]`) are indistinguishable in lua so `None` is returned instead of setting
   the return value to either of these.
 
-## TODOs
-
-- implement more redis functions
-- `redipy.sql`: A backend that provides the Redis functionality via SQL on
-  traditional database systems, such as SQLite, PostgreSQL, or MySQL.
-- switch_backend: dynamically switch backends at runtime which
-  migrates data to the new backend
-
 ## License
-`redipy` is licensed under the [Apache License (Version 2.0)](LICENSE).
+`redipy` is licensed under the [Apache License (Version 2.0)](https://github.com/JosuaKrause/redipy/blob/0.4.0/LICENSE).
 
 ## Changelog
-The changelog can be found [here](CHANGELOG.md).
+The changelog can be found [here](https://github.com/JosuaKrause/redipy/blob/main/CHANGELOG.md).
 
-## Contributing
+## Contributing<a id="Contributing"></a>
 
 Redipy is currently maintained by one person. Any help, even if it is just
 creating issues for bugs, are much appreciated.
@@ -476,3 +468,9 @@ You can submit your patch as pull request
 If you have any questions, suggestions, or issues with `redipy`, please feel
 free to [open an issue](https://github.com/JosuaKrause/redipy/issues) on
 GitHub. I would love to hear your feedback and improve `redipy`. Thank you!
+
+## Disclaimer
+This project is a personal project and is not associated with, supported by,
+or endorsed by my employer. The views and opinions expressed in this project
+are solely my own and do not represent the views or opinions of my employer
+or any other entity.
