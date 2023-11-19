@@ -9,14 +9,14 @@ that implement the same functionality, such as:
 - `redipy.redis`: A backend that connects to an actual Redis instance and
   delegates all operations to it.
 
-[![redipy logo](logo_small)](logo)
+[![redipy logo][logo_small]][logo]
 
 ### Warning
 
 This library is still early in development and not all redis functions are
 available yet!
 If you need certain functionality or found a bug, have a look at the
-[contributing](#Contributing) section.
+[contributing](#contributing) section.
 It is easy to add redis functions to the API.
 
 ## Installation
@@ -62,7 +62,7 @@ r = redipy.Redis(
 ```
 
 The `redipy` client object supports similar methods and attributes to the
-official [redis](redis) Python client library.
+official [redis][redis] Python client library.
 You can use them as you would normally do with `redis`. For example:
 
 ```python
@@ -371,12 +371,12 @@ The current limitations of `redipy` are:
   the return value to either of these.
 
 ## License
-`redipy` is licensed under the [Apache License (Version 2.0)](license).
+`redipy` is licensed under the [Apache License (Version 2.0)][license].
 
 ## Changelog
-The changelog can be found [here](changelog).
+The changelog can be found [here][changelog].
 
-## Contributing<a id="Contributing"></a>
+## Contributing<a id="contributing"></a>
 
 Redipy is currently maintained by one person. Any help, even if it is just
 creating issues for bugs, are much appreciated.
@@ -461,11 +461,11 @@ For a full implementation follow these steps:
 9. Make sure `make lint-all` passes, as well as, all tests (`make pytest`)
   run without issue.
 
-You can submit your patch as pull request [here](pulls).
+You can submit your patch as pull request [here][pulls].
 
 ## Feedback
 If you have any questions, suggestions, or issues with `redipy`, please feel
-free to [open an issue](issues) on
+free to [open an issue][issues] on
 GitHub. I would love to hear your feedback and improve `redipy`. Thank you!
 
 ## Disclaimer
