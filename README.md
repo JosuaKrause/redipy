@@ -9,7 +9,7 @@ that implement the same functionality, such as:
 - `redipy.redis`: A backend that connects to an actual Redis instance and
   delegates all operations to it.
 
-[![redipy logo][logo_small]][logo]
+[![redipy logo][logo-small]][logo]
 
 ### Warning
 
@@ -21,16 +21,20 @@ It is easy to add redis functions to the API.
 
 ## Quick Access
 
-- [Installation](#installation)
-- [Usage](#usage)
-- [Features](#features)
-- [Custom Script Example](#custom-script-example)
-- [Advanced Script Example](#advanced-script-example)
-- [Limitations](#limitations)
-- [License](#license)
-- [Changelog](#changelog)
-- [Contributing](#contributing)
-- [Feedback](#feedback)
+1. [Installation](#installation)
+2. [Usage](#usage)
+3. [Features](#features)
+4. [Custom Scripts](#custom-scripts)
+  - [Simple Example](#simple-example)
+  - [Advanced Example](#advanced-example)
+5. [Limitations](#limitations)
+6. [Contributing](#contributing)
+  - [If You Find a Bug](#if-you-find-a-bug)
+  - [Missing Redis or Lua Functions](#missing-redis-or-lua-functions)
+  - [Implementing New Redis Functions](#implementing-new-redis-functions)
+7. [Changelog](#changelog)
+8. [License](#license)
+9. [Feedback](#feedback)
 
 ## Installation<a id="installation"></a>
 You can install `redipy` using pip:
@@ -121,10 +125,14 @@ The main features of `redipy` are:
 - Migration: You can easily migrate data between different backends, or use
   multiple backends simultaneously.
 
-## Custom Script Example<a id="custom-script-example"></a>
+## Custom Scripts<a id="custom-scripts"></a>
 
 Redis scripts can be defined via a symbolic API in python and can be executed
-by any backend. Here, we are writing a filter function that drains a redis list
+by any backend.
+
+### Simple Example<a id="simple-example"></a>
+
+Here, we are writing a filter function that drains a redis list
 and puts items into a "left" and a "right" list by comparing each items
 numerical value with a given `cmp` value:
 
@@ -172,7 +180,7 @@ r.lpop("small", 4)  # ["1", "2"]
 r.lpop("big", 4)  # ["3", "4"]
 ```
 
-## Advanced Script Example<a id="advanced-script-example"></a>
+### Advanced Example<a id="advanced-example"></a>
 
 Here, we are implementing and object stack with fall-through lookup. Each frame
 in the stack has its own fields. If the user tries to access a field that
@@ -391,18 +399,12 @@ The current limitations of `redipy` are:
   (`[]`) are indistinguishable in lua so `None` is returned instead of setting
   the return value to either of these.
 
-## License<a id="license"></a>
-`redipy` is licensed under the [Apache License (Version 2.0)][license].
-
-## Changelog<a id="changelog"></a>
-The changelog can be found [here][changelog].
-
 ## Contributing<a id="contributing"></a>
 
 Any contribution, even if it is just creating an issue for a bug,
 is much appreciated.
 
-### If You Find a Bug
+### If You Find a Bug<a id="if-you-find-a-bug"></a>
 
 If you encounter a bug, please open an issue to draw attention to it or give
 a thumbsup if the issue already exists. This helps with prioritizing
@@ -410,10 +412,11 @@ implementation efforts. Even if you cannot solve the bug yourself,
 investigating why it happens or creating a PR to add test cases helps a lot.
 If you have a fix for a bug don't hesistate to open a PR.
 
-### Missing Redis or Lua Functions
+### Missing Redis or Lua Functions<a id="missing-redis-or-lua-functions"></a>
 If you encounter a missing redis or lua function please consider adding it
-yourself (see the [implementing](#implementing) section). Here also opening
-an issue or giving a thumbsup to existing issues helps with prioritization.
+yourself (see the [implementing](#implementing-new-redis-functions) section).
+Here also opening an issue or giving a thumbsup to existing issues helps
+with prioritization.
 
 However, if you need it only in your local setup
 without API support or support for multiple backends, pipelines, etc. you can
@@ -444,7 +447,7 @@ Adding functions as described above is discouraged as it may lead to
 inconsistent support of different backends and inconsistent behavior across
 different backends.
 
-### Implementing<a id="implementing"></a>
+### Implementing New Redis Functions<a id="implementing-new-redis-functions"></a>
 
 The easiest way to contribute to `redipy` is to pick some redis API functions
 that have not (or not completely) been [implemented][implemented] in `redipy`
@@ -484,16 +487,22 @@ PR. For a full implementation follow these steps:
 
 You can submit your patch as pull request [here][pulls].
 
+## Changelog<a id="changelog"></a>
+The changelog can be found [here][changelog].
+
+## License<a id="license"></a>
+`redipy` is licensed under the [Apache License (Version 2.0)][license].
+
 ## Feedback<a id="feedback"></a>
 If you have any questions, suggestions, or issues with `redipy`, please feel
 free to [open an issue][issues] on GitHub. I would love to hear your feedback
 and improve `redipy`. Thank you!
 
-[logo_small]: https://raw.githubusercontent.com/JosuaKrause/redipy/v0.4.0/img/redipy_logo_small.png
-[logo]: https://raw.githubusercontent.com/JosuaKrause/redipy/v0.4.0/img/redipy_logo.png
-[implemented]: https://github.com/JosuaKrause/redipy/issues/8
-[redis]: https://pypi.org/project/redis/
-[license]: https://github.com/JosuaKrause/redipy/blob/v0.4.0/LICENSE
 [changelog]: https://github.com/JosuaKrause/redipy/blob/main/CHANGELOG.md
-[pulls]: https://github.com/JosuaKrause/redipy/pulls
+[implemented]: https://github.com/JosuaKrause/redipy/issues/8
 [issues]: https://github.com/JosuaKrause/redipy/issues
+[license]: https://github.com/JosuaKrause/redipy/blob/v0.4.2/LICENSE
+[logo-small]: https://raw.githubusercontent.com/JosuaKrause/redipy/v0.4.2/img/redipy_logo_small.png
+[logo]: https://raw.githubusercontent.com/JosuaKrause/redipy/v0.4.2/img/redipy_logo.png
+[pulls]: https://github.com/JosuaKrause/redipy/pulls
+[redis]: https://pypi.org/project/redis/
