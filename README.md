@@ -19,14 +19,27 @@ If you need certain functionality or found a bug, have a look at the
 [contributing](#contributing) section.
 It is easy to add redis functions to the API.
 
-## Installation
+## Quick Access
+
+- [Installation](#installation)
+- [Usage](#usage)
+- [Features](#features)
+- [Custom Script Example](#custom-script-example)
+- [Advanced Script Example](#advanced-script-example)
+- [Limitations](#limitations)
+- [License](#license)
+- [Changelog](#changelog)
+- [Contributing](#contributing)
+- [Feedback](#feedback)
+
+## Installation<a id="installation"></a>
 You can install `redipy` using pip:
 
 ```sh
 pip install redipy
 ```
 
-## Usage
+## Usage<a id="usage"></a>
 To use `redipy`, you need to import the library and create a `redipy` client
 object with the desired backend. For example:
 
@@ -83,7 +96,7 @@ r.lpop("mylist")  # "c"
 r.rpop("mylist", 3)  # ["d", "a", "b"]
 ```
 
-## Features
+## Features<a id="features"></a>
 The main features of `redipy` are:
 
 - Flexibility: You can choose from different backends that suit your needs and
@@ -108,7 +121,7 @@ The main features of `redipy` are:
 - Migration: You can easily migrate data between different backends, or use
   multiple backends simultaneously.
 
-## Scripts
+## Custom Script Example<a id="custom-script-example"></a>
 
 Redis scripts can be defined via a symbolic API in python and can be executed
 by any backend. Here, we are writing a filter function that drains a redis list
@@ -159,7 +172,7 @@ r.lpop("small", 4)  # ["1", "2"]
 r.lpop("big", 4)  # ["3", "4"]
 ```
 
-## More Advanced Example
+## Advanced Script Example<a id="advanced-script-example"></a>
 
 Here, we are implementing and object stack with fall-through lookup. Each frame
 in the stack has its own fields. If the user tries to access a field that
@@ -353,7 +366,7 @@ class RStack:
         return self._rt.register_script(ctx)
 ```
 
-## Limitations
+## Limitations<a id="limitations"></a>
 The current limitations of `redipy` are:
 
 - Not all Redis commands are supported yet: This will eventually be resolved.
@@ -378,10 +391,10 @@ The current limitations of `redipy` are:
   (`[]`) are indistinguishable in lua so `None` is returned instead of setting
   the return value to either of these.
 
-## License
+## License<a id="license"></a>
 `redipy` is licensed under the [Apache License (Version 2.0)][license].
 
-## Changelog
+## Changelog<a id="changelog"></a>
 The changelog can be found [here][changelog].
 
 ## Contributing<a id="contributing"></a>
@@ -471,7 +484,7 @@ PR. For a full implementation follow these steps:
 
 You can submit your patch as pull request [here][pulls].
 
-## Feedback
+## Feedback<a id="feedback"></a>
 If you have any questions, suggestions, or issues with `redipy`, please feel
 free to [open an issue][issues] on GitHub. I would love to hear your feedback
 and improve `redipy`. Thank you!
