@@ -13,8 +13,8 @@ that implement the same functionality, such as:
 
 ### Warning
 
-This library is still early in development and not all redis functions are
-available yet!
+This library is still early in development and [not all redis functions are
+available yet][implemented]!
 If you need certain functionality or found a bug, have a look at the
 [contributing](#contributing) section.
 It is easy to add redis functions to the API.
@@ -116,20 +116,28 @@ and puts items into a "left" and a "right" list by comparing each items
 numerical value with a given `cmp` value:
 
 ```python
+import redipy
+
+# set up script
 ctx = redipy.script.FnContext()
+# add argument
 cmp = ctx.add_arg("cmp")
+# add key arguments
 inp = redipy.script.RedisList(ctx.add_key("inp"))
 left = redipy.script.RedisList(ctx.add_key("left"))
 right = redipy.script.RedisList(ctx.add_key("right"))
 
+# add local variable which contains the current value pop'ed from the list
 cur = ctx.add_local(inp.lpop())
 # we consume "inp" until it is empty
 loop = ctx.while_(cur.ne_(None))
+# push the value to the list depending on whether it is smaller than `cmp`
 b_then, b_else = loop.if_(redipy.script.ToNum(cur).lt_(cmp))
 b_then.add(left.rpush(cur))
 b_else.add(right.rpush(cur))
+# pop next value and store in local variable
 loop.add(cur.assign(inp.lpop()))
-
+# the script doesn't return a value
 ctx.set_return_value(None)
 
 # make sure to build the script only once and reuse the filter_list function
@@ -354,11 +362,11 @@ The current limitations of `redipy` are:
 - The semantic of redis functions inside scripts has been altered to feel more
   natural coming from python: Redis functions inside lua scripts often differ
   greatly from the documented behavior. For example, `LPOP` returns `false` for
-  an empty list inside lua (instead of `nil`). While `LPOP` returns `None` in
-  the python API. The script API of `redipy` has been altered to match the
-  python API more closely. As the user doesn't code in lua directly the benefit
-  of having a more consistent API outweighs the more complicated lua code that
-  needs to be generated in the backend.
+  an empty list inside lua (instead of `nil` or `cjson.null`). While `LPOP`
+  returns `None` in the python API. The script API of `redipy` has been altered
+  to match the python API more closely. As the user doesn't code in lua directly
+  the benefit of having a more consistent API outweighs the more complicated lua
+  code that needs to be generated in the backend.
 - Scripts aim to use python semantics as best as possible: In lua array indices
   start at 1. The script API uses a 0 based indexing system and transparently
   adjusts indices in the lua backend. Other, similar changes are performed
@@ -378,8 +386,8 @@ The changelog can be found [here][changelog].
 
 ## Contributing<a id="contributing"></a>
 
-Redipy is currently maintained by one person. Any help, even if it is just
-creating issues for bugs, are much appreciated.
+Any contribution, even if it is just creating an issue for a bug,
+is much appreciated.
 
 ### If You Find a Bug
 
@@ -391,8 +399,8 @@ If you have a fix for a bug don't hesistate to open a PR.
 
 ### Missing Redis or Lua Functions
 If you encounter a missing redis or lua function please consider adding it
-yourself (see #Implementing). Here also opening an issue or giving a thumbsup
-to existing issues helps with prioritizing.
+yourself (see the [implementing](#implementing) section). Here also opening
+an issue or giving a thumbsup to existing issues helps with prioritization.
 
 However, if you need it only in your local setup
 without API support or support for multiple backends, pipelines, etc. you can
@@ -423,12 +431,12 @@ Adding functions as described above is discouraged as it may lead to
 inconsistent support of different backends and inconsistent behavior across
 different backends.
 
-### Implementing
+### Implementing<a id="implementing"></a>
 
 The easiest way to contribute to `redipy` is to pick some redis API functions
-that have not (or not completely) been implemented in `redipy` yet.
-It is also much appreciated if you just add test cases or the stubs in a PR.
-For a full implementation follow these steps:
+that have not (or not completely) been [implemented][implemented] in `redipy`
+yet. It is also much appreciated if you just add test cases or the stubs in a
+PR. For a full implementation follow these steps:
 
 1. Add the signature of the function to `redipy.api.RedisAPI`. Adjust as
   necessary from the redis spec to get a pythonic feel. Also, add the signature
@@ -465,8 +473,8 @@ You can submit your patch as pull request [here][pulls].
 
 ## Feedback
 If you have any questions, suggestions, or issues with `redipy`, please feel
-free to [open an issue][issues] on
-GitHub. I would love to hear your feedback and improve `redipy`. Thank you!
+free to [open an issue][issues] on GitHub. I would love to hear your feedback
+and improve `redipy`. Thank you!
 
 ## Disclaimer
 This project is a personal project and is not associated with, supported by,
@@ -476,6 +484,7 @@ or any other entity.
 
 [logo_small]: https://raw.githubusercontent.com/JosuaKrause/redipy/v0.4.0/img/redipy_logo_small.png
 [logo]: https://raw.githubusercontent.com/JosuaKrause/redipy/v0.4.0/img/redipy_logo.png
+[implemented]: https://github.com/JosuaKrause/redipy/issues/8
 [redis]: https://pypi.org/project/redis/
 [license]: https://github.com/JosuaKrause/redipy/blob/0.4.0/LICENSE
 [changelog]: https://github.com/JosuaKrause/redipy/blob/main/CHANGELOG.md
