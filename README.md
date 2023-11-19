@@ -480,7 +480,7 @@ and improve `redipy`. Thank you!
 [logo]: https://raw.githubusercontent.com/JosuaKrause/redipy/v0.4.0/img/redipy_logo.png
 [implemented]: https://github.com/JosuaKrause/redipy/issues/8
 [redis]: https://pypi.org/project/redis/
-[license]: https://github.com/JosuaKrause/redipy/blob/0.4.0/LICENSE
+[license]: https://github.com/JosuaKrause/redipy/blob/v0.4.0/LICENSE
 [changelog]: https://github.com/JosuaKrause/redipy/blob/main/CHANGELOG.md
 [pulls]: https://github.com/JosuaKrause/redipy/pulls
 [issues]: https://github.com/JosuaKrause/redipy/issues
