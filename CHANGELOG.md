@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.4.2] - 2023-11-19
+
+### Bug-Fixes
+
+- Fix more pypi links.
+
 ## [0.4.1] - 2023-11-19
 
 ### Bug-Fixes
