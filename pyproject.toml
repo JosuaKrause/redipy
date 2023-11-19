@@ -2,7 +2,7 @@
     name = "redipy"
     description = "redipy is a uniform interface to Redis-like storage systems. It allows you to use the same Redis API with different backends that implement the same functionality."
     readme = "README.md"
-    version = "0.4.0"
+    version = "0.4.1"
     authors = [
         {name = "Josua Krause", email = "josua.krause@gmail.com"},
     ]
@@ -12,7 +12,7 @@
         "uniform api",
     ]
     license = {file = "LICENSE"}
-    requires-python = ">=3.11"
+    requires-python = ">= 3.11"
     classifiers = [
         "Development Status :: 4 - Beta",
         "License :: OSI Approved :: Apache Software License",
@@ -23,7 +23,9 @@
     dynamic = ["dependencies", "optional-dependencies"]
 
 [project.urls]
-    repository = "https://github.com/JosuaKrause/redipy"
+    Source = "https://github.com/JosuaKrause/redipy"
+    Issues = "https://github.com/JosuaKrause/redipy/issues"
+    Changelog = "https://github.com/JosuaKrause/redipy/blob/jk-readme/CHANGELOG.md"
 
 [build-system]
     requires = ["setuptools>=61.2"]

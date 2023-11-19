@@ -1,13 +1,18 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+## [0.4.1] - 2023-11-19
+
+### Bug-Fixes
+
+- Fix readme links.
 
 ## [0.4.0] - 2023-11-17
 
 ### Breaking
 
 - Scripts now need explicitly named arguments. ([#3])
-- Script errors are now `ValueError` instead of `redis.exceptions.ResponseError`. ([#3])
+- Script errors are now `ValueError` instead of
+  `redis.exceptions.ResponseError`. ([#3])
 - Add name argument to `redipy.plugin.LuaRedisPatch`. ([#7])
 
 ### Added
