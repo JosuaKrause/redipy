@@ -476,12 +476,6 @@ If you have any questions, suggestions, or issues with `redipy`, please feel
 free to [open an issue][issues] on GitHub. I would love to hear your feedback
 and improve `redipy`. Thank you!
 
-## Disclaimer
-This project is a personal project and is not associated with, supported by,
-or endorsed by my employer. The views and opinions expressed in this project
-are solely my own and do not represent the views or opinions of my employer
-or any other entity.
-
 [logo_small]: https://raw.githubusercontent.com/JosuaKrause/redipy/v0.4.0/img/redipy_logo_small.png
 [logo]: https://raw.githubusercontent.com/JosuaKrause/redipy/v0.4.0/img/redipy_logo.png
 [implemented]: https://github.com/JosuaKrause/redipy/issues/8
