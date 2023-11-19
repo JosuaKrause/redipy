@@ -19,7 +19,7 @@ If you need certain functionality or found a bug, have a look at the
 [contributing](#contributing) section.
 It is easy to add redis functions to the API.
 
-## Quick Access
+## Quick Access<a id="quick-access"></a>
 
 1. [Installation](#installation)
 2. [Usage](#usage)
@@ -36,7 +36,7 @@ It is easy to add redis functions to the API.
 8. [License](#license)
 9. [Feedback](#feedback)
 
-## Installation<a id="installation"></a>
+## Installation<a id="installation"></a> [🔝](#quick-access)
 You can install `redipy` using pip:
 
 ```sh
