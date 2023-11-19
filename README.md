@@ -9,7 +9,7 @@ that implement the same functionality, such as:
 - `redipy.redis`: A backend that connects to an actual Redis instance and
   delegates all operations to it.
 
-[![redipy logo](https://raw.githubusercontent.com/JosuaKrause/redipy/v0.4.0/img/redipy_logo_small.png)](https://raw.githubusercontent.com/JosuaKrause/redipy/v0.4.0/img/redipy_logo.png)
+[![redipy logo](logo_small)](logo)
 
 ### Warning
 
@@ -40,7 +40,7 @@ r = redipy.Redis()
 # Create a redipy client using the redis backend
 r = redipy.Redis(host="localhost", port=6379)
 
-# Or
+# Or preferred
 r = redipy.Redis(
     cfg={
         "host": "localhost",
@@ -62,8 +62,8 @@ r = redipy.Redis(
 ```
 
 The `redipy` client object supports similar methods and attributes to the
-official [redis](https://pypi.org/project/redis/) Python client library. You
-can use them as you would normally do with `redis`. For example:
+official [redis](redis) Python client library.
+You can use them as you would normally do with `redis`. For example:
 
 ```python
 # Set some values
@@ -155,7 +155,7 @@ r.lpop("big", 4)  # ["3", "4"]
 
 Here, we are implementing and object stack with fall-through lookup. Each frame
 in the stack has its own fields. If the user tries to access a field that
-doesn't exist in the current stack frame (and they are setting `get_cascading`)
+doesn't exist in the current stack frame (and they are using `get_cascading`)
 the accessor will recursively go down the stack until a value for the given
 field is found (or the end of the stack is reached).
 
@@ -371,10 +371,10 @@ The current limitations of `redipy` are:
   the return value to either of these.
 
 ## License
-`redipy` is licensed under the [Apache License (Version 2.0)](https://github.com/JosuaKrause/redipy/blob/0.4.0/LICENSE).
+`redipy` is licensed under the [Apache License (Version 2.0)](license).
 
 ## Changelog
-The changelog can be found [here](https://github.com/JosuaKrause/redipy/blob/main/CHANGELOG.md).
+The changelog can be found [here](changelog).
 
 ## Contributing<a id="Contributing"></a>
 
@@ -461,12 +461,11 @@ For a full implementation follow these steps:
 9. Make sure `make lint-all` passes, as well as, all tests (`make pytest`)
   run without issue.
 
-You can submit your patch as pull request
-[here](https://github.com/JosuaKrause/redipy/pulls).
+You can submit your patch as pull request [here](pulls).
 
 ## Feedback
 If you have any questions, suggestions, or issues with `redipy`, please feel
-free to [open an issue](https://github.com/JosuaKrause/redipy/issues) on
+free to [open an issue](issues) on
 GitHub. I would love to hear your feedback and improve `redipy`. Thank you!
 
 ## Disclaimer
@@ -474,3 +473,11 @@ This project is a personal project and is not associated with, supported by,
 or endorsed by my employer. The views and opinions expressed in this project
 are solely my own and do not represent the views or opinions of my employer
 or any other entity.
+
+[logo_small]: https://raw.githubusercontent.com/JosuaKrause/redipy/v0.4.0/img/redipy_logo_small.png
+[logo]: https://raw.githubusercontent.com/JosuaKrause/redipy/v0.4.0/img/redipy_logo.png
+[redis]: https://pypi.org/project/redis/
+[license]: https://github.com/JosuaKrause/redipy/blob/0.4.0/LICENSE
+[changelog]: https://github.com/JosuaKrause/redipy/blob/main/CHANGELOG.md
+[pulls]: https://github.com/JosuaKrause/redipy/pulls
+[issues]: https://github.com/JosuaKrause/redipy/issues

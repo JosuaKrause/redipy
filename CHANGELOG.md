@@ -11,7 +11,8 @@
 ### Breaking
 
 - Scripts now need explicitly named arguments. ([#3])
-- Script errors are now `ValueError` instead of `redis.exceptions.ResponseError`. ([#3])
+- Script errors are now `ValueError` instead of
+  `redis.exceptions.ResponseError`. ([#3])
 - Add name argument to `redipy.plugin.LuaRedisPatch`. ([#7])
 
 ### Added
