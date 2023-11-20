@@ -1,5 +1,6 @@
 __pycache__/
 !plugins/__init__.py
+/*.rdb
 .cache
 .coverage
 .coverage.*
