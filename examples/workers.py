@@ -4,10 +4,11 @@ import argparse
 import random
 import threading
 import time
-from typing import Literal, NoReturn
+from typing import cast, Literal, NoReturn
 
 import redipy
-from redipy import RedisClientAPI
+from redipy import ExecFunction, RedisClientAPI
+from redipy.script import FnContext, RedisHash, RedisSortedSet, RedisVar, ToNum
 
 
 def get_worker_id(client: RedisClientAPI, heartbeat_key: str) -> str:
@@ -16,6 +17,7 @@ def get_worker_id(client: RedisClientAPI, heartbeat_key: str) -> str:
 
     Args:
         client (RedisClientAPI): The redis client.
+
         heartbeat_key (str): The heartbeat key base.
 
     Returns:
@@ -25,14 +27,14 @@ def get_worker_id(client: RedisClientAPI, heartbeat_key: str) -> str:
     while True:
         worker_id = f"w{worker_num:08x}"
         if not client.set(
-                f"{heartbeat_key}:{worker_id}", "1", mode="if_missing"):
+                f"{heartbeat_key}:{worker_id}", "init", mode="if_missing"):
             worker_num += 1
             continue
         print(f"register worker {worker_id}")
         return worker_id
 
 
-def heartbeat(
+def worker_heartbeat(
         worker_id: str,
         client: RedisClientAPI,
         heartbeat_key: str) -> NoReturn:
@@ -41,14 +43,13 @@ def heartbeat(
 
     Args:
         worker_id (str): The worker id.
-        client (RedisClientAPI): The redis client.
-        heartbeat_key (str): The heartbeat key base.
 
-    Returns:
-        NoReturn: If the function exits the worker will become inactive.
+        client (RedisClientAPI): The redis client.
+
+        heartbeat_key (str): The heartbeat key base.
     """
     while True:
-        client.set(f"{heartbeat_key}:{worker_id}", "1", expire_in=2.0)
+        client.set(f"{heartbeat_key}:{worker_id}", "alive", expire_in=2.0)
         time.sleep(1.0)
 
 
@@ -57,16 +58,53 @@ def detect_stale_workers(
         queue_key: str,
         busy_key: str,
         heartbeat_key: str) -> NoReturn:
+    """
+    Goes through the list of active tasks and checks whether the associated
+    workers are still alive. If not, the task is added back to the task queue
+    with a higher priority.
+
+    Args:
+        client (RedisClientAPI): The redis client.
+
+        queue_key (str): The task queue key.
+
+        busy_key (str): The busy hash key.
+
+        heartbeat_key (str): The heartbeat key base.
+    """
+
+    def _task_check() -> ExecFunction:
+        ctx = FnContext()
+        queue = RedisSortedSet(ctx.add_key("queue"))
+        busy = RedisHash(ctx.add_key("busy"))
+        heartbeat = RedisVar(ctx.add_key("heartbeat"))
+        task = ctx.add_arg("task")
+
+        res = ctx.add_local(None)
+        b_then, _ = ctx.if_(heartbeat.exists().eq_(0))
+        b_then.add(queue.add(2.0, task))
+        b_then.add(busy.hdel(task))
+        b_then.add(res.assign(queue.card()))
+
+        ctx.set_return_value(res)
+
+        return client.register_script(ctx)
+
+    task_check = _task_check()
     while True:
         for task_id, worker_id in client.hgetall(busy_key).items():
-            if client.exists(f"{heartbeat_key}:{worker_id}"):
-                continue
-            with client.pipeline() as pipe:
-                pipe.zadd(queue_key, {task_id: 2.0})
-                pipe.hdel(busy_key, task_id)
-                pipe.zcard(queue_key)
-                _, _, count = pipe.execute()
-            print(f"readd task {task_id} (total tasks {count})")
+            cur = cast(int | None, task_check(
+                keys={
+                    "queue": queue_key,
+                    "busy": busy_key,
+                    "heartbeat": f"{heartbeat_key}:{worker_id}",
+                },
+                args={
+                    "task": task_id,
+                }))
+            if cur is not None:
+                print(f"readd task {task_id} (total tasks {cur})")
+        time.sleep(1.0)
 
 
 def enqueue_task(
@@ -76,6 +114,22 @@ def enqueue_task(
         priority: float,
         task_id: str,
         task_payload: float) -> None:
+    """
+    Adds a new task to the task queue.
+
+    Args:
+        client (RedisClientAPI): The redis client.
+
+        queue_key (str): The task queue key.
+
+        info_key (str): The task info hash key.
+
+        priority (float): The priority of the task.
+
+        task_id (str): The task id.
+
+        task_payload (float): The task payload.
+    """
     with client.pipeline() as pipe:
         pipe.hset(info_key, {task_id: f"{task_payload}"})
         pipe.zadd(queue_key, {task_id: priority})
@@ -84,36 +138,24 @@ def enqueue_task(
     print(f"add task {task_id} (payload {task_payload}; total tasks {count})")
 
 
-def pick_task(
-        worker_id: str,
-        client: RedisClientAPI,
-        queue_key: str,
-        info_key: str,
-        busy_key: str) -> tuple[str, float] | None:
-    res = client.zpop_max(queue_key)
-    if not res:
-        return None
-    task_id = res[0][0]
-    task_payload = client.hget(info_key, task_id)
-    assert task_payload is not None
-    client.hset(busy_key, {task_id: worker_id})
-    return task_id, float(task_payload)
-
-
 def execute_task(
         worker_id: str,
-        client: RedisClientAPI,
-        info_key: str,
-        busy_key: str,
         task_id: str,
         task_payload: float) -> None:
+    """
+    Executes a task.
+
+    Args:
+        worker_id (str): The worker id.
+
+        task_id (str): The task id.
+
+        task_payload (float): The task payload.
+    """
     print(f"[{worker_id}] start task {task_id} ({task_payload})")
     if task_payload > 0.0:
         time.sleep(task_payload)
     print(f"[{worker_id}] finished task {task_id}")
-    with client.pipeline() as pipe:
-        pipe.hdel(info_key, task_id)
-        pipe.hdel(busy_key, task_id)
 
 
 def consume_task_loop(
@@ -122,18 +164,70 @@ def consume_task_loop(
         queue_key: str,
         info_key: str,
         busy_key: str) -> NoReturn:
+    """
+    Consumes and executes tasks in a loop.
+
+    Args:
+        worker_id (str): The worker id.
+
+        client (RedisClientAPI): The redis client.
+
+        queue_key (str): The task queue key.
+
+        info_key (str): The task info hash key.
+
+        busy_key (str): The busy hash key.
+    """
+
+    def _pick_task() -> ExecFunction:
+        ctx = FnContext()
+        queue = RedisSortedSet(ctx.add_key("queue"))
+        info = RedisHash(ctx.add_key("info"))
+        busy = RedisHash(ctx.add_key("busy"))
+        worker = ctx.add_arg("worker")
+
+        res = ctx.add_local([])
+        loop, _, task = ctx.for_(queue.pop_max())
+        loop.add(res.set_at(res.len_(), task[0]))
+        loop.add(res.set_at(res.len_(), ToNum(info.hget(task[0]))))
+        loop.add(busy.hset({task[0]: worker}))
+
+        ctx.set_return_value(res)
+        return client.register_script(ctx)
+
+    pick_task = _pick_task()
     while True:
-        task = pick_task(worker_id, client, queue_key, info_key, busy_key)
-        if task is None:
+        task = cast(list, pick_task(
+            keys={
+                "queue": queue_key,
+                "info": info_key,
+                "busy": busy_key,
+            },
+            args={
+                "worker": worker_id,
+            }))
+        if not task:
             time.sleep(1.0)
             continue
         task_id, task_payload = task
-        execute_task(
-            worker_id, client, info_key, busy_key, task_id, task_payload)
+        execute_task(worker_id, task_id, task_payload)
+        with client.pipeline() as pipe:
+            pipe.hdel(info_key, task_id)
+            pipe.hdel(busy_key, task_id)
 
 
 def produce_task_loop(
         client: RedisClientAPI, queue_key: str, info_key: str) -> NoReturn:
+    """
+    Produces new tasks in a loop.
+
+    Args:
+        client (RedisClientAPI): The redis client.
+
+        queue_key (str): The task queue key.
+
+        info_key (str): The task info hash key.
+    """
     task_num = 0
     while True:
         priority = random.choice([0, 0.25, 0.5, 0.75, 1.0])
@@ -146,15 +240,27 @@ def produce_task_loop(
 
 
 def parse_args() -> Literal["single", "producer", "worker"]:
-    parser = argparse.ArgumentParser(
-        description="Worker Example")
-    parser.add_argument("mode", choices=["single", "producer", "worker"])
+    """
+    Parses the command line arguments.
+
+    Returns:
+        str: The mode.
+    """
+    parser = argparse.ArgumentParser(description="Worker Example")
+    parser.add_argument(
+        "mode",
+        choices=["single", "producer", "worker"],
+        help=(
+            "Which mode to run. Single is fully self contained. "
+            "Producer and worker run in separate processes together."
+        ))
 
     args = parser.parse_args()
     return args.mode
 
 
 def run() -> None:
+    """Runs the app."""
     mode = parse_args()
     queue_key = "task_queue"
     info_key = "task_info"
@@ -168,31 +274,41 @@ def run() -> None:
         produce_task_loop(client, queue_key, info_key)
 
     def do_heartbeat(worker_id: str, client: RedisClientAPI) -> NoReturn:
-        heartbeat(worker_id, client, heartbeat_key)
+        worker_heartbeat(worker_id, client, heartbeat_key)
 
     def do_consume(worker_id: str, client: RedisClientAPI) -> NoReturn:
         consume_task_loop(worker_id, client, queue_key, info_key, busy_key)
 
-    client = redipy.Redis(cfg={
-        "host": "localhost",
-        "port": 6379,
-        "passwd": "",
-        "prefix": "",
-    })
-
     if mode == "single":
-        pass
-    elif mode == "producer":
-        threading.Thread(
-            target=do_cleanup, args=(client,), daemon=True).start()
-        threading.Thread(target=do_produce, args=(client,)).start()
-    elif mode == "worker":
-        worker_id = get_worker_id(client, heartbeat_key)
-        threading.Thread(
-            target=do_heartbeat, args=(worker_id, client), daemon=True).start()
-        threading.Thread(target=do_consume, args=(worker_id, client)).start()
+        client = redipy.Redis()
+        for wid in range(3):
+            threading.Thread(
+                target=do_consume,
+                args=(f"w{wid:08x}", client),
+                daemon=True).start()
+        do_produce(client)
     else:
-        raise ValueError(f"invalid mode: {mode}")
+        client = redipy.Redis(cfg={
+            "host": "localhost",
+            "port": 6379,
+            "passwd": "",
+            "prefix": "",
+        })
+        if mode == "producer":
+            threading.Thread(
+                target=do_cleanup,
+                args=(client,),
+                daemon=True).start()
+            do_produce(client)
+        elif mode == "worker":
+            worker_id = get_worker_id(client, heartbeat_key)
+            threading.Thread(
+                target=do_heartbeat,
+                args=(worker_id, client),
+                daemon=True).start()
+            do_consume(worker_id, client)
+        else:
+            raise ValueError(f"invalid mode: {mode}")
 
 
 if __name__ == "__main__":
