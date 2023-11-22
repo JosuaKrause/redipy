@@ -11,7 +11,7 @@ that implement the same functionality, such as:
 
 [![redipy logo][logo-small]][logo]
 
-This [medium article][medium] explores some of the rational behind the library.
+This [medium article][medium] explores some of the rationale behind the library.
 
 ### Warning
 
