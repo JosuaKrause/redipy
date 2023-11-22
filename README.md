@@ -104,7 +104,7 @@ r.lpop("mylist")  # "c"
 r.rpop("mylist", 3)  # ["d", "a", "b"]
 ```
 
-More examples can be found in the [example folder][examples].
+More examples can be found in the [examples folder][examples].
 
 [🔝](#quick-access)
 
