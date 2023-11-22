@@ -9,6 +9,8 @@ that implement the same functionality, such as:
 - `redipy.redis`: A backend that connects to an actual Redis instance and
   delegates all operations to it.
 
+This [medium article][medium] explores some of the rational behind the library.
+
 [![redipy logo][logo-small]][logo]
 
 ### Warning
@@ -101,6 +103,8 @@ r.rpush("mylist", "d")
 r.lpop("mylist")  # "c"
 r.rpop("mylist", 3)  # ["d", "a", "b"]
 ```
+
+More examples can be found in the [example folder][examples].
 
 [🔝](#quick-access)
 
@@ -527,10 +531,12 @@ and improve `redipy`. Thank you!
 [🔝](#quick-access)
 
 [changelog]: https://github.com/JosuaKrause/redipy/blob/main/CHANGELOG.md
+[examples]: https://github.com/JosuaKrause/redipy/tree/main/examples
 [implemented]: https://github.com/JosuaKrause/redipy/issues/8
 [issues]: https://github.com/JosuaKrause/redipy/issues
 [license]: https://github.com/JosuaKrause/redipy/blob/v0.4.2/LICENSE
 [logo-small]: https://raw.githubusercontent.com/JosuaKrause/redipy/v0.4.2/img/redipy_logo_small.png
 [logo]: https://raw.githubusercontent.com/JosuaKrause/redipy/v0.4.2/img/redipy_logo.png
+[medium]: https://medium.com/@josua.krause/a-backend-agnostic-redis-interface-9fdeb8641bc5?source=friends_link&sk=565113f29f4cfadf174aa3ab23ab9a16
 [pulls]: https://github.com/JosuaKrause/redipy/pulls
 [redis]: https://pypi.org/project/redis/
