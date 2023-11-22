@@ -1,4 +1,4 @@
-# redipy
+# RediPy
 
 `redipy` is a Python library that provides a uniform interface to Redis-like
 storage systems. It allows you to use the same Redis API with different backends
@@ -15,11 +15,11 @@ This [medium article][medium] explores some of the rationale behind the library.
 
 ### Warning
 
-This library is still early in development and [not all redis functions are
+This library is still early in development and [not all Redis functions are
 available yet][implemented]!
 If you need certain functionality or found a bug, have a look at the
 [contributing](#contributing) section.
-It is easy to add redis functions to the API.
+It is easy to add Redis functions to the API.
 
 ## Quick Access<a id="quick-access"></a>
 
@@ -83,7 +83,7 @@ r = redipy.Redis(
 ```
 
 The `redipy` client object supports similar methods and attributes to the
-official [redis][redis] Python client library.
+official [Redis][redis] Python client library.
 You can use them as you would normally do with `redis`. For example:
 
 ```python
@@ -115,17 +115,17 @@ The main features of `redipy` are:
   preferences, without changing your code or learning new APIs.
 
 - Adaptability: You can start your project small with the memory backend and
-  only switch to a full redis server once the application grows.
+  only switch to a full Redis server once the application grows.
 
-- Scripting: You can create backend independent redis scripts without using lua.
+- Scripting: You can create backend independent Redis scripts without using Lua.
   Scripts are written using a symbolic API in python.
 
 - Compatibility: You can use any Redis client or tool with any backend.
 
-- Mockability: You can use redipy in tests that require redis with the memory
+- Mockability: You can use redipy in tests that require Redis with the memory
   backend to easily mock the functionality without actually having to run a
-  redis server in the background. Also, this avoids issues that might occur
-  when running tests in parallel with an actual redis server.
+  Redis server in the background. Also, this avoids issues that might occur
+  when running tests in parallel with an actual Redis server.
 
 - Performance: You can leverage the high performance of Redis or other backends
   that offer fast and scalable data storage and retrieval.
@@ -144,7 +144,7 @@ by any backend.
 
 ### Simple Example<a id="simple-example"></a>
 
-Here, we are writing a filter function that drains a redis list
+Here, we are writing a filter function that drains a Redis list
 and puts items into a "left" and a "right" list by comparing each items
 numerical value with a given `cmp` value:
 
@@ -395,24 +395,24 @@ The current limitations of `redipy` are:
 
 - Not all Redis commands are supported yet: This will eventually be resolved.
 - The API differs slightly: Most notably stored values are always strings
-  (i.e., the bytes returned by redis are decoded as utf-8).
-- The semantic of redis functions inside scripts has been altered to feel more
-  natural coming from python: Redis functions inside lua scripts often differ
+  (i.e., the bytes returned by Redis are decoded as utf-8).
+- The semantic of Redis functions inside scripts has been altered to feel more
+  natural coming from python: Redis functions inside Lua scripts often differ
   greatly from the documented behavior. For example, `LPOP` returns `false` for
-  an empty list inside lua (instead of `nil` or `cjson.null`). While `LPOP`
+  an empty list inside Lua (instead of `nil` or `cjson.null`). While `LPOP`
   returns `None` in the python API. The script API of `redipy` has been altered
-  to match the python API more closely. As the user doesn't code in lua directly
-  the benefit of having a more consistent API outweighs the more complicated lua
+  to match the python API more closely. As the user doesn't code in Lua directly
+  the benefit of having a more consistent API outweighs the more complicated Lua
   code that needs to be generated in the backend.
-- Scripts aim to use python semantics as best as possible: In lua array indices
+- Scripts aim to use python semantics as best as possible: In Lua array indices
   start at 1. The script API uses a 0 based indexing system and transparently
-  adjusts indices in the lua backend. Other, similar changes are performed
+  adjusts indices in the Lua backend. Other, similar changes are performed
   as well.
 - Scripts use JSON to pass arguments and return values: The arguments to the
-  script are passed as JSON bytes for the lua backend. Keys are passed as is.
+  script are passed as JSON bytes for the Lua backend. Keys are passed as is.
   The return value of the script is also converted into JSON when moving from
-  lua to python. Note, that the empty dictionary (`{}`) and the empty list
-  (`[]`) are indistinguishable in lua so `None` is returned instead of setting
+  Lua to python. Note, that the empty dictionary (`{}`) and the empty list
+  (`[]`) are indistinguishable in Lua so `None` is returned instead of setting
   the return value to either of these.
 
 [🔝](#quick-access)
@@ -435,14 +435,14 @@ If you have a fix for a bug don't hesistate to open a PR.
 [🔝](#quick-access)
 
 ### Missing Redis or Lua Functions<a id="missing-redis-or-lua-functions"></a>
-If you encounter a missing redis or lua function please consider adding it
+If you encounter a missing Redis or Lua function please consider adding it
 yourself (see the [implementing](#implementing-new-redis-functions) section).
 Here also opening an issue or giving a thumbsup to existing issues helps
 with prioritization.
 
 However, if you need it only in your local setup
 without API support or support for multiple backends, pipelines, etc. you can
-use the raw underlying redis connection via
+use the raw underlying Redis connection via
 `redipy.main.Redis.get_redis_runtime` and
 `redipy.redis.conn.RedisConnection.get_connection` or make use of
 the plug-in mechanism.
@@ -456,8 +456,8 @@ defined via loading the plugin they can be used in a `redipy.script.FnContext`
 via `redipy.script.RedisFn` or `redipy.script.CallFn` respectively.
 
 Note, that `redipy.script.RedisFn` and `redipy.script.CallFn` can always be
-used in redis backend scripts. However, calling functions this way will have
-the native lua behavior which can lead to surprising results. To patch those
+used in Redis backend scripts. However, calling functions this way will have
+the native Lua behavior which can lead to surprising results. To patch those
 up as well you can use `redipy.redis.lua.LuaBackend.add_redis_patch_plugin`,
 `redipy.redis.lua.LuaBackend.add_general_patch_plugin`, and
 `redipy.redis.lua.LuaBackend.add_helper_function_plugin` to add the subclasses
@@ -473,13 +473,13 @@ different backends.
 
 ### Implementing New Redis Functions<a id="implementing-new-redis-functions"></a>
 
-The easiest way to contribute to `redipy` is to pick some redis API functions
+The easiest way to contribute to `redipy` is to pick some Redis API functions
 that have not (or not completely) been [implemented][implemented] in `redipy`
 yet. It is also much appreciated if you just add test cases or the stubs in a
 PR. For a full implementation follow these steps:
 
 1. Add the signature of the function to `redipy.api.RedisAPI`. Adjust as
-  necessary from the redis spec to get a pythonic feel. Also, add the signature
+  necessary from the Redis spec to get a pythonic feel. Also, add the signature
   to `redipy.api.PipelineAPI` but with `None` as return value. Additionally,
   add the redirect to the backend in `redipy.main.Redis`.
 2. Implement the function in `redipy.redis.conn.RedisConnection` and
@@ -488,11 +488,11 @@ PR. For a full implementation follow these steps:
   to convert bytes into strings via `...decode("utf-8")` (there are various
   helper functions for this in `redipy.util`).
 3. Add tests to `test/test_sanity.py` to determine the function's behavior in
-  lua (especially its edge cases).
-4. If the lua behavior needs to be changed to provide a better feel you can add
+  Lua (especially its edge cases).
+4. If the Lua behavior needs to be changed to provide a better feel you can add
   a monkeypatch for the function call by either creating a class in
   `redipy.redis.rpatch` to directly change the returned expr for the execution
-  graph or using a lua helper function via adding a class to
+  graph or using a Lua helper function via adding a class to
   `redipy.redis.helpers` (you need to use a patch to use the helper in the
   right location).
 5. Next, add and implement the functionality in
