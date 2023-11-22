@@ -9,9 +9,9 @@ that implement the same functionality, such as:
 - `redipy.redis`: A backend that connects to an actual Redis instance and
   delegates all operations to it.
 
-This [medium article][medium] explores some of the rational behind the library.
-
 [![redipy logo][logo-small]][logo]
+
+This [medium article][medium] explores some of the rational behind the library.
 
 ### Warning
 
