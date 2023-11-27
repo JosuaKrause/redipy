@@ -9,21 +9,7 @@ that implement the same functionality, such as:
 - `redipy.redis`: A backend that connects to an actual Redis instance and
   delegates all operations to it.
 
-[![redipy logo][logo-small]][logo]
-
-This [medium article][medium] explores some of the rationale behind the library.
-
-### Warning
-
-This library is still early in development and [not all Redis functions are
-available yet][implemented]!
-If you need certain functionality or found a bug, have a look at the
-[contributing](#contributing) section.
-It is easy to add Redis functions to the API.
-
-## Quick Access<a id="quick-access"></a>
-
-<details><summary>Table of Content</summary>
+<details><summary>Table of Content</summary><a id="toc"></a>
 
 1. [Installation](#installation)
 2. [Usage](#usage)
@@ -42,6 +28,18 @@ It is easy to add Redis functions to the API.
 
 </details>
 
+[![redipy logo][logo-small]][logo]
+
+This [medium article][medium] explores some of the rationale behind the library.
+
+### Warning
+
+This library is still early in development and [not all Redis functions are
+available yet][implemented]!
+If you need certain functionality or found a bug, have a look at the
+[contributing](#contributing) section.
+It is easy to add Redis functions to the API.
+
 ## Installation<a id="installation"></a>
 You can install `redipy` using pip:
 
@@ -49,7 +47,7 @@ You can install `redipy` using pip:
 pip install redipy
 ```
 
-[🔝](#quick-access)
+[🔝](#toc)
 
 ## Usage<a id="usage"></a>
 To use `redipy`, you need to import the library and create a `redipy` client
@@ -110,7 +108,7 @@ r.rpop("mylist", 3)  # ["d", "a", "b"]
 
 More examples can be found in the [examples folder][examples].
 
-[🔝](#quick-access)
+[🔝](#toc)
 
 ## Features<a id="features"></a>
 The main features of `redipy` are:
@@ -137,14 +135,14 @@ The main features of `redipy` are:
 - Migration: You can easily migrate data between different backends, or use
   multiple backends simultaneously.
 
-[🔝](#quick-access)
+[🔝](#toc)
 
 ## Custom Scripts<a id="custom-scripts"></a>
 
 Redis scripts can be defined via a symbolic API in python and can be executed
 by any backend.
 
-[🔝](#quick-access)
+[🔝](#toc)
 
 ### Simple Example<a id="simple-example"></a>
 
@@ -196,7 +194,7 @@ r.lpop("small", 4)  # ["1", "2"]
 r.lpop("big", 4)  # ["3", "4"]
 ```
 
-[🔝](#quick-access)
+[🔝](#toc)
 
 ### Advanced Example<a id="advanced-example"></a>
 
@@ -392,7 +390,7 @@ class RStack:
         return self._rt.register_script(ctx)
 ```
 
-[🔝](#quick-access)
+[🔝](#toc)
 
 ## Limitations<a id="limitations"></a>
 The current limitations of `redipy` are:
@@ -419,14 +417,14 @@ The current limitations of `redipy` are:
   (`[]`) are indistinguishable in Lua so `None` is returned instead of setting
   the return value to either of these.
 
-[🔝](#quick-access)
+[🔝](#toc)
 
 ## Contributing<a id="contributing"></a>
 
 Any contribution, even if it is just creating an issue for a bug,
 is much appreciated.
 
-[🔝](#quick-access)
+[🔝](#toc)
 
 ### If You Find a Bug<a id="if-you-find-a-bug"></a>
 
@@ -436,7 +434,7 @@ implementation efforts. Even if you cannot solve the bug yourself,
 investigating why it happens or creating a PR to add test cases helps a lot.
 If you have a fix for a bug don't hesistate to open a PR.
 
-[🔝](#quick-access)
+[🔝](#toc)
 
 ### Missing Redis or Lua Functions<a id="missing-redis-or-lua-functions"></a>
 If you encounter a missing Redis or Lua function please consider adding it
@@ -473,7 +471,7 @@ Adding functions as described above is discouraged as it may lead to
 inconsistent support of different backends and inconsistent behavior across
 different backends.
 
-[🔝](#quick-access)
+[🔝](#toc)
 
 ### Implementing New Redis Functions<a id="implementing-new-redis-functions"></a>
 
@@ -515,24 +513,24 @@ PR. For a full implementation follow these steps:
 
 You can submit your patch as pull request [here][pulls].
 
-[🔝](#quick-access)
+[🔝](#toc)
 
 ## Changelog<a id="changelog"></a>
 The changelog can be found [here][changelog].
 
-[🔝](#quick-access)
+[🔝](#toc)
 
 ## License<a id="license"></a>
 `redipy` is licensed under the [Apache License (Version 2.0)][license].
 
-[🔝](#quick-access)
+[🔝](#toc)
 
 ## Feedback<a id="feedback"></a>
 If you have any questions, suggestions, or issues with `redipy`, please feel
 free to [open an issue][issues] on GitHub. I would love to hear your feedback
 and improve `redipy`. Thank you!
 
-[🔝](#quick-access)
+[🔝](#toc)
 
 [changelog]: https://github.com/JosuaKrause/redipy/blob/main/CHANGELOG.md
 [examples]: https://github.com/JosuaKrause/redipy/tree/main/examples
