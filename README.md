@@ -23,6 +23,8 @@ It is easy to add Redis functions to the API.
 
 ## Quick Access<a id="quick-access"></a>
 
+<details><summary>Table of Content</summary>
+
 1. [Installation](#installation)
 2. [Usage](#usage)
 3. [Features](#features)
@@ -37,6 +39,8 @@ It is easy to add Redis functions to the API.
 7. [Changelog](#changelog)
 8. [License](#license)
 9. [Feedback](#feedback)
+
+</details>
 
 ## Installation<a id="installation"></a>
 You can install `redipy` using pip:
