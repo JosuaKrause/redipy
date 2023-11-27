@@ -9,7 +9,10 @@ that implement the same functionality, such as:
 - `redipy.redis`: A backend that connects to an actual Redis instance and
   delegates all operations to it.
 
-<a id="toc"></a>
+[![redipy logo][logo-small]][logo]
+
+## Overview<a id="toc"></a>
+
 <details><summary>Table of Content</summary>
 
 1. [Installation](#installation)
@@ -28,8 +31,6 @@ that implement the same functionality, such as:
 9. [Feedback](#feedback)
 
 </details>
-
-[![redipy logo][logo-small]][logo]
 
 This [medium article][medium] explores some of the rationale behind the library.
 
