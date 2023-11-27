@@ -9,7 +9,8 @@ that implement the same functionality, such as:
 - `redipy.redis`: A backend that connects to an actual Redis instance and
   delegates all operations to it.
 
-<details><summary>Table of Content</summary><a id="toc"></a>
+<a id="toc"></a>
+<details><summary>Table of Content</summary>
 
 1. [Installation](#installation)
 2. [Usage](#usage)
