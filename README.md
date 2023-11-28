@@ -13,7 +13,7 @@ that implement the same functionality, such as:
 
 ## Overview<a id="toc"></a>
 
-<details><summary>Table of Content</summary>
+<details><summary>Table of Contents</summary>
 
 1. [Installation](#installation)
 2. [Usage](#usage)
@@ -71,6 +71,8 @@ r = redipy.Redis(
         "host": "localhost",
         "port": 6379,
         "passwd": "",
+        # A prefix that gets added to every key.
+        # Can be used to implement namespaces.
         "prefix": "",
     })
 
@@ -398,6 +400,7 @@ class RStack:
 The current limitations of `redipy` are:
 
 - Not all Redis commands are supported yet: This will eventually be resolved.
+  See [this issue to see the progress][implemented].
 - The API differs slightly: Most notably stored values are always strings
   (i.e., the bytes returned by Redis are decoded as utf-8).
 - The semantic of Redis functions inside scripts has been altered to feel more
