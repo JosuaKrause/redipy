@@ -239,7 +239,7 @@ def produce_task_loop(
         task_num += 1
 
 
-def parse_args() -> Literal["single", "producer", "worker"]:
+def parse_args() -> tuple[Literal["single", "producer", "worker"], bool]:
     """
     Parses the command line arguments.
 
@@ -254,14 +254,18 @@ def parse_args() -> Literal["single", "producer", "worker"]:
             "Which mode to run. Single is fully self contained. "
             "Producer and worker run in separate processes together."
         ))
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="If set all generated lua scripts are printed to stdout.")
 
     args = parser.parse_args()
-    return args.mode
+    return args.mode, args.verbose
 
 
 def run() -> None:
     """Runs the app."""
-    mode = parse_args()
+    mode, lua_verbose = parse_args()
     queue_key = "task_queue"
     info_key = "task_info"
     busy_key = "busy_tasks"
@@ -279,6 +283,10 @@ def run() -> None:
     def do_consume(worker_id: str, client: RedisClientAPI) -> NoReturn:
         consume_task_loop(worker_id, client, queue_key, info_key, busy_key)
 
+    def print_lua(code: list[str]) -> None:
+        for line in code:
+            print(line)
+
     if mode == "single":
         client = redipy.Redis()
         for wid in range(3):
@@ -288,12 +296,14 @@ def run() -> None:
                 daemon=True).start()
         do_produce(client)
     else:
-        client = redipy.Redis(cfg={
-            "host": "localhost",
-            "port": 6379,
-            "passwd": "",
-            "prefix": "",
-        })
+        client = redipy.Redis(
+            cfg={
+                "host": "localhost",
+                "port": 6379,
+                "passwd": "",
+                "prefix": "",
+            },
+            lua_code_hook=print_lua if lua_verbose else None)
         if mode == "producer":
             threading.Thread(
                 target=do_cleanup,
