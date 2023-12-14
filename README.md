@@ -544,6 +544,6 @@ and improve `redipy`. Thank you!
 [license]: https://github.com/JosuaKrause/redipy/blob/v0.4.2/LICENSE
 [logo-small]: https://raw.githubusercontent.com/JosuaKrause/redipy/v0.4.2/img/redipy_logo_small.png
 [logo]: https://raw.githubusercontent.com/JosuaKrause/redipy/v0.4.2/img/redipy_logo.png
-[medium]: https://medium.com/@josua.krause/a-backend-agnostic-redis-interface-9fdeb8641bc5?source=friends_link&sk=565113f29f4cfadf174aa3ab23ab9a16
+[medium]: https://medium.josuakrause.com/a-backend-agnostic-redis-interface-9fdeb8641bc5?source=friends_link&sk=565113f29f4cfadf174aa3ab23ab9a16
 [pulls]: https://github.com/JosuaKrause/redipy/pulls
 [redis]: https://pypi.org/project/redis/

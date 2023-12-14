@@ -3,6 +3,7 @@ import collections
 import datetime
 import itertools
 import time
+from collections.abc import Iterable
 from typing import Literal, overload
 
 from redipy.api import RedisAPI, RSetMode, RSM_ALWAYS, RSM_EXISTS, RSM_MISSING
@@ -69,6 +70,7 @@ class State:
         self._zorder: dict[str, list[str]] = {}
         self._zscores: dict[str, dict[str, float]] = {}
         self._deletes: set[str] = set()
+        self._delete_count: int = 0  # TODO: for scan offset adjustment
 
     def key_type(self, key: str) -> KeyType | None:
         """
@@ -118,6 +120,19 @@ class State:
             raise ValueError(f"key {key} already used as sorted set")
         if self._parent is not None:
             self._parent.verify_key(key_type, key)
+
+    def get_all_keys(self) -> Iterable[str]:
+        if self._parent is not None:
+            yield from self._parent.get_all_keys()
+        self._clean_vals()
+        for key in self._vals:
+            yield key
+        for key in self._queues:
+            yield key
+        for key in self._hashes:
+            yield key
+        for key in self._zorder:
+            yield key
 
     def exists(self, key: str) -> bool:
         """
