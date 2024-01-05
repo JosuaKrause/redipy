@@ -1,8 +1,22 @@
+# Copyright 2024 Josua Krause
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 """This module handles the internal state of the memory runtime."""
 import collections
 import datetime
 import itertools
 import time
+from collections.abc import Iterable
 from typing import Literal, overload
 
 from redipy.api import RedisAPI, RSetMode, RSM_ALWAYS, RSM_EXISTS, RSM_MISSING
@@ -69,6 +83,7 @@ class State:
         self._zorder: dict[str, list[str]] = {}
         self._zscores: dict[str, dict[str, float]] = {}
         self._deletes: set[str] = set()
+        self._delete_count: int = 0  # TODO: for scan offset adjustment
 
     def key_type(self, key: str) -> KeyType | None:
         """
@@ -118,6 +133,19 @@ class State:
             raise ValueError(f"key {key} already used as sorted set")
         if self._parent is not None:
             self._parent.verify_key(key_type, key)
+
+    def get_all_keys(self) -> Iterable[str]:
+        if self._parent is not None:
+            yield from self._parent.get_all_keys()
+        self._clean_vals()
+        for key in self._vals:
+            yield key
+        for key in self._queues:
+            yield key
+        for key in self._hashes:
+            yield key
+        for key in self._zorder:
+            yield key
 
     def exists(self, key: str) -> bool:
         """
