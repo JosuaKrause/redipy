@@ -180,3 +180,7 @@ def test_indent() -> None:
     ]
     fmt_ind = indent(fmt_str, 2)
     assert fmt_ind == ref_indent
+
+
+def test_patterns() -> None:
+    """Test redis pattern conversions."""

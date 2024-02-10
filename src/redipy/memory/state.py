@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """This module handles the internal state of the memory runtime."""
+import bisect
 import collections
 import datetime
 import itertools
@@ -20,7 +21,7 @@ from collections.abc import Iterable
 from typing import Literal, overload
 
 from redipy.api import RedisAPI, RSetMode, RSM_ALWAYS, RSM_EXISTS, RSM_MISSING
-from redipy.util import now, time_diff, to_number_str
+from redipy.util import convert_pattern, now, time_diff, to_number_str
 
 
 def compute_expire(
@@ -60,6 +61,14 @@ KeyType = Literal[
 """The different key types."""
 
 
+MIN_SCAN_LENGTH: int = 10
+"""The internal minimum number of items returned by `scan`."""
+
+
+KEYS_MAX_SCAN: int = 10000
+"""The internal maximum length for `scan` used by `keys`."""
+
+
 class State:
     """
     The state holding the actual values of the memory runtime. A state can have
@@ -83,7 +92,8 @@ class State:
         self._zorder: dict[str, list[str]] = {}
         self._zscores: dict[str, dict[str, float]] = {}
         self._deletes: set[str] = set()
-        self._delete_count: int = 0  # TODO: for scan offset adjustment
+        self._key_cache: list[str] | None = None
+        self._delete_count: int = 0
 
     def key_type(self, key: str) -> KeyType | None:
         """
@@ -134,18 +144,173 @@ class State:
         if self._parent is not None:
             self._parent.verify_key(key_type, key)
 
-    def get_all_keys(self) -> Iterable[str]:
-        if self._parent is not None:
-            yield from self._parent.get_all_keys()
-        self._clean_vals()
-        for key in self._vals:
-            yield key
-        for key in self._queues:
-            yield key
-        for key in self._hashes:
-            yield key
-        for key in self._zorder:
-            yield key
+    def _populate_key_cache(self) -> list[str]:
+        """
+        Populates the key cache.
+
+        Returns:
+            list[str]: A sorted list of all keys.
+        """
+        key_cache = sorted({
+            *self._vals,
+            *self._queues,
+            *self._hashes,
+            *self._zorder,
+            *([] if self._parent is None else self._parent.get_key_cache()),
+            })
+        self._key_cache = key_cache
+        return key_cache
+
+    def get_key_cache(self) -> list[str]:
+        """
+        Retrieves the full key cache. If necessary populates the key cache.
+        The key cache is a sorted list of all keys. It is used for scanning
+        keys.
+
+        Returns:
+            list[str]: A sorted list of all keys.
+        """
+        res = self._key_cache
+        if res is None:
+            res = self._populate_key_cache()
+        return res
+
+    def _start_ix(self, pattern_prefix: str) -> int:
+        """
+        Computes the start index in the key cache for a given pattern prefix.
+
+        Args:
+            pattern_prefix (str): The pattern prefix is the longest prefix of
+                the pattern that does not include any wildcards or ranges.
+
+        Returns:
+            int: Where the key cache can be started to be scanned to
+                immediately retrieve keys starting with at least the pattern
+                prefix.
+        """
+        return bisect.bisect_left(self.get_key_cache(), pattern_prefix)
+
+    def _scan(
+            self,
+            cursor: int,
+            length: int,
+            pattern_prefix: str | None) -> tuple[list[str], int]:
+        """
+        Internal scan. The result might include keys that will be filtered in
+        the actual scan function.
+
+        Args:
+            cursor (int): The scan cursor. If the scan cursor is 0 the starting
+                position in the key cache is used. If the scan cursor is not 0
+                it is the adjusted index one after the last returned key. The
+                index is adjusted by the total amount of keys deleted. During
+                iteration, if a key is added to the left of the cursor index
+                it will not be returned (which is allowed by the spec) and some
+                previously returned keys might be returned again. If the key is
+                added to the right it will eventually be returned as well. If
+                a key is deleted the adjustment of the cursor is shifted left
+                by one (i.e., `delete_count` is increased by one). Due to the
+                shift we continue iterating as if nothing happened. Shifting
+                the index to the left guarantees that we do not skip an
+                existing key if the deleted key was to the left.
+            length (int): The length of the returned result. To avoid expensive
+                iterations with small return lengths this value is clipped to
+                `MIN_SCAN_LENGTH` on the lower end.
+            pattern_prefix (str | None): The pattern prefix is the longest
+                prefix of the pattern that does not include any wildcards or
+                ranges. If None, all keys are considered.
+
+        Returns:
+            tuple[list[str], int]: A tuple of the returned keys and the next
+                cursor. If the iteration is complete the next cursor is 0.
+        """
+        delete_count = self._delete_count
+        if cursor == 0 and pattern_prefix is not None:
+            cursor = self._start_ix(pattern_prefix)
+        else:
+            cursor = max(cursor - delete_count, 0)
+        key_cache = self.get_key_cache()
+        end_ix = max(cursor + max(length, MIN_SCAN_LENGTH), 1)
+        res = key_cache[cursor:end_ix]
+        if end_ix >= len(key_cache):
+            end_ix = 0
+        else:
+            end_ix += delete_count
+        return res, end_ix
+
+    def scan_keys(
+            self,
+            cursor: int,
+            length: int,
+            pattern: str | None,
+            filter_type: KeyType | None) -> tuple[list[str], int]:
+        """
+        Scan through all keys.
+
+        Args:
+            cursor (int): The scan cursor. A value of 0 initiates the beginning
+                of the scan. All other values are defined internally and should
+                only be previous return values of scan.
+            length (int): The length hint of the returned values. The actual
+                number of returned keys might differ.
+            pattern (str | None): If not None a redis key pattern to filter
+                keys.
+            filter_type (KeyType | None): If not None filter by key type.
+
+        Returns:
+            tuple[list[str], int]: A tuple of the returned keys and the next
+                cursor. If the iteration is complete the next cursor is 0.
+        """
+        if pattern is not None:
+            prefix, pat = convert_pattern(pattern)
+        else:
+            prefix = None
+            pat = None
+
+        def process(keys: list[str]) -> Iterable[str]:
+            for key in keys:
+                key_type = self.key_type(key)
+                if key_type is None:
+                    continue
+                if filter_type is not None and key_type != filter_type:
+                    continue
+                if pat is not None and not pat.match(key):
+                    continue
+                yield key
+
+        keys, next_cursor = self._scan(cursor, length, prefix)
+        if prefix is not None and keys:
+            last_key = keys[-1]
+            last_key = last_key[:len(prefix)]
+            if last_key > prefix:
+                next_cursor = 0
+        return list(process(keys)), next_cursor
+
+    def get_all_keys(
+            self,
+            pattern: str | None,
+            filter_type: KeyType | None) -> Iterable[str]:
+        """
+        Completes a full scan through all keys.
+
+        Args:
+            pattern (str | None): If not None a redis key pattern to filter
+                keys.
+            filter_type (KeyType | None): If not None filter by key type.
+
+        Yields:
+            str: The key.
+        """
+        length = MIN_SCAN_LENGTH
+        cursor = 0
+        while True:
+            keys, next_cursor = self.scan_keys(
+                cursor, length, pattern, filter_type)
+            yield from keys
+            if next_cursor == 0:
+                break
+            cursor = next_cursor
+            length = min(length * 2, KEYS_MAX_SCAN)
 
     def exists(self, key: str) -> bool:
         """

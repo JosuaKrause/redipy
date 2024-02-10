@@ -1064,3 +1064,36 @@ def normalize_values(res: Any) -> Any:
             for key, value in res.items()
         }
     return res
+
+
+def convert_pattern(pattern: str) -> tuple[str, re.Pattern]:
+    """
+    Convert a redis pattern into a prefix and a regular expression.
+
+    Args:
+        pattern (str): The redis pattern. A redis pattern can contain the
+            wildcards `*` (variable match) and `?` (single character match) and
+            character groups `[...]` which can be negated via `^` and allow
+            `-` to specify character ranges. `\\` can be used to use the
+            literal special characters.
+
+    Returns:
+        tuple[str, re.Pattern]: A tuple of the longest prefix without special
+            character and an equivalent regular expression.
+    """
+
+    def findix(text: str) -> int:
+        res = pattern.find(text)
+        if res < 0:
+            return len(pattern)
+        return res
+
+    first_ix = max(findix("*"), findix("?"), findix("["))
+    pat = re.escape(pattern)
+    pat = pat.replace(r"\*", r".*")
+    pat = pat.replace(r"\?", r".")
+    pat = pat.replace(r"\[", r"[")
+    pat = pat.replace(r"\]", r"]")
+    pat = pat.replace(r"\-", r"-")
+    pat = pat.replace(r"[\^", r"[^")
+    return pattern[:first_ix], re.compile(pat)
