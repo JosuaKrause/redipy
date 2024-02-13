@@ -1081,19 +1081,53 @@ def convert_pattern(pattern: str) -> tuple[str, re.Pattern]:
         tuple[str, re.Pattern]: A tuple of the longest prefix without special
             character and an equivalent regular expression.
     """
-
-    def findix(text: str) -> int:
-        res = pattern.find(text)
-        if res < 0:
-            return len(pattern)
-        return res
-
-    first_ix = max(findix("*"), findix("?"), findix("["))
-    pat = re.escape(pattern)
-    pat = pat.replace(r"\*", r".*")
-    pat = pat.replace(r"\?", r".")
-    pat = pat.replace(r"\[", r"[")
-    pat = pat.replace(r"\]", r"]")
-    pat = pat.replace(r"\-", r"-")
-    pat = pat.replace(r"[\^", r"[^")
-    return pattern[:first_ix], re.compile(pat)
+    bs = "\\"
+    star = "*"
+    one = "?"
+    sqo = "["
+    sqc = "]"
+    setop = "^-"
+    special = f"{star}{one}{sqo}"
+    ix = 0
+    is_bs = False
+    is_set = False
+    is_prefix = True
+    prefix = ""
+    pat = ""
+    while ix < len(pattern):
+        cur = pattern[ix]
+        exclude_prefix = False
+        is_escape = True
+        reset_bs = True
+        if cur == bs:
+            is_escape = False
+            if not is_bs:
+                is_bs = True
+                exclude_prefix = True
+                reset_bs = False
+        if not is_bs:
+            if cur == sqc:
+                is_escape = False
+                is_set = False
+            elif cur in special:
+                is_escape = False
+                if cur == sqo:
+                    is_set = True
+                elif not is_set:
+                    if cur == star:
+                        cur = ".*"
+                    elif cur == one:
+                        cur = "."
+                is_prefix = False
+            elif cur in setop:
+                is_escape = False
+        if is_prefix and not exclude_prefix:
+            prefix += cur
+        if is_escape and not is_bs:
+            pat += re.escape(cur)
+        else:
+            pat += cur
+        if reset_bs:
+            is_bs = False
+        ix += 1
+    return prefix, re.compile(pat)
