@@ -18,9 +18,6 @@ redis functionality can be added with the help of the `redipy.plugin` module.
 
 The most common symbols of redipy are reexported at the top level for easy
 access."""
-import importlib.metadata
-import tomllib
-
 import redipy.plugin  # pylint: disable=unused-import  # noqa
 import redipy.script  # pylint: disable=unused-import  # noqa
 from redipy.api import (
@@ -39,12 +36,24 @@ from redipy.memory.rt import LocalRuntime
 from redipy.redis.conn import RedisConfig, RedisConnection, RedisFactory
 
 
-try:
-    with open("../pyproject.toml", "rb") as f:
-        pyproject = tomllib.load(f)
-    __version__ = pyproject["project"]["version"]
-except Exception:  # pylint: disable=broad-exception-caught
-    __version__ = importlib.metadata.version("redipy")
+def _get_version() -> str:
+    # pylint: disable=import-outside-toplevel
+    try:
+        import os
+        import tomllib
+
+        with open(os.path.join(__file__, "../pyproject.toml"), "rb") as fin:
+            pyproject = tomllib.load(fin)
+        if pyproject["project"]["name"] == "redipy":
+            return pyproject["project"]["version"]
+    except Exception:  # pylint: disable=broad-exception-caught
+        pass
+    from importlib.metadata import version
+
+    return version("redipy")
+
+
+__version__ = _get_version()  # pylint: disable=invalid-name
 
 
 __all__ = [
