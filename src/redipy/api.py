@@ -16,11 +16,14 @@ in RedisAPI and once in PipelineAPI. Additional functionality is added via
 RedisClientAPI."""
 import contextlib
 import datetime
-from collections.abc import Iterator
-from typing import Literal, overload
+from collections.abc import Iterable, Iterator
+from typing import Literal, overload, TypeAlias
 
 from redipy.backend.backend import ExecFunction
 from redipy.symbolic.seq import FnContext
+
+
+Set: TypeAlias = set
 
 
 RSetMode = Literal[
@@ -37,6 +40,15 @@ This is equivalent to the NX flag."""
 RSM_EXISTS: RSetMode = "if_exists"
 """The value will only be set when the key did exist.
 This is equivalent to the XX flag."""
+
+
+KeyType = Literal[
+    "value",
+    "list",
+    "hash",
+    "zset",
+]
+"""The different key types."""
 
 
 class PipelineAPI:
@@ -510,6 +522,54 @@ class RedisAPI:
             int: The number of keys that got removed.
         """
         raise NotImplementedError()
+
+    def key_type(self, key: str) -> KeyType | None:
+        raise NotImplementedError()
+
+    def scan(
+            self,
+            cursor: int,
+            *,
+            match: str | None = None,
+            count: int | None = None,
+            filter_type: KeyType | None = None) -> tuple[int, list[str]]:
+        raise NotImplementedError()
+
+    def iter_keys(
+            self,
+            *,
+            match: str | None = None,
+            filter_type: KeyType | None = None) -> Iterable[str]:
+        cursor = 0
+        count = 10
+        while True:
+            cursor, keys = self.scan(
+                cursor,
+                match=match,
+                count=count,
+                filter_type=filter_type)
+            yield from keys
+            if cursor == 0:
+                break
+            if count < 1000:
+                count = int(min(1000, count * 1.2))
+
+    def keys_sync(
+            self,
+            match: str | None = None,
+            filter_type: KeyType | None = None) -> list[str]:
+        raise NotImplementedError()
+
+    def keys(
+            self,
+            *,
+            match: str | None = None,
+            filter_type: KeyType | None = None,
+            sync: bool = True) -> list[str]:
+        if sync:
+            return self.keys_sync(match=match, filter_type=filter_type)
+        return sorted(
+            set(self.iter_keys(match=match, filter_type=filter_type)))
 
     @overload
     def set(
@@ -1002,6 +1062,21 @@ class RedisAPI:
         Returns:
             dict[str, str]: A dictionary with fields mapping to their values.
         """
+        raise NotImplementedError()
+
+    def sadd(self, key: str, *values: str) -> int:
+        raise NotImplementedError()
+
+    def srem(self, key: str, *values: str) -> int:
+        raise NotImplementedError()
+
+    def sismember(self, key: str, value: str) -> bool:
+        raise NotImplementedError()
+
+    def scard(self, key: str) -> int:
+        raise NotImplementedError()
+
+    def smembers(self, key: str) -> Set[str]:
         raise NotImplementedError()
 
 

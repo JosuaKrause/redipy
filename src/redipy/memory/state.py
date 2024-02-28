@@ -20,7 +20,14 @@ import time
 from collections.abc import Iterable
 from typing import Literal, overload
 
-from redipy.api import RedisAPI, RSetMode, RSM_ALWAYS, RSM_EXISTS, RSM_MISSING
+from redipy.api import (
+    KeyType,
+    RedisAPI,
+    RSetMode,
+    RSM_ALWAYS,
+    RSM_EXISTS,
+    RSM_MISSING,
+)
 from redipy.util import convert_pattern, now, time_diff, to_number_str
 
 
@@ -50,15 +57,6 @@ def compute_expire(
             f"cannot set timestamp {expire_timestamp} "
             f"and duration {expire_in} at the same time")
     return time.monotonic() + time_diff(now(), expire_timestamp)
-
-
-KeyType = Literal[
-    "value",
-    "list",
-    "hash",
-    "zset",
-]
-"""The different key types."""
 
 
 MIN_SCAN_LENGTH: int = 10
