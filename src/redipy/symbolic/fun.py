@@ -201,6 +201,15 @@ class RedisObj:
         """
         return self.redis_fn("del")
 
+    def key_type(self) -> Expr:
+        """
+        Retrieves the type of the key.
+
+        Returns:
+            Expr: The expression for the redis function call.
+        """
+        return self.redis_fn("type")
+
 
 LogLevel = Literal["debug", "verbose", "notice", "warning"]
 """Logging level constants."""

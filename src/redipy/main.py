@@ -18,7 +18,14 @@ import datetime
 from collections.abc import Callable, Iterator
 from typing import Literal, overload
 
-from redipy.api import PipelineAPI, RedisClientAPI, RSetMode, RSM_ALWAYS
+from redipy.api import (
+    KeyType,
+    PipelineAPI,
+    RedisClientAPI,
+    RSetMode,
+    RSM_ALWAYS,
+    Set,
+)
 from redipy.backend.backend import ExecFunction
 from redipy.backend.runtime import Runtime
 from redipy.graph.seq import SequenceObj
@@ -231,6 +238,26 @@ class Redis(RedisClientAPI):
     def delete(self, *keys: str) -> int:
         return self._rt.delete(*keys)
 
+    def key_type(self, key: str) -> KeyType | None:
+        return self._rt.key_type(key)
+
+    def scan(
+            self,
+            cursor: int,
+            *,
+            match: str | None = None,
+            count: int | None = None,
+            filter_type: KeyType | None = None) -> tuple[int, list[str]]:
+        return self._rt.scan(
+            cursor, match=match, count=count, filter_type=filter_type)
+
+    def keys_block(
+            self,
+            *,
+            match: str | None = None,
+            filter_type: KeyType | None = None) -> list[str]:
+        return self._rt.keys_block(match=match, filter_type=filter_type)
+
     @overload
     def set(
             self,
@@ -393,3 +420,18 @@ class Redis(RedisClientAPI):
 
     def hgetall(self, key: str) -> dict[str, str]:
         return self._rt.hgetall(key)
+
+    def sadd(self, key: str, *values: str) -> int:
+        return self._rt.sadd(key, *values)
+
+    def srem(self, key: str, *values: str) -> int:
+        return self._rt.srem(key, *values)
+
+    def sismember(self, key: str, value: str) -> bool:
+        return self._rt.sismember(key, value)
+
+    def scard(self, key: str) -> int:
+        return self._rt.scard(key)
+
+    def smembers(self, key: str) -> Set[str]:
+        return self._rt.smembers(key)

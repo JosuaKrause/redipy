@@ -27,6 +27,7 @@ from redipy.api import (
     RSM_ALWAYS,
     RSM_EXISTS,
     RSM_MISSING,
+    Set,
 )
 from redipy.util import convert_pattern, now, time_diff, to_number_str
 
@@ -86,6 +87,7 @@ class State:
         self._vals: dict[str, tuple[str, float | None]] = {}
         self._queues: dict[str, collections.deque[str]] = {}
         self._hashes: dict[str, dict[str, str]] = {}
+        self._sets: dict[str, set[str]] = {}
         # TODO: to be replaced by something more efficient later
         self._zorder: dict[str, list[str]] = {}
         self._zscores: dict[str, dict[str, float]] = {}
@@ -106,11 +108,13 @@ class State:
         if key in self._deletes:
             return None
         if key in self._vals:
-            return "value"
+            return "string"
         if key in self._queues:
             return "list"
         if key in self._hashes:
             return "hash"
+        if key in self._sets:
+            return "set"
         if key in self._zorder:
             return "zset"
         if self._parent is not None:
@@ -131,16 +135,21 @@ class State:
         """
         if key in self._deletes:
             return
-        if key_type != "value" and key in self._vals:
-            raise ValueError(f"key {key} already used as value")
+        if key_type != "string" and key in self._vals:
+            raise ValueError(f"key {key} already used as string")
         if key_type != "list" and key in self._queues:
             raise ValueError(f"key {key} already used as list")
         if key_type != "hash" and key in self._hashes:
             raise ValueError(f"key {key} already used as hash")
+        if key_type != "set" and key in self._sets:
+            raise ValueError(f"key {key} already used as set")
         if key_type != "zset" and key in self._zorder:
             raise ValueError(f"key {key} already used as sorted set")
         if self._parent is not None:
             self._parent.verify_key(key_type, key)
+
+    def _flush_key_cache(self) -> None:
+        self._key_cache = None
 
     def _populate_key_cache(self) -> list[str]:
         """
@@ -153,6 +162,7 @@ class State:
             *self._vals,
             *self._queues,
             *self._hashes,
+            *self._sets,
             *self._zorder,
             *([] if self._parent is None else self._parent.get_key_cache()),
             })
@@ -239,9 +249,10 @@ class State:
     def scan_keys(
             self,
             cursor: int,
-            length: int,
-            pattern: str | None,
-            filter_type: KeyType | None) -> tuple[list[str], int]:
+            *,
+            count: int,
+            match: str | None,
+            filter_type: KeyType | None) -> tuple[int, list[str]]:
         """
         Scan through all keys.
 
@@ -249,9 +260,9 @@ class State:
             cursor (int): The scan cursor. A value of 0 initiates the beginning
                 of the scan. All other values are defined internally and should
                 only be previous return values of scan.
-            length (int): The length hint of the returned values. The actual
+            count (int): The length hint of the returned values. The actual
                 number of returned keys might differ.
-            pattern (str | None): If not None a redis key pattern to filter
+            match (str | None): If not None a redis key pattern to filter
                 keys.
             filter_type (KeyType | None): If not None filter by key type.
 
@@ -259,8 +270,8 @@ class State:
             tuple[list[str], int]: A tuple of the returned keys and the next
                 cursor. If the iteration is complete the next cursor is 0.
         """
-        if pattern is not None:
-            prefix, pat = convert_pattern(pattern)
+        if match is not None:
+            prefix, pat = convert_pattern(match)
         else:
             prefix = None
             pat = None
@@ -276,39 +287,41 @@ class State:
                     continue
                 yield key
 
-        keys, next_cursor = self._scan(cursor, length, prefix)
+        keys, next_cursor = self._scan(cursor, count, prefix)
         if prefix is not None and keys:
             last_key = keys[-1]
             last_key = last_key[:len(prefix)]
             if last_key > prefix:
                 next_cursor = 0
-        return list(process(keys)), next_cursor
+        return next_cursor, list(process(keys))
 
     def get_all_keys(
             self,
-            pattern: str | None,
+            *,
+            match: str | None,
             filter_type: KeyType | None) -> Iterable[str]:
         """
-        Completes a full scan through all keys.
+        Completes a full scan through all keys. As this operation is performed
+        fully inside a lock, no duplicate keys will be returned.
 
         Args:
-            pattern (str | None): If not None a redis key pattern to filter
+            match (str | None): If not None a redis key pattern to filter
                 keys.
             filter_type (KeyType | None): If not None filter by key type.
 
         Yields:
             str: The key.
         """
-        length = MIN_SCAN_LENGTH
+        count = MIN_SCAN_LENGTH
         cursor = 0
         while True:
-            keys, next_cursor = self.scan_keys(
-                cursor, length, pattern, filter_type)
+            next_cursor, keys = self.scan_keys(
+                cursor, count=count, match=match, filter_type=filter_type)
             yield from keys
             if next_cursor == 0:
                 break
             cursor = next_cursor
-            length = min(length * 2, KEYS_MAX_SCAN)
+            count = min(count * 2, KEYS_MAX_SCAN)
 
     def exists(self, key: str) -> bool:
         """
@@ -328,6 +341,8 @@ class State:
             return True
         if key in self._hashes:
             return True
+        if key in self._sets:
+            return True
         if key in self._zorder:
             return True
         if self._parent is not None:
@@ -343,12 +358,22 @@ class State:
         """
         if self._parent is not None:
             self._deletes.update(deletes)
+        has_delete = False
         for key in deletes:
-            self._vals.pop(key, None)
-            self._queues.pop(key, None)
-            self._hashes.pop(key, None)
-            self._zorder.pop(key, None)
-            self._zscores.pop(key, None)
+            if self._vals.pop(key, None) is not None:
+                has_delete = True
+            if self._queues.pop(key, None) is not None:
+                has_delete = True
+            if self._hashes.pop(key, None) is not None:
+                has_delete = True
+            if self._sets.pop(key, None) is not None:
+                has_delete = True
+            if self._zorder.pop(key, None) is not None:
+                has_delete = True
+            if self._zscores.pop(key, None) is not None:
+                has_delete = True
+        if has_delete:
+            self._flush_key_cache()
 
     def apply(self, other: 'State') -> None:
         """
@@ -366,6 +391,7 @@ class State:
         raw_vals = other.raw_vals()
         raw_queues = other.raw_queues()
         raw_hashes = other.raw_hashes()
+        raw_sets = other.raw_sets()
         raw_zorder = other.raw_zorder()
         raw_zscores = other.raw_zscores()
 
@@ -373,6 +399,7 @@ class State:
         new_keys.update(set(raw_vals.keys()) - set(self._vals.keys()))
         new_keys.update(set(raw_queues.keys()) - set(self._queues.keys()))
         new_keys.update(set(raw_hashes.keys()) - set(self._hashes.keys()))
+        new_keys.update(set(raw_sets.keys()) - set(self._sets.keys()))
         new_keys.update(set(raw_zorder.keys()) - set(self._zorder.keys()))
         new_keys.update(set(raw_zscores.keys()) - set(self._zscores.keys()))
         # NOTE: deleting all new keys makes sure they don't exist as a
@@ -382,6 +409,7 @@ class State:
         self._vals.update(raw_vals)
         self._queues.update(raw_queues)
         self._hashes.update(raw_hashes)
+        self._sets.update(raw_sets)
         self._zorder.update(raw_zorder)
         self._zscores.update(raw_zscores)
         self._clean_vals()
@@ -394,6 +422,7 @@ class State:
         self._vals.clear()
         self._queues.clear()
         self._hashes.clear()
+        self._sets.clear()
         self._zorder.clear()
         self._zscores.clear()
         self._deletes.clear()
@@ -405,7 +434,10 @@ class State:
         Args:
             key (str): The key.
         """
+        if self.exists(key):
+            return
         self._deletes.discard(key)
+        self._flush_key_cache()
 
     def _is_pending_delete(self, key: str) -> bool:
         """
@@ -483,6 +515,15 @@ class State:
         """
         return self._hashes
 
+    def raw_sets(self) -> dict[str, set[str]]:
+        """
+        Raw access to the sets dictionary.
+
+        Returns:
+            dict[str, set[str]]: The actual sets dictionary of this state.
+        """
+        return self._sets
+
     def raw_zorder(self) -> dict[str, list[str]]:
         """
         Raw access to the zorder dictionary.
@@ -521,7 +562,7 @@ class State:
             expire (float | None): When the value should expire if at all.
         """
         if key not in self._vals:
-            self.verify_key("value", key)
+            self.verify_key("string", key)
         self._prepare_key_for_write(key)
         self._vals[key] = (value, expire)
 
@@ -556,7 +597,7 @@ class State:
             key (str): The key.
 
         Returns:
-            bool: If the key exists and its type is "value".
+            bool: If the key exists and its type is "string".
         """
         return self.get_value(key) is not None
 
@@ -657,6 +698,47 @@ class State:
             return self._parent.readonly_hash(key)
         return res
 
+    def get_set(self, key: str) -> set[str]:
+        """
+        Returns a set for writing. If the set doesn't exist already it will
+        be created.
+
+        Args:
+            key (str): The key.
+
+        Returns:
+            set[str]: The set for writing.
+        """
+        res = self._sets.get(key)
+        if res is None:
+            self.verify_key("set", key)
+            if self._parent is not None and not self._is_pending_delete(key):
+                res = set(self._parent.get_set(key))
+            else:
+                res = set()
+            self._sets[key] = res
+        self._prepare_key_for_write(key)
+        return res
+
+    def readonly_set(self, key: str) -> set[str] | None:
+        """
+        Returns a set for reading only. If the set doesn't exist None is
+        returned.
+
+        Args:
+            key (str): The key.
+
+        Returns:
+            set[str] | None: The readonly set. Make sure to not
+            modify it as it is not a copy. None if the set doesn't exist.
+        """
+        res = self._sets.get(key)
+        if res is None:
+            if self._parent is None or self._is_pending_delete(key):
+                return None
+            return self._parent.readonly_set(key)
+        return res
+
     def get_zset(self, key: str) -> tuple[list[str], dict[str, float]]:
         """
         Returns a zset for writing. If the zset doesn't exist already it
@@ -745,6 +827,7 @@ class State:
             f"vals={self._vals},"
             f"queues={dict(self._queues)},"
             f"hashes={dict(self._hashes)},"
+            f"sets={dict(self._sets)},"
             f"zorder={dict(self._zorder)},"
             f"zscores={dict(self._zscores)},"
             f"deletes={self._deletes},"
@@ -788,6 +871,30 @@ class Machine(RedisAPI):
         res = self.exists(*keys)
         self._state.delete(set(keys))
         return res
+
+    def key_type(self, key: str) -> KeyType | None:
+        return self._state.key_type(key)
+
+    def scan(
+            self,
+            cursor: int,
+            *,
+            match: str | None = None,
+            count: int | None = None,
+            filter_type: KeyType | None = None) -> tuple[int, list[str]]:
+        return self._state.scan_keys(
+            cursor,
+            count=10 if count is None else count,
+            match=match,
+            filter_type=filter_type)
+
+    def keys_block(
+            self,
+            *,
+            match: str | None = None,
+            filter_type: KeyType | None = None) -> list[str]:
+        return list(
+            self._state.get_all_keys(match=match, filter_type=filter_type))
 
     @overload
     def set(
@@ -1090,6 +1197,38 @@ class Machine(RedisAPI):
         if res is None:
             return {}
         return dict(res)
+
+    def sadd(self, key: str, *values: str) -> int:
+        obj = self._state.get_set(key)
+        before = len(obj)
+        obj.update(values)
+        return len(obj) - before
+
+    def srem(self, key: str, *values: str) -> int:
+        obj = self._state.get_set(key)
+        before = len(obj)
+        obj.difference_update(set(values))
+        if not obj:
+            self._state.delete({key})
+        return before - len(obj)
+
+    def sismember(self, key: str, value: str) -> bool:
+        obj = self._state.readonly_set(key)
+        if obj is None:
+            return False
+        return value in obj
+
+    def scard(self, key: str) -> int:
+        obj = self._state.readonly_set(key)
+        if obj is None:
+            return 0
+        return len(obj)
+
+    def smembers(self, key: str) -> Set[str]:
+        obj = self._state.readonly_set(key)
+        if obj is None:
+            return set()
+        return set(obj)
 
     def __str__(self) -> str:
         return (

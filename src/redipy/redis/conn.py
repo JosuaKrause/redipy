@@ -34,11 +34,14 @@ from redis.commands.core import Script
 from redis.exceptions import ResponseError
 
 from redipy.api import (
+    as_key_type,
+    KeyType,
     PipelineAPI,
     RSetMode,
     RSM_ALWAYS,
     RSM_EXISTS,
     RSM_MISSING,
+    Set,
 )
 from redipy.backend.runtime import Runtime
 from redipy.redis.lua import LuaBackend
@@ -271,6 +274,30 @@ class PipelineConnection(PipelineAPI):
             self.with_prefix(key) for key in keys))
         self.add_fixup(int)
 
+    def key_type(self, key: str) -> None:
+        self._pipe.type(key)
+        self.add_fixup(lambda val: as_key_type(to_maybe_str(val)))
+
+    def scan(
+            self,
+            cursor: int,
+            *,
+            match: str | None = None,
+            count: int | None = None,
+            filter_type: KeyType | None = None) -> None:
+        self._pipe.scan(cursor, match=match, count=count, _type=filter_type)
+        self.add_fixup(lambda val: (int(val[0]), to_list_str(val[1])))
+
+    def keys(
+            self,
+            *,
+            match: str | None = None,
+            filter_type: KeyType | None = None) -> None:
+        if filter_type is not None:
+            raise RuntimeError("type filtering not implemented yet!")
+        self._pipe.keys("*" if match is None else match)
+        self.add_fixup(to_list_str)
+
     def set(
             self,
             key: str,
@@ -408,6 +435,26 @@ class PipelineConnection(PipelineAPI):
             to_maybe_str(field): to_maybe_str(val)
             for field, val in res.items()
         })
+
+    def sadd(self, key: str, *values: str) -> None:
+        self._pipe.sadd(key, *values)
+        self.add_fixup(int)
+
+    def srem(self, key: str, *values: str) -> None:
+        self._pipe.srem(key, *values)
+        self.add_fixup(int)
+
+    def sismember(self, key: str, value: str) -> None:
+        self._pipe.sismember(key, value)
+        self.add_fixup(lambda val: int(val) > 0)
+
+    def scard(self, key: str) -> None:
+        self._pipe.scard(key)
+        self.add_fixup(int)
+
+    def smembers(self, key: str) -> None:
+        self._pipe.smembers(key)
+        self.add_fixup(to_list_str)
 
 
 class RedisConnection(Runtime[list[str]]):
@@ -711,6 +758,31 @@ class RedisConnection(Runtime[list[str]]):
             return conn.delete(*(
                 self.with_prefix(key) for key in keys))
 
+    def key_type(self, key: str) -> KeyType | None:
+        with self.get_connection() as conn:
+            return as_key_type(to_maybe_str(conn.type(key)))
+
+    def scan(
+            self,
+            cursor: int,
+            *,
+            match: str | None = None,
+            count: int | None = None,
+            filter_type: KeyType | None = None) -> tuple[int, list[str]]:
+        with self.get_connection() as conn:
+            new_cursor, res = conn.scan(cursor, match, count, filter_type)
+        return int(new_cursor), to_list_str(res)
+
+    def keys_block(
+            self,
+            *,
+            match: str | None = None,
+            filter_type: KeyType | None = None) -> list[str]:
+        if filter_type is not None:
+            raise RuntimeError("type filtering not implemented yet!")
+        with self.get_connection() as conn:
+            return to_list_str(conn.keys("*" if match is None else match))
+
     @overload
     def set(
             self,
@@ -931,3 +1003,23 @@ class RedisConnection(Runtime[list[str]]):
                 to_maybe_str(field): to_maybe_str(val)
                 for field, val in conn.hgetall(self.with_prefix(key)).items()
             }
+
+    def sadd(self, key: str, *values: str) -> int:
+        with self.get_connection() as conn:
+            return int(conn.sadd(key, *values))
+
+    def srem(self, key: str, *values: str) -> int:
+        with self.get_connection() as conn:
+            return int(conn.srem(key, *values))
+
+    def sismember(self, key: str, value: str) -> bool:
+        with self.get_connection() as conn:
+            return int(conn.sismember(key, value)) > 0
+
+    def scard(self, key: str) -> int:
+        with self.get_connection() as conn:
+            return int(conn.scard(key))
+
+    def smembers(self, key: str) -> Set[str]:
+        with self.get_connection() as conn:
+            return set(to_list_str(conn.smembers(key)))

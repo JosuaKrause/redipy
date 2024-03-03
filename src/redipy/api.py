@@ -17,7 +17,7 @@ RedisClientAPI."""
 import contextlib
 import datetime
 from collections.abc import Iterable, Iterator
-from typing import Literal, overload, TypeAlias
+from typing import cast, get_args, Literal, overload, TypeAlias
 
 from redipy.backend.backend import ExecFunction
 from redipy.symbolic.seq import FnContext
@@ -43,12 +43,48 @@ This is equivalent to the XX flag."""
 
 
 KeyType = Literal[
-    "value",
+    "string",
     "list",
-    "hash",
+    "set",
     "zset",
+    "hash",
+    "stream",
 ]
 """The different key types."""
+
+
+KEY_TYPES: set[KeyType] = set(get_args(KeyType))
+
+
+@overload
+def as_key_type(text: str) -> KeyType:
+    ...
+
+
+@overload
+def as_key_type(text: None) -> None:
+    ...
+
+
+def as_key_type(text: str | None) -> KeyType | None:
+    """
+    Converts a string into a key type.
+
+    Args:
+        text (str): The string.
+
+    Raises:
+        ValueError: If the string does not represent a key type.
+
+    Returns:
+        KeyType: The key type or None if the input was None.
+    """
+    if text is None:
+        return None
+    if text not in KEY_TYPES:
+        raise ValueError(
+            f"unknown key type: {text}. Only {KEY_TYPES} are supported.")
+    return cast(KeyType, text)
 
 
 class PipelineAPI:
@@ -86,6 +122,72 @@ class PipelineAPI:
 
         Args:
             *keys (str): The keys.
+        """
+        raise NotImplementedError()
+
+    def key_type(self, key: str) -> None:
+        """
+        The type of the given key if it exists.
+
+        See also the redis documentation: https://redis.io/commands/type/
+
+        The pipeline value is the key type or None if the key does not exist.
+
+        Args:
+            key (str): The key.
+        """
+        raise NotImplementedError()
+
+    def scan(
+            self,
+            cursor: int,
+            *,
+            match: str | None = None,
+            count: int | None = None,
+            filter_type: KeyType | None = None) -> None:
+        """
+        Performs a singular scan operation on the keys of the database. Note,
+        that this cannot be used to scan all keys in a pipeline as scan depends
+        on the previous' scan cursor which is unobtainable within the same
+        pipeline.
+
+        See also the redis documentation: https://redis.io/commands/scan/
+
+        A tuple of the new cursor and the current keys. If the new cursor is
+        0 the iteration ends.
+
+        Args:
+            cursor (int): The cursor. This value is either 0 (for starting a
+                scan) or a value returned previously by this function.
+            match (str | None, optional): Filters the keys according to a redis
+                match string. Defaults to None.
+            count (int | None, optional): Estimate of expected returned keys
+                in one call. The actual number returned might be different.
+                Defaults to None.
+            filter_type (KeyType | None, optional): Filters by the key type.
+                Defaults to None.
+        """
+        raise NotImplementedError()
+
+    def keys(
+            self,
+            *,
+            match: str | None = None,
+            filter_type: KeyType | None = None) -> None:
+        """
+        Retrieves all matching keys. This method can take very long to complete
+        and block the database for a long time. It is best to avoid retrieving
+        keys in a pipeline.
+
+        See also the redis documentation: https://redis.io/commands/keys/
+
+        The pipeline value is the list of unique matching keys.
+
+        Args:
+            match (str | None, optional): Filters the keys according to a redis
+                match string. Defaults to None.
+            filter_type (KeyType | None, optional): Filters by the key type.
+                Defaults to None.
         """
         raise NotImplementedError()
 
@@ -492,6 +594,75 @@ class PipelineAPI:
         """
         raise NotImplementedError()
 
+    def sadd(self, key: str, *values: str) -> None:
+        """
+        Add values to the set of the given key.
+
+        See also the redis documentation: https://redis.io/commands/sadd/
+
+        The pipeline value is the number of new items in the set.
+
+        Args:
+            key (str): The key.
+            *values (str): The values to add.
+        """
+        raise NotImplementedError()
+
+    def srem(self, key: str, *values: str) -> None:
+        """
+        Remove values from the set of the given key.
+
+        See also the redis documentation: https://redis.io/commands/srem/
+
+        The pipeline value is the number of existing items removed from the
+        set.
+
+        Args:
+            key (str): The key.
+            *values (str): The values to remove.
+        """
+        raise NotImplementedError()
+
+    def sismember(self, key: str, value: str) -> None:
+        """
+        Tests whether the given value is present in the set of the given key.
+
+        See also the redis documentation: https://redis.io/commands/sismember/
+
+        The pipeline value is a boolean. True, if the set contains the value.
+
+        Args:
+            key (str): The key.
+            value (str): The value.
+        """
+        raise NotImplementedError()
+
+    def scard(self, key: str) -> None:
+        """
+        Computes the size of the set given by the key.
+
+        See also the redis documentation: https://redis.io/commands/scard/
+
+        The pipeline value is the number of elements in the set.
+
+        Args:
+            key (str): The key.
+        """
+        raise NotImplementedError()
+
+    def smembers(self, key: str) -> None:
+        """
+        Returns all elements of the set given by the key.
+
+        See also the redis documentation: https://redis.io/commands/smembers/
+
+        The pipeline value is a set of all elements of the set.
+
+        Args:
+            key (str): The key.
+        """
+        raise NotImplementedError()
+
 
 class RedisAPI:
     """The redis API."""
@@ -524,6 +695,17 @@ class RedisAPI:
         raise NotImplementedError()
 
     def key_type(self, key: str) -> KeyType | None:
+        """
+        The type of the given key if it exists.
+
+        See also the redis documentation: https://redis.io/commands/type/
+
+        Args:
+            key (str): The key.
+
+        Returns:
+            KeyType | None: The key type or None if the key does not exist.
+        """
         raise NotImplementedError()
 
     def scan(
@@ -533,6 +715,26 @@ class RedisAPI:
             match: str | None = None,
             count: int | None = None,
             filter_type: KeyType | None = None) -> tuple[int, list[str]]:
+        """
+        Scans the keys of the database.
+
+        See also the redis documentation: https://redis.io/commands/scan/
+
+        Args:
+            cursor (int): The cursor. This value is either 0 (for starting a
+                scan) or a value returned previously by this function.
+            match (str | None, optional): Filters the keys according to a redis
+                match string. Defaults to None.
+            count (int | None, optional): Estimate of expected returned keys
+                in one call. The actual number returned might be different.
+                Defaults to None.
+            filter_type (KeyType | None, optional): Filters by the key type.
+                Defaults to None.
+
+        Returns:
+            tuple[int, list[str]]: A tuple of the new cursor and the current
+                keys. If the new cursor is 0 the iteration ends.
+        """
         raise NotImplementedError()
 
     def iter_keys(
@@ -540,6 +742,20 @@ class RedisAPI:
             *,
             match: str | None = None,
             filter_type: KeyType | None = None) -> Iterable[str]:
+        """
+        Iterates matching keys. This is a more streamlined interface to scan.
+
+        See also the redis documentation: https://redis.io/commands/scan/
+
+        Args:
+            match (str | None, optional): Filters the keys according to a redis
+                match string. Defaults to None.
+            filter_type (KeyType | None, optional): Filters by the key type.
+                Defaults to None.
+
+        Yields:
+            str: The keys of this query. Duplicate keys might get returned.
+        """
         cursor = 0
         count = 10
         while True:
@@ -554,10 +770,27 @@ class RedisAPI:
             if count < 1000:
                 count = int(min(1000, count * 1.2))
 
-    def keys_sync(
+    def keys_block(
             self,
+            *,
             match: str | None = None,
             filter_type: KeyType | None = None) -> list[str]:
+        """
+        Retrieves all matching keys. This method blocks the full database until
+        all keys are returned. In most cases it is better to use the
+        non-blocking function instead.
+
+        See also the redis documentation: https://redis.io/commands/keys/
+
+        Args:
+            match (str | None, optional): Filters the keys according to a redis
+                match string. Defaults to None.
+            filter_type (KeyType | None, optional): Filters by the key type.
+                Defaults to None.
+
+        Returns:
+            list[str]: The list of unique matching keys.
+        """
         raise NotImplementedError()
 
     def keys(
@@ -565,11 +798,27 @@ class RedisAPI:
             *,
             match: str | None = None,
             filter_type: KeyType | None = None,
-            sync: bool = True) -> list[str]:
-        if sync:
-            return self.keys_sync(match=match, filter_type=filter_type)
-        return sorted(
-            set(self.iter_keys(match=match, filter_type=filter_type)))
+            block: bool = True) -> Set[str]:
+        """
+        Retrieves all matching keys.
+
+        See also the redis documentation: https://redis.io/commands/scan/ and
+            https://redis.io/commands/keys/
+
+        Args:
+            match (str | None, optional): Filters the keys according to a redis
+                match string. Defaults to None.
+            filter_type (KeyType | None, optional): Filters by the key type.
+                Defaults to None.
+            block (bool, optional): Whether to block the full database while
+                retrieving the matching keys. Defaults to True.
+
+        Returns:
+            set[str]: The set of unique matching keys.
+        """
+        if block:
+            return set(self.keys_block(match=match, filter_type=filter_type))
+        return set(self.iter_keys(match=match, filter_type=filter_type))
 
     @overload
     def set(
@@ -653,6 +902,95 @@ class RedisAPI:
         """
         raise NotImplementedError()
 
+    @overload
+    def set_value(
+            self,
+            key: str,
+            value: str,
+            *,
+            mode: RSetMode,
+            return_previous: Literal[True],
+            expire_timestamp: datetime.datetime | None,
+            expire_in: float | None,
+            keep_ttl: bool) -> str | None:
+        ...
+
+    @overload
+    def set_value(
+            self,
+            key: str,
+            value: str,
+            *,
+            mode: RSetMode,
+            return_previous: Literal[False],
+            expire_timestamp: datetime.datetime | None,
+            expire_in: float | None,
+            keep_ttl: bool) -> bool | None:
+        ...
+
+    @overload
+    def set_value(
+            self,
+            key: str,
+            value: str,
+            *,
+            mode: RSetMode = RSM_ALWAYS,
+            return_previous: bool = False,
+            expire_timestamp: datetime.datetime | None = None,
+            expire_in: float | None = None,
+            keep_ttl: bool = False) -> str | bool | None:
+        ...
+
+    def set_value(
+            self,
+            key: str,
+            value: str,
+            *,
+            mode: RSetMode = RSM_ALWAYS,
+            return_previous: bool = False,
+            expire_timestamp: datetime.datetime | None = None,
+            expire_in: float | None = None,
+            keep_ttl: bool = False) -> str | bool | None:
+        """
+        Sets a value for a given key. The value can be scheduled to expire.
+
+        See also the redis documentation: https://redis.io/commands/set/
+
+        Args:
+            key (str): The key.
+
+            value (str): The value.
+
+            mode (RSetMode, optional): Under which condition to set the value
+            valid values are RSM_ALWAYS, RSM_MISSING, and RSM_EXISTS.
+            RSM_MISSING is the equivalent of setting the NX flag. RSM_EXISTS is
+            the equivalent of the XX flag. Defaults to RSM_ALWAYS.
+
+            return_previous (bool, optional): Whether to return the previous
+            value associated with the key. Defaults to False.
+
+            expire_timestamp (datetime.datetime | None, optional): A timestamp
+            on when to expire the key. Defaults to None.
+
+            expire_in (float | None, optional): A relative time in seconds on
+            when to expire the key. Defaults to None.
+
+            keep_ttl (bool, optional): Whether to keep previous expiration
+            times. Defaults to False.
+
+        Returns:
+            str | bool | None: The return value depends on the return_previous
+            argument.
+        """
+        return self.set(
+            key,
+            value,
+            mode=mode,
+            return_previous=return_previous,
+            expire_timestamp=expire_timestamp,
+            expire_in=expire_in,
+            keep_ttl=keep_ttl)
+
     def get(self, key: str) -> str | None:
         """
         Retrieves the value for the given key.
@@ -667,6 +1005,21 @@ class RedisAPI:
             value has expired.
         """
         raise NotImplementedError()
+
+    def get_value(self, key: str) -> str | None:
+        """
+        Retrieves the value for the given key.
+
+        See also the redis documentation: https://redis.io/commands/get/
+
+        Args:
+            key (str): The key.
+
+        Returns:
+            str | None: The value or None if the key does not exists or the
+            value has expired.
+        """
+        return self.get(key)
 
     def incrby(self, key: str, inc: float | int) -> float:
         """
@@ -1065,18 +1418,76 @@ class RedisAPI:
         raise NotImplementedError()
 
     def sadd(self, key: str, *values: str) -> int:
+        """
+        Add values to the set of the given key.
+
+        See also the redis documentation: https://redis.io/commands/sadd/
+
+        Args:
+            key (str): The key.
+            *values (str): The values to add.
+
+        Returns:
+            int: The number of new items in the set.
+        """
         raise NotImplementedError()
 
     def srem(self, key: str, *values: str) -> int:
+        """
+        Remove values from the set of the given key.
+
+        See also the redis documentation: https://redis.io/commands/srem/
+
+        Args:
+            key (str): The key.
+            *values (str): The values to remove.
+
+        Returns:
+            int: The number of existing items removed from the set.
+        """
         raise NotImplementedError()
 
     def sismember(self, key: str, value: str) -> bool:
+        """
+        Tests whether the given value is present in the set of the given key.
+
+        See also the redis documentation: https://redis.io/commands/sismember/
+
+        Args:
+            key (str): The key.
+            value (str): The value.
+
+        Returns:
+            bool: True, if the set contains the value.
+        """
         raise NotImplementedError()
 
     def scard(self, key: str) -> int:
+        """
+        Computes the size of the set given by the key.
+
+        See also the redis documentation: https://redis.io/commands/scard/
+
+        Args:
+            key (str): The key.
+
+        Returns:
+            int: The number of elements in the set.
+        """
         raise NotImplementedError()
 
     def smembers(self, key: str) -> Set[str]:
+        """
+        Returns all elements of the set given by the key.
+
+        See also the redis documentation: https://redis.io/commands/smembers/
+
+        Args:
+            key (str): The key.
+
+        Returns:
+            set[str]: All elements of the set.
+        """
         raise NotImplementedError()
 
 
