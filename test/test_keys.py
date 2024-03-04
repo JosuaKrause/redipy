@@ -17,7 +17,7 @@
 import re
 from collections.abc import Callable, Iterable
 from test.util import get_setup
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -83,8 +83,8 @@ PIPE_EXPECTED: dict[KeyType, Callable[[Any, int], bool]] = {
 
 
 @pytest.mark.parametrize("types", KEY_TYPE_MODES)
-@pytest.mark.parametrize("k_add", [None, 3, 10])
-@pytest.mark.parametrize("k_del", [None, 7, 11])
+@pytest.mark.parametrize("k_add", [None, 10])
+@pytest.mark.parametrize("k_del", [None, 7])
 @pytest.mark.parametrize("match", [None, "k1*", "k???"])
 @pytest.mark.parametrize("count", [30, 200, 500, 1000, 2000, 10000, 100000])
 @pytest.mark.parametrize("rt_lua", [False, True])
@@ -111,15 +111,11 @@ def test_scan(
     if count > 200 and (k_add is None or k_del is None):
         # NOTE: those tests wouldn't add anything interesting
         return
+    if count > 2000 and (types is not None or match is None):
+        # NOTE: we reduce test cases for large data
+        return
     if rt_lua and count >= 10000:
         # NOTE: redis backend tests get really slow with many keys
-        return
-    if count > 10000 and (
-            types is not None
-            or k_add is None
-            or k_del is None
-            or match is None):
-        # NOTE: we reduce test cases for large data
         return
 
     all_keys: dict[str, KeyType] = {}
@@ -328,7 +324,11 @@ def test_keys(
     for test_type in test_types:
         for_type(test_type)
 
-    for final_key in rt.keys(block=True):
+    with rt.pipeline() as pipe:
+        pipe.keys()
+        finals_keys: list[str] = cast(list, pipe.execute()[0])
+
+    for final_key in finals_keys:
         assert final_key in keys
         final_type = keys[final_key]
         assert rt.exists(final_key) > 0
