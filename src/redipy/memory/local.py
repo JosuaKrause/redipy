@@ -91,10 +91,10 @@ class _Uninit():
     """An uninitialized variable. When a stack frame is created during
     execution values are initialized with this singleton value."""
     def __str__(self) -> str:
-        return "UNINIT"
+        return "UNINIT"  # pragma: no cover
 
     def __repr__(self) -> str:
-        return self.__str__()
+        return self.__str__()  # pragma: no cover
 
 
 UNINIT = _Uninit()

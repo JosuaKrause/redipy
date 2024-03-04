@@ -30,6 +30,10 @@ def test_errors() -> None:
     with pytest.raises(ValueError, match="unknown backend foo"):
         Redis(backend="foo")  # type: ignore
 
+    with pytest.raises(
+            ValueError, match="rt must not be None for custom backend"):
+        Redis(backend="custom")
+
     rt_redis = Redis("custom", rt=get_setup("test_err", rt_lua=True))
     assert rt_redis.maybe_get_redis_runtime() is not None
     assert rt_redis.get_redis_runtime() is not None

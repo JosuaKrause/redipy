@@ -764,8 +764,7 @@ class RedisConnection(Runtime[list[str]]):
                 vals.update(res)
                 if cursor == 0:
                     break
-                if count < 1000:
-                    count = int(min(1000, count * 1.2))
+                count = int(min(1000, count * 1.2))
         return (val.decode("utf-8") for val in vals)
 
     def prefix_exists(
@@ -793,8 +792,7 @@ class RedisConnection(Runtime[list[str]]):
                     return True
                 if cursor == 0:
                     return False
-                if count < 1000:
-                    count = int(min(1000, count * 1.2))
+                count = int(min(1000, count * 1.2))
 
     def exists(self, *keys: str) -> int:
         with self.get_connection() as conn:

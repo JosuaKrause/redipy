@@ -108,6 +108,9 @@ def test_scan(
     """
     rt = get_setup("test_keys", rt_lua)
 
+    if count > 200 and (k_add is None or k_del is None):
+        # NOTE: those tests wouldn't add anything interesting
+        return
     if rt_lua and count >= 10000:
         # NOTE: redis backend tests get really slow with many keys
         return

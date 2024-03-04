@@ -25,6 +25,7 @@ from redipy.graph.expr import (
     is_none_literal,
 )
 from redipy.main import Redis
+from redipy.redis.conn import RedisConnection
 from redipy.symbolic.fun import FromJSON, LogFn, ToJSON, ToStr, TypeStr
 from redipy.symbolic.rzset import RedisSortedSet
 from redipy.symbolic.seq import FnContext
@@ -148,6 +149,9 @@ def test_misc(rt_lua: bool) -> None:
         "infer",
         redis_module="test_misc",
         cfg=cfg))
+    check_redis(Redis(
+        "infer",
+        rt=RedisConnection("test_misc", cfg=cfg)))
 
 
 def test_literals() -> None:
