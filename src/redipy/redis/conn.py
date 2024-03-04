@@ -242,6 +242,25 @@ class PipelineConnection(PipelineAPI):
         """
         return f"{self._prefix}{key}"
 
+    def no_prefix(self, key: str) -> str:
+        """
+        Removes the prefix from the key.
+
+        Args:
+            key (str): The actual key.
+
+        Raises:
+            ValueError: If the actual key does not have the prefix.
+
+        Returns:
+            str: The key without prefix.
+        """
+        res = key.removeprefix(self._prefix)
+        if res == key:
+            raise ValueError(
+                f"invalid key ({key}) does not contain prefix {self._prefix}")
+        return res
+
     def add_fixup(self, fix: Callable[[Any], Any]) -> None:
         """
         Adds a fixup callback for the current pipeline command. Every pipeline
@@ -275,7 +294,7 @@ class PipelineConnection(PipelineAPI):
         self.add_fixup(int)
 
     def key_type(self, key: str) -> None:
-        self._pipe.type(key)
+        self._pipe.type(self.with_prefix(key))
         self.add_fixup(lambda val: as_key_type(to_maybe_str(val)))
 
     def scan(
@@ -285,18 +304,27 @@ class PipelineConnection(PipelineAPI):
             match: str | None = None,
             count: int | None = None,
             filter_type: KeyType | None = None) -> None:
+        if match is None:
+            match = self.with_prefix("*")
+        else:
+            match = self.with_prefix(match)
         self._pipe.scan(cursor, match=match, count=count, _type=filter_type)
-        self.add_fixup(lambda val: (int(val[0]), to_list_str(val[1])))
+        self.add_fixup(
+            lambda val: (int(val[0]), to_list_str(val[1], self.no_prefix)))
 
     def keys(
             self,
             *,
             match: str | None = None,
             filter_type: KeyType | None = None) -> None:
+        if match is None:
+            match = self.with_prefix("*")
+        else:
+            match = self.with_prefix(match)
         if filter_type is not None:
             raise RuntimeError("type filtering not implemented yet!")
-        self._pipe.keys("*" if match is None else match)
-        self.add_fixup(to_list_str)
+        self._pipe.keys(match)
+        self.add_fixup(lambda vals: to_list_str(vals, self.no_prefix))
 
     def set(
             self,
@@ -437,23 +465,23 @@ class PipelineConnection(PipelineAPI):
         })
 
     def sadd(self, key: str, *values: str) -> None:
-        self._pipe.sadd(key, *values)
+        self._pipe.sadd(self.with_prefix(key), *values)
         self.add_fixup(int)
 
     def srem(self, key: str, *values: str) -> None:
-        self._pipe.srem(key, *values)
+        self._pipe.srem(self.with_prefix(key), *values)
         self.add_fixup(int)
 
     def sismember(self, key: str, value: str) -> None:
-        self._pipe.sismember(key, value)
+        self._pipe.sismember(self.with_prefix(key), value)
         self.add_fixup(lambda val: int(val) > 0)
 
     def scard(self, key: str) -> None:
-        self._pipe.scard(key)
+        self._pipe.scard(self.with_prefix(key))
         self.add_fixup(int)
 
     def smembers(self, key: str) -> None:
-        self._pipe.smembers(key)
+        self._pipe.smembers(self.with_prefix(key))
         self.add_fixup(to_list_str)
 
 
@@ -599,6 +627,26 @@ class RedisConnection(Runtime[list[str]]):
             str: The actual key.
         """
         return f"{self.get_prefix()}{key}"
+
+    def no_prefix(self, key: str) -> str:
+        """
+        Removes the prefix from the key.
+
+        Args:
+            key (str): The actual key.
+
+        Raises:
+            ValueError: If the actual key does not have the prefix.
+
+        Returns:
+            str: The key without prefix.
+        """
+        res = key.removeprefix(self.get_prefix())
+        if res == key:
+            raise ValueError(
+                f"invalid key ({key}) does not contain prefix "
+                f"{self.get_prefix()}")
+        return res
 
     def get_pubsub_key(self, key: str) -> str:
         """
@@ -760,7 +808,7 @@ class RedisConnection(Runtime[list[str]]):
 
     def key_type(self, key: str) -> KeyType | None:
         with self.get_connection() as conn:
-            return as_key_type(to_maybe_str(conn.type(key)))
+            return as_key_type(to_maybe_str(conn.type(self.with_prefix(key))))
 
     def scan(
             self,
@@ -769,19 +817,27 @@ class RedisConnection(Runtime[list[str]]):
             match: str | None = None,
             count: int | None = None,
             filter_type: KeyType | None = None) -> tuple[int, list[str]]:
+        if match is None:
+            match = self.with_prefix("*")
+        else:
+            match = self.with_prefix(match)
         with self.get_connection() as conn:
             new_cursor, res = conn.scan(cursor, match, count, filter_type)
-        return int(new_cursor), to_list_str(res)
+        return int(new_cursor), to_list_str(res, self.no_prefix)
 
     def keys_block(
             self,
             *,
             match: str | None = None,
             filter_type: KeyType | None = None) -> list[str]:
+        if match is None:
+            match = self.with_prefix("*")
+        else:
+            match = self.with_prefix(match)
         if filter_type is not None:
             raise RuntimeError("type filtering not implemented yet!")
         with self.get_connection() as conn:
-            return to_list_str(conn.keys("*" if match is None else match))
+            return to_list_str(conn.keys(match), self.no_prefix)
 
     @overload
     def set(
@@ -1006,20 +1062,20 @@ class RedisConnection(Runtime[list[str]]):
 
     def sadd(self, key: str, *values: str) -> int:
         with self.get_connection() as conn:
-            return int(conn.sadd(key, *values))
+            return int(conn.sadd(self.with_prefix(key), *values))
 
     def srem(self, key: str, *values: str) -> int:
         with self.get_connection() as conn:
-            return int(conn.srem(key, *values))
+            return int(conn.srem(self.with_prefix(key), *values))
 
     def sismember(self, key: str, value: str) -> bool:
         with self.get_connection() as conn:
-            return int(conn.sismember(key, value)) > 0
+            return int(conn.sismember(self.with_prefix(key), value)) > 0
 
     def scard(self, key: str) -> int:
         with self.get_connection() as conn:
-            return int(conn.scard(key))
+            return int(conn.scard(self.with_prefix(key)))
 
     def smembers(self, key: str) -> Set[str]:
         with self.get_connection() as conn:
-            return set(to_list_str(conn.smembers(key)))
+            return set(to_list_str(conn.smembers(self.with_prefix(key))))

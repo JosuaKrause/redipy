@@ -203,7 +203,7 @@ def test_patterns() -> None:
         print("prefix")
         assert prefix == expect_prefix
         print("regex")
-        assert pat.pattern == expect_regex
+        assert pat.pattern == f"^{expect_regex}$"
         for candidate in match:
             print(f"match {candidate}")
             assert pat.match(candidate) is not None, \
@@ -297,3 +297,8 @@ def test_patterns() -> None:
         "h",
         r"h[\\]llo",
         [r"h\llo"], ["hello", "hbllo", r"h[\]allo", "hllo", r"h\\llo"])
+    check(
+        r"k???",
+        "k",
+        r"k...",
+        ["k100", "k999"], ["ak100", "k1000", "k10"])

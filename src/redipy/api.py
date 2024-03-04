@@ -57,7 +57,7 @@ KEY_TYPES: set[KeyType] = set(get_args(KeyType))
 
 
 @overload
-def as_key_type(text: str) -> KeyType:
+def as_key_type(text: str) -> KeyType | None:
     ...
 
 
@@ -77,9 +77,10 @@ def as_key_type(text: str | None) -> KeyType | None:
         ValueError: If the string does not represent a key type.
 
     Returns:
-        KeyType: The key type or None if the input was None.
+        KeyType: The key type or None if the input was None or the input was
+            the string "none".
     """
-    if text is None:
+    if text is None or text == "none":
         return None
     if text not in KEY_TYPES:
         raise ValueError(

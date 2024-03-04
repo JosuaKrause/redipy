@@ -1013,22 +1013,30 @@ def to_maybe_str(res: bytes | None) -> str | None:
 
 
 @overload
-def to_list_str(res: Iterable[bytes]) -> list[str]:
+def to_list_str(
+        res: Iterable[bytes],
+        transform: Callable[[str], str] | None = None) -> list[str]:
     ...
 
 
 @overload
-def to_list_str(res: None) -> None:
+def to_list_str(
+        res: None,
+        transform: Callable[[str], str] | None = None) -> None:
     ...
 
 
-def to_list_str(res: Iterable[bytes] | None) -> list[str] | None:
+def to_list_str(
+        res: Iterable[bytes] | None,
+        transform: Callable[[str], str] | None = None) -> list[str] | None:
     """
     Converts a list of bytes into a list of strings. If the input is None
     then only None is returned.
 
     Args:
         res (Iterable[bytes] | None): The list of bytes.
+        transform (Callable[[str], str] | None, optional): An optional mapping
+            function to be applied to each element.
 
     Returns:
         list[str] | None: The list of strings. If the input was None then None
@@ -1036,6 +1044,8 @@ def to_list_str(res: Iterable[bytes] | None) -> list[str] | None:
     """
     if res is None:
         return res
+    if transform is not None:
+        return [transform(val.decode("utf-8")) for val in res]
     return [val.decode("utf-8") for val in res]
 
 
@@ -1130,4 +1140,4 @@ def convert_pattern(pattern: str) -> tuple[str, re.Pattern]:
         if reset_bs:
             is_bs = False
         ix += 1
-    return prefix, re.compile(pat)
+    return prefix, re.compile(f"^{pat}$")

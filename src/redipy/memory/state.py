@@ -356,9 +356,10 @@ class State:
         Args:
             deletes (set[str]): The keys to delete.
         """
+        has_delete = False
         if self._parent is not None:
             self._deletes.update(deletes)
-        has_delete = False
+            has_delete = True
         for key in deletes:
             if self._vals.pop(key, None) is not None:
                 has_delete = True
@@ -374,6 +375,7 @@ class State:
                 has_delete = True
         if has_delete:
             self._flush_key_cache()
+            self._delete_count += 1
 
     def apply(self, other: 'State') -> None:
         """
