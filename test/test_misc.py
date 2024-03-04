@@ -14,10 +14,17 @@
 """Tests miscellaneous redis functionality."""
 import io
 from contextlib import redirect_stdout
-from test.util import get_setup
+from test.util import get_setup, get_test_config
 
 import pytest
 
+from redipy.graph.expr import (
+    ExprObj,
+    find_literal,
+    get_literal,
+    is_none_literal,
+)
+from redipy.main import Redis
 from redipy.symbolic.fun import FromJSON, LogFn, ToJSON, ToStr, TypeStr
 from redipy.symbolic.rzset import RedisSortedSet
 from redipy.symbolic.seq import FnContext
@@ -114,3 +121,106 @@ def test_misc(rt_lua: bool) -> None:
         assert pipe.execute() == [3]
         pipe.llen("bar")
         assert pipe.execute() == [3]
+
+    def check_redis(redis: Redis) -> None:
+        assert redis.set("test_rt", "yes")
+        assert redis.get("test_rt") == "yes"
+        assert redis.delete("test_rt") == 1
+
+    cfg = get_test_config()
+    check_redis(Redis(
+        "infer",
+        redis_module="test_misc",
+        host=cfg["host"],
+        port=cfg["port"],
+        passwd=cfg["passwd"],
+        path=cfg["path"],
+        prefix=cfg["prefix"]))
+    check_redis(Redis(
+        "redis",
+        redis_module="test_misc",
+        host=cfg["host"],
+        port=cfg["port"],
+        passwd=cfg["passwd"],
+        path=cfg["path"],
+        prefix=cfg["prefix"]))
+    check_redis(Redis(
+        "infer",
+        redis_module="test_misc",
+        cfg=cfg))
+
+
+def test_literals() -> None:
+    """Tests literal expression helper functions."""
+    assert get_literal(
+        {
+            "kind": "load_json_arg",
+            "index": 0,
+        },
+        "int") is None
+    assert get_literal(
+        {
+            "kind": "val",
+            "type": "int",
+            "value": 5,
+        },
+        "int") == 5
+    assert get_literal(
+        {
+            "kind": "val",
+            "type": "int",
+            "value": 5,
+        },
+        "bool") is None
+
+    assert not is_none_literal(
+        {
+            "kind": "load_json_arg",
+            "index": 0,
+        })
+    assert not is_none_literal(
+        {
+            "kind": "val",
+            "type": "int",
+            "value": 5,
+        })
+    assert is_none_literal(
+        {
+            "kind": "val",
+            "type": "none",
+            "value": None,
+        })
+
+    exprs: list[ExprObj] = [
+        {
+            "kind": "load_json_arg",
+            "index": 0,
+        },
+        {
+            "kind": "val",
+            "type": "int",
+            "value": 5,
+        },
+        {
+            "kind": "val",
+            "type": "str",
+            "value": "push",
+        },
+        {
+            "kind": "val",
+            "type": "none",
+            "value": None,
+        },
+    ]
+
+    assert find_literal(exprs, 6) is None
+    assert find_literal(exprs, 5) == (1, 5)
+    assert find_literal(exprs, 5, vtype="int") == (1, 5)
+    assert find_literal(exprs, 5, vtype="float") is None
+    assert find_literal(exprs, "push", vtype="str") == (2, "push")
+    assert find_literal(exprs, "PUSH", vtype="str") is None
+    assert find_literal(exprs, "PUSH", no_case=True) is None  # needs vtype=str
+    assert find_literal(
+        exprs, "PUSH", vtype="str", no_case=True) == (2, "push")
+    assert find_literal(exprs, None) == (3, None)
+    assert find_literal(exprs, None, vtype="none") == (3, None)

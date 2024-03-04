@@ -92,6 +92,8 @@ class Runtime(Generic[T], RedisClientAPI):
             with self.lock():
                 if self._backend is None:
                     self._backend = self.create_backend()
+                else:
+                    pass  # pragma: no cover
         return self._backend
 
     @classmethod

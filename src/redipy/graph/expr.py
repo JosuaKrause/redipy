@@ -189,10 +189,10 @@ def find_literal(
         value (JSONType): The value to look for.
 
         vtype (ValueType | None, optional): The type of the value to look for.
-        Defaults to None.
+            Defaults to None.
 
         no_case (bool, optional): Whether the value should be search without
-        considering case (only for strings). Defaults to False.
+            considering case (only for strings). Defaults to False.
 
     Returns:
         tuple[int, JSONType] | None: If found, the index and the literal.

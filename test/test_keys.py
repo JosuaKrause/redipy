@@ -86,7 +86,7 @@ PIPE_EXPECTED: dict[KeyType, Callable[[Any, int], bool]] = {
 @pytest.mark.parametrize("k_add", [None, 3, 10])
 @pytest.mark.parametrize("k_del", [None, 7, 11])
 @pytest.mark.parametrize("match", [None, "k1*", "k???"])
-@pytest.mark.parametrize("count", [30, 200, 500, 1000, 2000, 10000])
+@pytest.mark.parametrize("count", [30, 200, 500, 1000, 2000, 10000, 100000])
 @pytest.mark.parametrize("rt_lua", [False, True])
 def test_scan(
         types: KeyType | None,
@@ -110,6 +110,13 @@ def test_scan(
 
     if rt_lua and count >= 10000:
         # NOTE: redis backend tests get really slow with many keys
+        return
+    if count > 10000 and (
+            types is not None
+            or k_add is None
+            or k_del is None
+            or match is None):
+        # NOTE: we reduce test cases for large data
         return
 
     all_keys: dict[str, KeyType] = {}

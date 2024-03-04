@@ -22,8 +22,9 @@ import pytest
 from redipy.backend.backend import ExecFunction
 from redipy.backend.runtime import Runtime
 from redipy.graph.seq import SequenceObj
+from redipy.main import Redis
 from redipy.memory.rt import LocalRuntime
-from redipy.redis.conn import RedisConfig, RedisConnection
+from redipy.redis.conn import RedisConfig
 from redipy.symbolic.seq import FnContext
 from redipy.util import code_fmt, get_test_salt
 
@@ -75,14 +76,16 @@ def get_setup(
         Runtime: The runtime.
     """
     if rt_lua:
-        res: Runtime = RedisConnection(test_name, cfg=get_test_config())
-        if lua_script is not None:
 
-            def code_hook(code: list[str]) -> None:
-                code_str = code_fmt(code)
-                assert code_str == lua_script
+        def code_hook(code: list[str]) -> None:
+            code_str = code_fmt(code)
+            assert code_str == lua_script
 
-            res.set_code_hook(code_hook)
+        redis = Redis(
+            redis_module=test_name,
+            cfg=get_test_config(),
+            lua_code_hook=None if lua_script is None else code_hook)
+        res: Runtime = redis.get_redis_runtime()
     else:
         res = LocalRuntime()
 
