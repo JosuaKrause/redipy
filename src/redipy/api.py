@@ -233,6 +233,54 @@ class PipelineAPI:
         """
         raise NotImplementedError()
 
+    def set_value(
+            self,
+            key: str,
+            value: str,
+            *,
+            mode: RSetMode = RSM_ALWAYS,
+            return_previous: bool = False,
+            expire_timestamp: datetime.datetime | None = None,
+            expire_in: float | None = None,
+            keep_ttl: bool = False) -> None:
+        """
+        Sets a value for a given key. The value can be scheduled to expire.
+
+        See also the redis documentation: https://redis.io/commands/set/
+
+        The pipeline value depends on the return_previous argument.
+
+        Args:
+            key (str): The key.
+
+            value (str): The value.
+
+            mode (RSetMode, optional): Under which condition to set the value
+            valid values are RSM_ALWAYS, RSM_MISSING, and RSM_EXISTS.
+            RSM_MISSING is the equivalent of setting the NX flag. RSM_EXISTS is
+            the equivalent of the XX flag. Defaults to RSM_ALWAYS.
+
+            return_previous (bool, optional): Whether to return the previous
+            value associated with the key. Defaults to False.
+
+            expire_timestamp (datetime.datetime | None, optional): A timestamp
+            on when to expire the key. Defaults to None.
+
+            expire_in (float | None, optional): A relative time in seconds on
+            when to expire the key. Defaults to None.
+
+            keep_ttl (bool, optional): Whether to keep previous expiration
+            times. Defaults to False.
+        """
+        self.set(
+            key,
+            value,
+            mode=mode,
+            return_previous=return_previous,
+            expire_timestamp=expire_timestamp,
+            expire_in=expire_in,
+            keep_ttl=keep_ttl)
+
     def get(self, key: str) -> None:
         """
         Retrieves the value for the given key.
@@ -246,6 +294,20 @@ class PipelineAPI:
             key (str): The key.
         """
         raise NotImplementedError()
+
+    def get_value(self, key: str) -> None:
+        """
+        Retrieves the value for the given key.
+
+        See also the redis documentation: https://redis.io/commands/get/
+
+        The pipeline value is the value or None if the key does not exists or
+        the value has expired.
+
+        Args:
+            key (str): The key.
+        """
+        self.get(key)
 
     def incrby(self, key: str, inc: float | int) -> None:
         """

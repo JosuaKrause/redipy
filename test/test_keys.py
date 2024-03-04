@@ -17,10 +17,11 @@
 import re
 from collections.abc import Callable, Iterable
 from test.util import get_setup
+from typing import Any
 
 import pytest
 
-from redipy.api import KeyType
+from redipy.api import KeyType, PipelineAPI
 from redipy.backend.runtime import Runtime
 from redipy.util import convert_pattern
 
@@ -44,7 +45,8 @@ KEY_TYPE_MODES: list[KeyType | None] = [
 ]
 
 
-DEFAULTS: dict[KeyType, Callable[[Runtime, str, int], object]] = {
+DEFAULTS: dict[
+        KeyType, Callable[[Runtime | PipelineAPI, str, int], object]] = {
     "string": lambda rt, key, ix: rt.set_value(key, f"v{ix}"),
     "list": lambda rt, key, ix: rt.rpush(key, f"v{ix}"),
     "set": lambda rt, key, ix: rt.sadd(key, f"v{ix}"),
@@ -59,6 +61,24 @@ CHECKS: dict[KeyType, Callable[[Runtime, str, int], bool]] = {
     "set": lambda rt, key, ix: rt.smembers(key) == {f"v{ix}"},
     "zset": lambda rt, key, ix: rt.zrange(key, 0, -1) == [f"v{ix}"],
     "hash": lambda rt, key, ix: rt.hgetall(key) == {"value": f"v{ix}"},
+}
+
+
+PIPE_CHECKS: dict[KeyType, Callable[[PipelineAPI, str], None]] = {
+    "string": lambda pipe, key: pipe.get_value(key),
+    "list": lambda pipe, key: pipe.lrange(key, 0, -1),
+    "set": lambda pipe, key: pipe.smembers(key),
+    "zset": lambda pipe, key: pipe.zrange(key, 0, -1),
+    "hash": lambda pipe, key: pipe.hgetall(key),
+}
+
+
+PIPE_EXPECTED: dict[KeyType, Callable[[Any, int], bool]] = {
+    "string": lambda res, ix: res == f"v{ix}",
+    "list": lambda res, ix: set(res) == {f"v{ix}"},
+    "set": lambda res, ix: res == {f"v{ix}"},
+    "zset": lambda res, ix: res == [f"v{ix}"],
+    "hash": lambda res, ix: res == {"value": f"v{ix}"},
 }
 
 
@@ -175,9 +195,8 @@ def test_scan(
         _, pat = convert_pattern(match)
     for ref_key, ref_type in keys.items():
         if pat is not None and not pat.match(ref_key):
+            assert ref_key not in total
             continue
-        if pat is not None:
-            print(pat.pattern)
         assert ref_key in total
         assert rt.exists(ref_key) > 0
         assert rt.key_type(ref_key) == ref_type
@@ -204,3 +223,114 @@ def test_scan(
         assert rt.key_type(final_key) == final_type
         assert CHECKS[final_type](rt, final_key, extract(final_key))
         assert rt.delete(final_key) == 1
+
+
+@pytest.mark.parametrize("types", KEY_TYPE_MODES)
+@pytest.mark.parametrize("match", [None, "k1*", "k???"])
+@pytest.mark.parametrize("block", [False, True])
+@pytest.mark.parametrize("rt_lua", [False, True])
+def test_keys(
+        types: KeyType | None,
+        match: str | None,
+        block: bool,
+        rt_lua: bool) -> None:
+    """
+    Test keys command.
+
+    Args:
+        types (KeyType | None): Which key types to use.
+        match (str | None): The filter pattern.
+        block (bool): Whether to use blocking operations.
+        rt_lua (bool): Whether to use the redis or memory runtime.
+    """
+    rt = get_setup("test_keys", rt_lua)
+    if rt_lua and types is not None:
+        return  # FIXME: implement filter_type for redis connections
+
+    def gen(
+            start: int,
+            stop: int,
+            step: int = 1) -> Iterable[tuple[KeyType, str]]:
+        yield from ((
+            KEY_TYPE_REG[ix % len(KEY_TYPE_REG)] if types is None else types,
+            f"k{ix}",
+        ) for ix in range(start, stop, step))
+
+    def extract(key: str) -> int:
+        return int(key[1:])
+
+    keys: dict[str, KeyType] = {}
+    assert rt.keys(match=match, block=block, filter_type=types) == set()
+    with rt.pipeline() as pipe:
+        pipe.scan(0, match=match, filter_type=types)
+        pipe.keys(match=match, filter_type=types)
+        scan_res, keys_res = pipe.execute()
+        assert scan_res[0] == 0
+        assert scan_res[1] == []
+        assert keys_res == []
+        for key_type, key in gen(0, 100):
+            ix = extract(key)
+            DEFAULTS[key_type](pipe, key, ix)
+            keys[key] = key_type
+    assert rt.keys(block=block) == set(keys.keys())
+
+    def for_type(filter_type: KeyType | None) -> None:
+        total = rt.keys(block=block, match=match, filter_type=filter_type)
+        pat: re.Pattern | None = None
+        if match:
+            _, pat = convert_pattern(match)
+
+        def get_type_check(ref_type: str) -> Callable[[Any], bool]:
+            return lambda res: res == ref_type
+
+        def get_pipe_check(
+                ref_key: str, ref_type: KeyType) -> Callable[[Any], bool]:
+            expected = PIPE_EXPECTED[ref_type]
+            ix = extract(ref_key)
+            return lambda res: expected(res, ix)
+
+        checks: list[tuple[Callable[[Any], bool], str]] = []
+        with rt.pipeline() as pipe:
+            for ref_key, ref_type in keys.items():
+                if pat is not None and not pat.match(ref_key):
+                    assert ref_key not in total
+                    continue
+                if filter_type is not None and ref_type != filter_type:
+                    assert ref_key not in total
+                    continue
+                assert ref_key in total
+                pipe.exists(ref_key)
+                checks.append((lambda res: int(res) > 0, f"exists {ref_key}"))
+                pipe.key_type(ref_key)
+                checks.append((
+                    get_type_check(ref_type),
+                    f"type {ref_key} {ref_type}"))
+                PIPE_CHECKS[ref_type](pipe, ref_key)
+                checks.append((
+                    get_pipe_check(ref_key, ref_type),
+                    f"check {ref_key} {ref_type}"))
+            results = pipe.execute()
+        for cur_res, cur_check in zip(results, checks):
+            check, check_name = cur_check
+            assert check(cur_res), f"{check_name} result: {cur_res}"
+
+    test_types: list[KeyType | None] = [None] if rt_lua else KEY_TYPE_MODES
+    for test_type in test_types:
+        for_type(test_type)
+
+    for final_key in rt.keys(block=True):
+        assert final_key in keys
+        final_type = keys[final_key]
+        assert rt.exists(final_key) > 0
+        assert rt.key_type(final_key) == final_type
+        assert CHECKS[final_type](rt, final_key, extract(final_key))
+        assert rt.delete(final_key) == 1
+
+    assert rt.keys(match=match, block=block, filter_type=types) == set()
+    with rt.pipeline() as pipe:
+        pipe.scan(0, match=match, filter_type=types)
+        pipe.keys(match=match, filter_type=types)
+        scan_final, keys_final = pipe.execute()
+        assert scan_final[0] == 0
+        assert scan_final[1] == []
+        assert keys_final == []

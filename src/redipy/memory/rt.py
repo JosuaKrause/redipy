@@ -560,8 +560,8 @@ class LocalPipeline(PipelineAPI):
             *,
             match: str | None = None,
             filter_type: KeyType | None = None) -> None:
-        self.add_cmd(lambda: self._sm.keys(
-            match=match, filter_type=filter_type))
+        self.add_cmd(lambda: sorted(self._sm.keys(
+            match=match, filter_type=filter_type)))
 
     def set(
             self,

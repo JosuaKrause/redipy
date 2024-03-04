@@ -202,7 +202,7 @@ class State:
             self,
             cursor: int,
             length: int,
-            pattern_prefix: str | None) -> tuple[list[str], int]:
+            pattern_prefix: str | None) -> tuple[int, list[str]]:
         """
         Internal scan. The result might include keys that will be filtered in
         the actual scan function.
@@ -229,8 +229,8 @@ class State:
                 ranges. If None, all keys are considered.
 
         Returns:
-            tuple[list[str], int]: A tuple of the returned keys and the next
-                cursor. If the iteration is complete the next cursor is 0.
+            tuple[int, list[str]]: A tuple of the next cursor and the returned
+                keys. If the iteration is complete the next cursor is 0.
         """
         delete_count = self._delete_count
         if cursor == 0 and pattern_prefix is not None:
@@ -244,7 +244,7 @@ class State:
             end_ix = 0
         else:
             end_ix += delete_count
-        return res, end_ix
+        return end_ix, res
 
     def scan_keys(
             self,
@@ -267,8 +267,8 @@ class State:
             filter_type (KeyType | None): If not None filter by key type.
 
         Returns:
-            tuple[list[str], int]: A tuple of the returned keys and the next
-                cursor. If the iteration is complete the next cursor is 0.
+            tuple[int, list[str]]: A tuple of the next cursor and the returned
+                keys. If the iteration is complete the next cursor is 0.
         """
         if match is not None:
             prefix, pat = convert_pattern(match)
@@ -287,7 +287,7 @@ class State:
                     continue
                 yield key
 
-        keys, next_cursor = self._scan(cursor, count, prefix)
+        next_cursor, keys = self._scan(cursor, count, prefix)
         if prefix is not None and keys:
             last_key = keys[-1]
             last_key = last_key[:len(prefix)]
@@ -315,12 +315,11 @@ class State:
         count = MIN_SCAN_LENGTH
         cursor = 0
         while True:
-            next_cursor, keys = self.scan_keys(
+            cursor, keys = self.scan_keys(
                 cursor, count=count, match=match, filter_type=filter_type)
             yield from keys
-            if next_cursor == 0:
+            if cursor == 0:
                 break
-            cursor = next_cursor
             count = min(count * 2, KEYS_MAX_SCAN)
 
     def exists(self, key: str) -> bool:
@@ -417,6 +416,9 @@ class State:
         self._clean_vals()
         self.delete(other.raw_deletes())
 
+        if new_keys:
+            self._flush_key_cache()
+
     def reset(self) -> None:
         """
         Completely resets the state.
@@ -428,18 +430,22 @@ class State:
         self._zorder.clear()
         self._zscores.clear()
         self._deletes.clear()
+        self._flush_key_cache()
 
-    def _prepare_key_for_write(self, key: str) -> None:
+    def _prepare_key_for_write(self, key: str, is_new: bool) -> None:
         """
         Prepares a key for writing by ensuring that it is not deleted.
 
         Args:
             key (str): The key.
+            is_new (bool): Whether the key is new.
         """
-        if self.exists(key):
+        exists = self.exists(key)
+        if not exists or is_new:
+            self._flush_key_cache()
+        if exists:
             return
         self._deletes.discard(key)
-        self._flush_key_cache()
 
     def _is_pending_delete(self, key: str) -> bool:
         """
@@ -563,9 +569,11 @@ class State:
             value (str): The value.
             expire (float | None): When the value should expire if at all.
         """
+        is_new = False
         if key not in self._vals:
             self.verify_key("string", key)
-        self._prepare_key_for_write(key)
+            is_new = True
+        self._prepare_key_for_write(key, is_new)
         self._vals[key] = (value, expire)
 
     def get_value(self, key: str) -> tuple[str, float | None] | None:
@@ -614,6 +622,7 @@ class State:
         Returns:
             collections.deque[str]: The queue for writing.
         """
+        is_new = False
         res = self._queues.get(key)
         if res is None:
             self.verify_key("list", key)
@@ -622,7 +631,8 @@ class State:
             else:
                 res = collections.deque()
             self._queues[key] = res
-        self._prepare_key_for_write(key)
+            is_new = True
+        self._prepare_key_for_write(key, is_new)
         return res
 
     def readonly_queue(self, key: str) -> collections.deque[str] | None:
@@ -670,6 +680,7 @@ class State:
         Returns:
             dict[str, str]: The hash for writing.
         """
+        is_new = False
         res = self._hashes.get(key)
         if res is None:
             self.verify_key("hash", key)
@@ -678,7 +689,8 @@ class State:
             else:
                 res = {}
             self._hashes[key] = res
-        self._prepare_key_for_write(key)
+            is_new = True
+        self._prepare_key_for_write(key, is_new)
         return res
 
     def readonly_hash(self, key: str) -> dict[str, str] | None:
@@ -711,6 +723,7 @@ class State:
         Returns:
             set[str]: The set for writing.
         """
+        is_new = False
         res = self._sets.get(key)
         if res is None:
             self.verify_key("set", key)
@@ -719,7 +732,8 @@ class State:
             else:
                 res = set()
             self._sets[key] = res
-        self._prepare_key_for_write(key)
+            is_new = True
+        self._prepare_key_for_write(key, is_new)
         return res
 
     def readonly_set(self, key: str) -> set[str] | None:
@@ -753,6 +767,7 @@ class State:
             tuple[list[str], dict[str, float]]: The tuple of zorder and zscores
             for writing.
         """
+        is_new = False
         rorder = self._zorder.get(key)
         rscores = self._zscores.get(key)
         if rorder is None:
@@ -766,7 +781,8 @@ class State:
                 rscores = {}
             self._zorder[key] = rorder
             self._zscores[key] = rscores
-        self._prepare_key_for_write(key)
+            is_new = True
+        self._prepare_key_for_write(key, is_new)
         assert rscores is not None
         return (rorder, rscores)
 
@@ -895,6 +911,7 @@ class Machine(RedisAPI):
             *,
             match: str | None = None,
             filter_type: KeyType | None = None) -> list[str]:
+        # NOTE: get_all_keys cannot have duplicates
         return list(
             self._state.get_all_keys(match=match, filter_type=filter_type))
 

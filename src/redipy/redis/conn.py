@@ -482,7 +482,7 @@ class PipelineConnection(PipelineAPI):
 
     def smembers(self, key: str) -> None:
         self._pipe.smembers(self.with_prefix(key))
-        self.add_fixup(to_list_str)
+        self.add_fixup(lambda res: set(to_list_str(res)))
 
 
 class RedisConnection(Runtime[list[str]]):
