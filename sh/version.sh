@@ -56,7 +56,7 @@ if [ -z "${ARG_TAG}" ]; then
     TOML_CHK="import tomllib;print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])"
     CUR_VERSION=$(echo "${TOML_CHK}" | ${PYTHON} 2>/dev/null)
 else
-    CUR_VERSION=$(git describe --tags --abbrev=0)
+    CUR_VERSION=$(git tag --merged | sort -rV | head -n 1)
 fi
 
 if [ -z "${ARG_NEXT}" ]; then

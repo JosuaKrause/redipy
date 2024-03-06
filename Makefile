@@ -106,7 +106,7 @@ requirements-complete:
 	PYTHON=$(PYTHON) ./sh/requirements_complete.sh $(FILE)
 
 name:
-	git describe --abbrev=10 --tags HEAD
+	git describe --tags --match `git tag --merged | sort -rV | head -n 1`
 
 git-check:
 	./sh/git_check.sh
