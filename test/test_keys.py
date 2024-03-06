@@ -256,6 +256,10 @@ def test_keys(
     if rt_lua and types is not None:
         return  # FIXME: implement filter_type for redis connections
 
+    rt_alt = get_setup("test_keys_alt", rt_lua)
+    # NOTE: this value should never be returned by keys or scan
+    rt_alt.set_value("foo", "clobber")
+
     def gen(
             start: int,
             stop: int,
@@ -274,7 +278,7 @@ def test_keys(
         pipe.scan(0, match=match, filter_type=types)
         pipe.keys(match=match, filter_type=types)
         scan_res, keys_res = pipe.execute()
-        assert scan_res[0] == 0
+        # NOTE: scan_res[0] could be != 0 if other keys exist in the db
         assert scan_res[1] == []
         assert keys_res == []
         for key_type, key in gen(0, 100):
@@ -344,6 +348,11 @@ def test_keys(
         pipe.scan(0, match=match, filter_type=types)
         pipe.keys(match=match, filter_type=types)
         scan_final, keys_final = pipe.execute()
-        assert scan_final[0] == 0
         assert scan_final[1] == []
         assert keys_final == []
+    cursor = scan_final[0]
+    while cursor != 0:
+        cursor, scan_arr = rt.scan(cursor, match=match, filter_type=types)
+        assert scan_arr == []
+
+    assert rt_alt.get_value("foo") == "clobber"
