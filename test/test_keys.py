@@ -197,7 +197,7 @@ def test_scan(
         elif iters == 11 and k_del is not None:
             cond_op(gen(0, count, k_del), lambda _: True, is_add=False)
         elif iters == 12:
-            scan_count = 1000
+            scan_count = 50
 
     pat: re.Pattern | None = None
     if match:
