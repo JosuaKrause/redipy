@@ -131,20 +131,20 @@ class State:
             key (str): The key.
 
         Raises:
-            ValueError: If the key already exists with a different type.
+            TypeError: If the key already exists with a different type.
         """
         if key in self._deletes:
             return
         if key_type != "string" and key in self._vals:
-            raise ValueError(f"key {key} already used as string")
+            raise TypeError(f"key {key} already used as string")
         if key_type != "list" and key in self._queues:
-            raise ValueError(f"key {key} already used as list")
+            raise TypeError(f"key {key} already used as list")
         if key_type != "hash" and key in self._hashes:
-            raise ValueError(f"key {key} already used as hash")
+            raise TypeError(f"key {key} already used as hash")
         if key_type != "set" and key in self._sets:
-            raise ValueError(f"key {key} already used as set")
+            raise TypeError(f"key {key} already used as set")
         if key_type != "zset" and key in self._zorder:
-            raise ValueError(f"key {key} already used as sorted set")
+            raise TypeError(f"key {key} already used as zset")
         if self._parent is not None:
             self._parent.verify_key(key_type, key)
 
@@ -168,6 +168,8 @@ class State:
         if self._parent is None:
             key_cache = sorted(pre)
         else:
+            # NOTE: no need to remove duplicates here as they are allowed
+            # by the spec and are removed downstream which is much cheaper
             parent_cache = self._parent.get_key_cache()
             key_cache = sorted(pre + parent_cache)
         self._key_cache = key_cache
@@ -605,11 +607,10 @@ class State:
         if res is not None and not self._is_alive(res):
             self._clean_vals()
             return None
-        if (
-                res is None
-                and self._parent is not None
-                and not self._is_pending_delete(key)):
-            return self._parent.get_value(key)
+        if res is None:
+            self.verify_key("string", key)
+            if self._parent is not None and not self._is_pending_delete(key):
+                return self._parent.get_value(key)
         return res
 
     def has_value(self, key: str) -> bool:
@@ -663,6 +664,7 @@ class State:
         """
         res = self._queues.get(key)
         if res is None:
+            self.verify_key("list", key)
             if self._parent is None or self._is_pending_delete(key):
                 return None
             return self._parent.readonly_queue(key)
@@ -680,6 +682,7 @@ class State:
         """
         res = self.readonly_queue(key)
         if res is None:
+            self.verify_key("list", key)
             return 0
         return len(res)
 
@@ -721,6 +724,7 @@ class State:
         """
         res = self._hashes.get(key)
         if res is None:
+            self.verify_key("hash", key)
             if self._parent is None or self._is_pending_delete(key):
                 return None
             return self._parent.readonly_hash(key)
@@ -764,6 +768,7 @@ class State:
         """
         res = self._sets.get(key)
         if res is None:
+            self.verify_key("set", key)
             if self._parent is None or self._is_pending_delete(key):
                 return None
             return self._parent.readonly_set(key)
@@ -814,6 +819,7 @@ class State:
         """
         res = self._zorder.get(key)
         if res is None:
+            self.verify_key("zset", key)
             if self._parent is None or self._is_pending_delete(key):
                 return None
             return self._parent.readonly_zorder(key)
@@ -833,6 +839,7 @@ class State:
         """
         res = self._zscores.get(key)
         if res is None:
+            self.verify_key("zset", key)
             if self._parent is None or self._is_pending_delete(key):
                 return None
             return self._parent.readonly_zscores(key)
@@ -850,6 +857,7 @@ class State:
         """
         res = self.readonly_zorder(key)
         if res is None:
+            self.verify_key("zset", key)
             return 0
         return len(res)
 

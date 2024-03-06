@@ -536,8 +536,13 @@ class RedisConnection(Runtime[list[str]]):
         Yields:
             Redis: The redis connection.
         """
-        with self._conn.get_connection() as conn:
-            yield conn
+        try:
+            with self._conn.get_connection() as conn:
+                yield conn
+        except ResponseError as rerr:
+            if not f"{rerr}".startswith("WRONGTYPE"):
+                raise
+            raise TypeError("key already used with different type") from rerr
 
     def get_dynamic_script(self, code: str) -> RedisFunctionBytes:
         """
