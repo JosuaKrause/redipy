@@ -158,13 +158,13 @@ class State:
         Returns:
             list[str]: A sorted list of all keys.
         """
-        pre = [
-            *self._vals,
-            *self._queues,
-            *self._hashes,
-            *self._sets,
-            *self._zorder,
-        ]
+        pre = (
+            list(self._vals)
+            + list(self._queues)
+            + list(self._hashes)
+            + list(self._sets)
+            + list(self._zorder)
+        )
         if self._parent is None:
             key_cache = sorted(pre)
         else:
