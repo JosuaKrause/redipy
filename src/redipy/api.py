@@ -830,7 +830,7 @@ class RedisAPI:
             yield from keys
             if cursor == 0:
                 break
-            count = int(min(1000, count * 1.2))
+            count = int(min(1000, count * 2))
 
     def keys_block(
             self,

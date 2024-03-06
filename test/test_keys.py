@@ -83,7 +83,7 @@ PIPE_EXPECTED: dict[KeyType, Callable[[Any, int], bool]] = {
 
 
 @pytest.mark.parametrize("types", KEY_TYPE_MODES)
-@pytest.mark.parametrize("k_add", [None, 10])
+@pytest.mark.parametrize("k_add", [None, 11])
 @pytest.mark.parametrize("k_del", [None, 7])
 @pytest.mark.parametrize("match", [None, "k1*", "k???"])
 @pytest.mark.parametrize("count", [30, 200, 500, 1000, 2000, 10000, 100000])
@@ -197,7 +197,7 @@ def test_scan(
         elif iters == 11 and k_del is not None:
             cond_op(gen(0, count, k_del), lambda _: True, is_add=False)
         elif iters == 12:
-            scan_count = 100  # NOTE: return the rest a bit quicker
+            scan_count = 1000  # NOTE: return the rest a bit quicker
 
     pat: re.Pattern | None = None
     if match:
