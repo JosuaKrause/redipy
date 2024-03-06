@@ -179,8 +179,9 @@ def test_scan(
                     assert rt.delete(cur_key) == 1
     iters = 0
     cursor = 0
+    scan_count = 50
     while True:
-        cursor, partial = rt.scan(cursor, match=match, count=50)
+        cursor, partial = rt.scan(cursor, match=match, count=scan_count)
         total.update(partial)
         if cursor == 0:
             break
@@ -195,6 +196,8 @@ def test_scan(
             cond_op(later, lambda _: True, is_add=True)
         elif iters == 11 and k_del is not None:
             cond_op(gen(0, count, k_del), lambda _: True, is_add=False)
+        elif iters == 12:
+            scan_count = 100000
 
     pat: re.Pattern | None = None
     if match:
