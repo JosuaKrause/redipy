@@ -276,16 +276,26 @@ class State:
             prefix = None
             pat = None
 
-        def process(keys: list[str]) -> Iterable[str]:
-            for key in keys:
-                key_type = self.key_type(key)
-                if key_type is None:
-                    continue
-                if filter_type is not None and key_type != filter_type:
-                    continue
-                if pat is not None and not pat.match(key):
-                    continue
-                yield key
+        def process_type(keys: Iterable[str]) -> Iterable[str]:
+            if filter_type is None:
+                return keys
+            return (
+                key
+                for key in keys
+                if self.key_type(key) == filter_type)
+
+        def process_pat(keys: Iterable[str]) -> Iterable[str]:
+            if pat is None:
+                return keys
+            return (
+                key
+                for key in keys
+                if pat.match(key))
+
+        def process(keys: list[str]) -> list[str]:
+            if filter_type is None and pat is None:
+                return keys
+            return list(process_pat(process_type(keys)))
 
         next_cursor, keys = self._scan(cursor, count, prefix)
         if prefix is not None and keys:
@@ -293,7 +303,7 @@ class State:
             last_key = last_key[:len(prefix)]
             if last_key > prefix:
                 next_cursor = 0
-        return next_cursor, list(process(keys))
+        return next_cursor, process(keys)
 
     def get_all_keys(
             self,
