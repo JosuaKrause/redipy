@@ -346,7 +346,7 @@ class ArrayAt(Expr):
     def compile(self) -> ExprObj:
         return {
             "kind": "array_at",
-            "var": self._array.get_ref(),
+            "arr": self._array.get_ref(),
             "index": self._index.compile(),
         }
 
@@ -368,7 +368,7 @@ class DictKey(Expr):
     def compile(self) -> ExprObj:
         return {
             "kind": "dict_key",
-            "var": self._obj.get_ref(),
+            "obj": self._obj.get_ref(),
             "key": self._key.compile(),
         }
 

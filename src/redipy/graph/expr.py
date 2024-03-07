@@ -99,13 +99,13 @@ BinaryOpObj = TypedDict('BinaryOpObj', {
 """Performs a binary operation."""
 ArrayAtObj = TypedDict('ArrayAtObj', {
     "kind": Literal["array_at"],
-    "var": RefIdObj,
+    "arr": 'ExprObj',
     "index": 'ExprObj',
 })
 """Reads an index from an array."""
 DictKeyObj = TypedDict('DictKeyObj', {
     "kind": Literal["dict_key"],
-    "var": RefIdObj,
+    "obj": 'ExprObj',
     "key": 'ExprObj',
 })
 """Reads a key from a dictionary."""

@@ -179,7 +179,8 @@ def test_ensure_name_available() -> None:
         "asintstr",
         "3.2",
         ValueError,
-        r"Error while executing script\nCode:\nreturn asintstr\(3\.2\)\n\n"
+        r"Error while executing script:\s*user_script:[^:]*:[^\n]*asintstr"
+        r"[^\n]*\nCode:\nreturn asintstr\(3\.2\)\n\n"
         r"Context:\n  \n  \n  \n> return asintstr\(3\.2\)",
         [
             (

@@ -70,7 +70,7 @@ end
 if (tostring(nil) ~= "nil") then
     var_2 = false
 end
-if (redis.call("type", key_0) ~= "zset") then
+if (redis.call("type", key_0)["ok"] ~= "zset") then
     var_2 = false
 end
 return cjson.encode(var_2)

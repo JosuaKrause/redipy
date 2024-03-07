@@ -16,6 +16,32 @@ from redipy.graph.expr import CallObj, ExprObj, find_literal, LiteralValObj
 from redipy.plugin import LuaRedisPatch
 
 
+class RTypePatch(LuaRedisPatch):
+    """Converts the output of TYPE into a proper string."""
+    @staticmethod
+    def names() -> set[str]:
+        return {"type"}
+
+    def patch(
+            self,
+            name: str,
+            expr: CallObj,
+            args: list[ExprObj],
+            *,
+            is_expr_stmt: bool) -> ExprObj:
+        if is_expr_stmt:
+            return expr
+        return {
+            "kind": "dict_key",
+            "obj": expr,
+            "key": {
+                "kind": "val",
+                "type": "str",
+                "value": "ok",
+            },
+        }
+
+
 class RSetPatch(LuaRedisPatch):
     """Converts the output of SET into a proper boolean value."""
     @staticmethod

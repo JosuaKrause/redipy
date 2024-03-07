@@ -444,7 +444,7 @@ class LocalBackend(
 
             return exec_const
         if expr["kind"] == "array_at":
-            arr_ref = self.compile_expr(ctx, expr["var"])
+            arr_ref = self.compile_expr(ctx, expr["arr"])
             arr_ix = self.compile_expr(ctx, expr["index"])
 
             def exec_arr_at(state: ExecState) -> JSONType:
@@ -452,7 +452,7 @@ class LocalBackend(
 
             return exec_arr_at
         if expr["kind"] == "dict_key":
-            obj_ref = self.compile_expr(ctx, expr["var"])
+            obj_ref = self.compile_expr(ctx, expr["obj"])
             obj_key = self.compile_expr(ctx, expr["key"])
 
             def exec_dict_key(state: ExecState) -> JSONType:

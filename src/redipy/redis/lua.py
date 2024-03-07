@@ -417,11 +417,11 @@ class LuaBackend(
             return f"{expr['raw']}"
         if expr["kind"] == "array_at":
             return (
-                f"{self.compile_expr(ctx, expr['var'])}"
+                f"{self.compile_expr(ctx, expr['arr'])}"
                 f"[{self.compile_expr(ctx, expr['index'])} + 1]")
         if expr["kind"] == "dict_key":
             return (
-                f"{self.compile_expr(ctx, expr['var'])}"
+                f"{self.compile_expr(ctx, expr['obj'])}"
                 f"[{self.compile_expr(ctx, expr['key'])}]")
         if expr["kind"] == "array_len":
             return f"#{self.compile_expr(ctx, expr['var'])}"
