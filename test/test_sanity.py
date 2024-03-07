@@ -77,7 +77,8 @@ def test_sanity() -> None:
     assert redis.get("baz") == "c"
 
     # type
-    check_expression("redis.call('type', KEYS[1])['ok']", "str", keys=["bar"])
+    check_expression(
+        "redis.call('type', KEYS[1])['ok']", "string", keys=["bar"])
     check_expression(
         "type(redis.call('type', KEYS[1])['ok'])", "string", keys=["bar"])
 
