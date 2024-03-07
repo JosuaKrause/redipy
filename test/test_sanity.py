@@ -76,6 +76,11 @@ def test_sanity() -> None:
     assert redis.set("baz", "c") is True
     assert redis.get("baz") == "c"
 
+    # type
+    check_expression("redis.call('type', KEYS[1])['ok']", "str", keys=["bar"])
+    check_expression(
+        "type(redis.call('type', KEYS[1])['ok'])", "string", keys=["bar"])
+
     # lpop
     check_expression("redis.call('lpop', KEYS[1])", "false", keys=["foo"])
     check_expression(
@@ -145,6 +150,16 @@ def test_sanity() -> None:
     check_expression("redis.call('zadd', KEYS[1], 2, 'a')", "1", keys=["zbar"])
     check_expression("redis.call('zadd', KEYS[1], 3, 'b')", "1", keys=["zbar"])
     assert redis.zpop_min("zbar", 2) == [("a", 2), ("b", 3)]
+
+    # scard
+    check_expression("redis.call('scard', KEYS[1])", "0", keys=["rset"])
+    check_expression(
+        "type(redis.call('scard', KEYS[1]))", "number", keys=["rset"])
+    assert redis.sadd("rset", "a", "b", "c")
+    check_expression("redis.call('scard', KEYS[1])", "3", keys=["rset"])
+    check_expression(
+        "type(redis.call('scard', KEYS[1]))", "number", keys=["rset"])
+    assert redis.scard("rset") == 3
 
 
 def test_ensure_name_available() -> None:

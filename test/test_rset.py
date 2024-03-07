@@ -218,3 +218,27 @@ def test_rset(rt_lua: bool) -> None:
     assert redis.sismember("c", "b")
     assert not redis.sismember("c", "c")
     assert redis.scard("c") == 2
+
+    assert redis.srem("a", "a", "b", "c", "g") == 3
+    with redis.pipeline() as pipe:
+        pipe.scard("a")
+        pipe.smembers("a")
+        pipe.srem("a", "d", "e", "f")
+        pipe.exists("a")
+        pipe.sismember("b", "a")
+        pipe.sismember("b", "b")
+        pipe.srem("b", "b")
+        pipe.scard("b")
+        pipe.srem("b", "d")
+        pipe.scard("b")
+        pipe_res = pipe.execute()
+    assert pipe_res[0] == 6  # scard
+    assert pipe_res[1] == {"a", "b", "c", "d", "e", "f"}  # smembers
+    assert pipe_res[2] == 3  # srem
+    assert not pipe_res[3]  # exists
+    assert not pipe_res[4]  # sismember
+    assert pipe_res[5]  # sismember
+    assert pipe_res[6] == 1  # srem
+    assert pipe_res[7] == 1  # scard
+    assert pipe_res[8] == 1  # srem
+    assert pipe_res[9] == 0  # scard
