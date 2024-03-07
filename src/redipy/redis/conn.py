@@ -1,3 +1,16 @@
+# Copyright 2024 Josua Krause
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 """The runtime for the redis backend."""
 import contextlib
 import datetime
@@ -21,11 +34,14 @@ from redis.commands.core import Script
 from redis.exceptions import ResponseError
 
 from redipy.api import (
+    as_key_type,
+    KeyType,
     PipelineAPI,
     RSetMode,
     RSM_ALWAYS,
     RSM_EXISTS,
     RSM_MISSING,
+    Set,
 )
 from redipy.backend.runtime import Runtime
 from redipy.redis.lua import LuaBackend
@@ -160,6 +176,8 @@ class RedisWrapper:
                 if res is None:
                     res = self._redis_factory(cfg=self._cfg)
                     self._service_conn[ix] = res
+                else:
+                    pass  # pragma: no cover
         return res
 
     @contextlib.contextmanager
@@ -226,6 +244,25 @@ class PipelineConnection(PipelineAPI):
         """
         return f"{self._prefix}{key}"
 
+    def no_prefix(self, key: str) -> str:
+        """
+        Removes the prefix from the key.
+
+        Args:
+            key (str): The actual key.
+
+        Raises:
+            ValueError: If the actual key does not have the prefix.
+
+        Returns:
+            str: The key without prefix.
+        """
+        res = key.removeprefix(self._prefix)
+        if res == key:
+            raise ValueError(
+                f"invalid key ({key}) does not contain prefix {self._prefix}")
+        return res
+
     def add_fixup(self, fix: Callable[[Any], Any]) -> None:
         """
         Adds a fixup callback for the current pipeline command. Every pipeline
@@ -257,6 +294,39 @@ class PipelineConnection(PipelineAPI):
         self._pipe.delete(*(
             self.with_prefix(key) for key in keys))
         self.add_fixup(int)
+
+    def key_type(self, key: str) -> None:
+        self._pipe.type(self.with_prefix(key))
+        self.add_fixup(lambda val: as_key_type(to_maybe_str(val)))
+
+    def scan(
+            self,
+            cursor: int,
+            *,
+            match: str | None = None,
+            count: int | None = None,
+            filter_type: KeyType | None = None) -> None:
+        if match is None:
+            match = self.with_prefix("*")
+        else:
+            match = self.with_prefix(match)
+        self._pipe.scan(cursor, match=match, count=count, _type=filter_type)
+        self.add_fixup(
+            lambda val: (int(val[0]), to_list_str(val[1], self.no_prefix)))
+
+    def keys(
+            self,
+            *,
+            match: str | None = None,
+            filter_type: KeyType | None = None) -> None:
+        if match is None:
+            match = self.with_prefix("*")
+        else:
+            match = self.with_prefix(match)
+        if filter_type is not None:
+            raise RuntimeError("type filtering not implemented yet!")
+        self._pipe.keys(match)
+        self.add_fixup(lambda vals: to_list_str(vals, self.no_prefix))
 
     def set(
             self,
@@ -396,6 +466,26 @@ class PipelineConnection(PipelineAPI):
             for field, val in res.items()
         })
 
+    def sadd(self, key: str, *values: str) -> None:
+        self._pipe.sadd(self.with_prefix(key), *values)
+        self.add_fixup(int)
+
+    def srem(self, key: str, *values: str) -> None:
+        self._pipe.srem(self.with_prefix(key), *values)
+        self.add_fixup(int)
+
+    def sismember(self, key: str, value: str) -> None:
+        self._pipe.sismember(self.with_prefix(key), value)
+        self.add_fixup(lambda val: int(val) > 0)
+
+    def scard(self, key: str) -> None:
+        self._pipe.scard(self.with_prefix(key))
+        self.add_fixup(int)
+
+    def smembers(self, key: str) -> None:
+        self._pipe.smembers(self.with_prefix(key))
+        self.add_fixup(lambda res: set(to_list_str(res)))
+
 
 class RedisConnection(Runtime[list[str]]):
     """The runtime of the redis backend."""
@@ -448,8 +538,13 @@ class RedisConnection(Runtime[list[str]]):
         Yields:
             Redis: The redis connection.
         """
-        with self._conn.get_connection() as conn:
-            yield conn
+        try:
+            with self._conn.get_connection() as conn:
+                yield conn
+        except ResponseError as rerr:
+            if not f"{rerr}".startswith("WRONGTYPE"):
+                raise
+            raise TypeError("key has a different type") from rerr
 
     def get_dynamic_script(self, code: str) -> RedisFunctionBytes:
         """
@@ -503,10 +598,10 @@ class RedisConnection(Runtime[list[str]]):
                     ctx = "\n".join((
                         f"{'>' if ix == context else ' '} {line}"
                         for (ix, line) in enumerate(res[1])))
-                    info = f"\nCode:\n{code}\n\nContext:\n{ctx}"
+                    info = f"{res[0]}\nCode:\n{code}\n\nContext:\n{ctx}"
             if info is None:
-                info = f": {exc}"
-            raise ValueError(f"Error while executing script{info}") from exc
+                info = f"{exc}"
+            raise ValueError(f"Error while executing script: {info}") from exc
 
         def execute_bytes_result(
                 *,
@@ -539,6 +634,26 @@ class RedisConnection(Runtime[list[str]]):
             str: The actual key.
         """
         return f"{self.get_prefix()}{key}"
+
+    def no_prefix(self, key: str) -> str:
+        """
+        Removes the prefix from the key.
+
+        Args:
+            key (str): The actual key.
+
+        Raises:
+            ValueError: If the actual key does not have the prefix.
+
+        Returns:
+            str: The key without prefix.
+        """
+        res = key.removeprefix(self.get_prefix())
+        if res == key:
+            raise ValueError(
+                f"invalid key ({key}) does not contain prefix "
+                f"{self.get_prefix()}")
+        return res
 
     def get_pubsub_key(self, key: str) -> str:
         """
@@ -656,8 +771,7 @@ class RedisConnection(Runtime[list[str]]):
                 vals.update(res)
                 if cursor == 0:
                     break
-                if count < 1000:
-                    count = int(min(1000, count * 1.2))
+                count = int(min(1000, count * 2))
         return (val.decode("utf-8") for val in vals)
 
     def prefix_exists(
@@ -685,8 +799,7 @@ class RedisConnection(Runtime[list[str]]):
                     return True
                 if cursor == 0:
                     return False
-                if count < 1000:
-                    count = int(min(1000, count * 1.2))
+                count = int(min(1000, count * 2))
 
     def exists(self, *keys: str) -> int:
         with self.get_connection() as conn:
@@ -697,6 +810,39 @@ class RedisConnection(Runtime[list[str]]):
         with self.get_connection() as conn:
             return conn.delete(*(
                 self.with_prefix(key) for key in keys))
+
+    def key_type(self, key: str) -> KeyType | None:
+        with self.get_connection() as conn:
+            return as_key_type(to_maybe_str(conn.type(self.with_prefix(key))))
+
+    def scan(
+            self,
+            cursor: int,
+            *,
+            match: str | None = None,
+            count: int | None = None,
+            filter_type: KeyType | None = None) -> tuple[int, list[str]]:
+        if match is None:
+            match = self.with_prefix("*")
+        else:
+            match = self.with_prefix(match)
+        with self.get_connection() as conn:
+            new_cursor, res = conn.scan(cursor, match, count, filter_type)
+        return int(new_cursor), to_list_str(res, self.no_prefix)
+
+    def keys_block(
+            self,
+            *,
+            match: str | None = None,
+            filter_type: KeyType | None = None) -> list[str]:
+        if match is None:
+            match = self.with_prefix("*")
+        else:
+            match = self.with_prefix(match)
+        if filter_type is not None:
+            raise RuntimeError("type filtering not implemented yet!")
+        with self.get_connection() as conn:
+            return to_list_str(conn.keys(match), self.no_prefix)
 
     @overload
     def set(
@@ -918,3 +1064,23 @@ class RedisConnection(Runtime[list[str]]):
                 to_maybe_str(field): to_maybe_str(val)
                 for field, val in conn.hgetall(self.with_prefix(key)).items()
             }
+
+    def sadd(self, key: str, *values: str) -> int:
+        with self.get_connection() as conn:
+            return int(conn.sadd(self.with_prefix(key), *values))
+
+    def srem(self, key: str, *values: str) -> int:
+        with self.get_connection() as conn:
+            return int(conn.srem(self.with_prefix(key), *values))
+
+    def sismember(self, key: str, value: str) -> bool:
+        with self.get_connection() as conn:
+            return int(conn.sismember(self.with_prefix(key), value)) > 0
+
+    def scard(self, key: str) -> int:
+        with self.get_connection() as conn:
+            return int(conn.scard(self.with_prefix(key)))
+
+    def smembers(self, key: str) -> Set[str]:
+        with self.get_connection() as conn:
+            return set(to_list_str(conn.smembers(self.with_prefix(key))))

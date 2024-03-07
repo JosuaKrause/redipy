@@ -1,9 +1,21 @@
+# Copyright 2024 Josua Krause
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 # pylint: disable=singleton-comparison
 """Tests pipeline functionality."""
 from test.util import get_setup
 
 import pytest
-import redis as redis_lib
 
 
 @pytest.mark.parametrize("rt_lua", [False, True])
@@ -131,14 +143,6 @@ def test_pipe(rt_lua: bool) -> None:
     assert rt.hgetall("cval") == {"a": "0", "b": "1", "c": "2"}
     assert rt.hkeys("cval") == ["a", "b", "c"]
     assert rt.hvals("cval") == ["0", "1", "2"]
-    if rt_lua:
-        with pytest.raises(
-                redis_lib.exceptions.ResponseError,
-                match=(
-                    "WRONGTYPE Operation against a key holding "
-                    "the wrong kind of value")):
-            assert rt.lpop("cval")
-    else:
-        with pytest.raises(ValueError, match="key cval already used as hash"):
-            assert rt.lpop("cval")
+    with pytest.raises(TypeError, match=r"key.*(ha|i)s a"):
+        assert rt.lpop("cval")
     assert rt.get("late_val") == "c"

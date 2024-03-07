@@ -1,3 +1,16 @@
+# Copyright 2024 Josua Krause
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 """Provides core functionality of expressions."""
 from collections.abc import Callable
 
@@ -185,7 +198,7 @@ class Constant(Expr):
         }
 
 
-LiteralType = str | int | float | bool | list | None
+LiteralType = str | int | float | bool | list | dict | None
 """Literal values that transparently get converted to expressions."""
 MixedType = LiteralType | Expr
 """An expression or literal."""
@@ -249,6 +262,8 @@ class LiteralOp(Expr):
             return "str"
         if isinstance(value, list):
             return "list"
+        if isinstance(value, dict):
+            return "dict"
         raise ValueError(f"unknown type for: {value}")
 
     def compile(self) -> ExprObj:

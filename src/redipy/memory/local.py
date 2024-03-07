@@ -1,3 +1,16 @@
+# Copyright 2024 Josua Krause
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 """Defines the script backend for the memory runtime."""
 import json
 from collections.abc import Callable
@@ -78,10 +91,10 @@ class _Uninit():
     """An uninitialized variable. When a stack frame is created during
     execution values are initialized with this singleton value."""
     def __str__(self) -> str:
-        return "UNINIT"
+        return "UNINIT"  # pragma: no cover
 
     def __repr__(self) -> str:
-        return self.__str__()
+        return self.__str__()  # pragma: no cover
 
 
 UNINIT = _Uninit()
@@ -234,6 +247,24 @@ class LocalBackend(
 
             raise ValueError(
                 f"cannot assign to position of {cmd['assign']['kind']}")
+        if cmd["kind"] == "assign_key":
+            var_name = cmd["assign"]["name"]
+            obj_key = self.compile_expr(ctx, cmd["key"])
+            rhs = self.compile_expr(ctx, cmd["value"])
+
+            if cmd["assign"]["kind"] == "var":
+                cur_ix = ctx["local_names"][var_name]
+
+                def exec_var_assign_key(state: ExecState) -> None:
+                    obj = cast(dict, state[state_stack][-1][cur_ix])
+                    key = obj_key(state)
+                    elem = rhs(state)
+                    obj[key] = elem
+
+                return exec_var_assign_key
+
+            raise ValueError(
+                f"cannot assign to key of {cmd['assign']['kind']}")
         if cmd["kind"] == "stmt":
             stmt = self.compile_expr(ctx, cmd["expr"])
 
@@ -361,6 +392,9 @@ class LocalBackend(
             if val_type == "list":
                 res_json = json_compact(value)
                 return lambda state: json.loads(res_json)
+            if val_type == "dict":
+                res_json = json_compact(value)
+                return lambda state: json.loads(res_json)
             if val_type == "bool":
                 res: JSONType = bool(value)
             elif val_type == "int":
@@ -410,14 +444,23 @@ class LocalBackend(
 
             return exec_const
         if expr["kind"] == "array_at":
-            arr_ref = self.compile_expr(ctx, expr["var"])
+            arr_ref = self.compile_expr(ctx, expr["arr"])
             arr_ix = self.compile_expr(ctx, expr["index"])
 
             def exec_arr_at(state: ExecState) -> JSONType:
                 return cast(list, arr_ref(state))[cast(int, arr_ix(state))]
 
             return exec_arr_at
+        if expr["kind"] == "dict_key":
+            obj_ref = self.compile_expr(ctx, expr["obj"])
+            obj_key = self.compile_expr(ctx, expr["key"])
+
+            def exec_dict_key(state: ExecState) -> JSONType:
+                return cast(dict, obj_ref(state)).get(obj_key(state))
+
+            return exec_dict_key
         if expr["kind"] == "array_len":
+            # NOTE: can also be used for dict
             arr_ref = self.compile_expr(ctx, expr["var"])
             return lambda state: len(cast(list, arr_ref(state)))
         if expr["kind"] == "concat":

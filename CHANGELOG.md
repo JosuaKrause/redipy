@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0] - 2024-03-06
+
+### Changed
+
+- Started renaming `set` to `set_value` and `get` to `get_value` ([#15])
+
+### Added
+
+- Add script functionality for dictionaries ([#15])
+- Redis keys functions: `TYPE`, `SCAN`, `KEYS` ([#15])
+- Redis set functions: `SADD`, `SREM`, `SISMEMBER`, `SCARD`, `SMEMBERS` ([#15])
+
 ## [0.4.2] - 2023-11-19
 
 ### Bug-Fixes
@@ -23,7 +35,7 @@
 
 ### Added
 
-- Added ZRANGE (partially) and LRANGE. ([#7])
+- Added `ZRANGE` (partially) and `LRANGE`. ([#7])
 - Inferring backend in Redis constructor. ([#3])
 - Allow access to raw runtime and redis connections. ([#3])
 - Executing scripts from a pipeline. ([#3])
@@ -46,3 +58,4 @@
 
 [#3]: https://github.com/JosuaKrause/redipy/pull/3
 [#7]: https://github.com/JosuaKrause/redipy/pull/7
+[#15]: https://github.com/JosuaKrause/redipy/pull/15

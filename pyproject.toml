@@ -2,7 +2,7 @@
     name = "redipy"
     description = "redipy is a uniform interface to Redis-like storage systems. It allows you to use the same Redis API with different backends that implement the same functionality."
     readme = "README.md"
-    version = "0.4.2"
+    version = "0.5.0"
     authors = [
         {name = "Josua Krause", email = "josua.krause@gmail.com"},
     ]
@@ -126,6 +126,7 @@
 
 [tool.pylint.messages_control]
     disable = [
+        "bad-docstring-quotes",
         "docstring-first-line-empty",
         "duplicate-code",
         "fixme",

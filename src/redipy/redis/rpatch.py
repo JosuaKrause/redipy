@@ -1,6 +1,45 @@
+# Copyright 2024 Josua Krause
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 """Module for patching lua redis function calls."""
 from redipy.graph.expr import CallObj, ExprObj, find_literal, LiteralValObj
 from redipy.plugin import LuaRedisPatch
+
+
+class RTypePatch(LuaRedisPatch):
+    """Converts the output of TYPE into a proper string."""
+    @staticmethod
+    def names() -> set[str]:
+        return {"type"}
+
+    def patch(
+            self,
+            name: str,
+            expr: CallObj,
+            args: list[ExprObj],
+            *,
+            is_expr_stmt: bool) -> ExprObj:
+        if is_expr_stmt:
+            return expr
+        return {
+            "kind": "dict_key",
+            "obj": expr,
+            "key": {
+                "kind": "val",
+                "type": "str",
+                "value": "ok",
+            },
+        }
 
 
 class RSetPatch(LuaRedisPatch):
@@ -161,4 +200,31 @@ class RHashGetAllPatch(LuaRedisPatch):
             "name": f"{self.helper_pkg()}.pairlist_dict",
             "args": [expr],
             "no_adjust": False,
+        }
+
+
+class RIsMemberPatch(LuaRedisPatch):
+    """Converts the output of SISMEMBER into a proper boolean value."""
+    @staticmethod
+    def names() -> set[str]:
+        return {"sismember"}
+
+    def patch(
+            self,
+            name: str,
+            expr: CallObj,
+            args: list[ExprObj],
+            *,
+            is_expr_stmt: bool) -> ExprObj:
+        if is_expr_stmt:
+            return expr
+        return {
+            "kind": "binary",
+            "op": "ne",
+            "left": expr,
+            "right": {
+                "kind": "val",
+                "type": "int",
+                "value": 0,
+            },
         }

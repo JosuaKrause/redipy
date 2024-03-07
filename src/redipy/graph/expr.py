@@ -1,15 +1,28 @@
+# Copyright 2024 Josua Krause
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 """Defines all execution graph node types of expressions. An expression cannot
 be executed alone and usually has no side-effects."""
 from typing import Literal, TypedDict
 
 
-LiteralValueType = str | int | float | bool | list | None
+LiteralValueType = str | int | float | bool | list | dict | None
 """A literal value."""
 JSONType = str | int | float | list | dict | None
 """A literal value that can be converted to JSON."""
 
 
-ValueType = Literal["str", "int", "float", "bool", "list", "none"]
+ValueType = Literal["str", "int", "float", "bool", "list", "dict", "none"]
 """Named literal value types."""
 
 
@@ -86,15 +99,21 @@ BinaryOpObj = TypedDict('BinaryOpObj', {
 """Performs a binary operation."""
 ArrayAtObj = TypedDict('ArrayAtObj', {
     "kind": Literal["array_at"],
-    "var": RefIdObj,
+    "arr": 'ExprObj',
     "index": 'ExprObj',
 })
 """Reads an index from an array."""
+DictKeyObj = TypedDict('DictKeyObj', {
+    "kind": Literal["dict_key"],
+    "obj": 'ExprObj',
+    "key": 'ExprObj',
+})
+"""Reads a key from a dictionary."""
 ArrayLengthObj = TypedDict('ArrayLengthObj', {
     "kind": Literal["array_len"],
     "var": RefIdObj,
 })
-"""Reads the length of an array."""
+"""Reads the length of an array or dictionary."""
 ConcatObj = TypedDict('ConcatObj', {
     "kind": Literal["concat"],
     "strings": 'list[ExprObj]',
@@ -116,6 +135,7 @@ ExprObj = (
     | UnaryOpObj
     | BinaryOpObj
     | ArrayAtObj
+    | DictKeyObj
     | ArrayLengthObj
     | ConcatObj
     | CallObj
@@ -176,10 +196,10 @@ def find_literal(
         value (JSONType): The value to look for.
 
         vtype (ValueType | None, optional): The type of the value to look for.
-        Defaults to None.
+            Defaults to None.
 
         no_case (bool, optional): Whether the value should be search without
-        considering case (only for strings). Defaults to False.
+            considering case (only for strings). Defaults to False.
 
     Returns:
         tuple[int, JSONType] | None: If found, the index and the literal.

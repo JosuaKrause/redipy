@@ -1,3 +1,16 @@
+# Copyright 2024 Josua Krause
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 """Defines the script backend for the redis runtime. Scripts are converted to
 lua."""
 import json
@@ -293,6 +306,15 @@ class LuaBackend(
                 return [f"{lcl_name}[{arr_ix} + 1] = {rhs}"]
             raise ValueError(
                 f"cannot assign to position of {cmd['assign']['kind']}")
+        if cmd["kind"] == "assign_key":
+            obj_key = self.compile_expr(ctx, cmd["key"])
+            rhs = self.compile_expr(ctx, cmd["value"])
+            assign_obj = cmd["assign"]
+            if assign_obj["kind"] == "var":
+                lcl_name = assign_obj["name"]
+                return [f"{lcl_name}[{obj_key}] = {rhs}"]
+            raise ValueError(
+                f"cannot assign to key of {cmd['assign']['kind']}")
         if cmd["kind"] == "stmt":
             ctx.set_expr_stmt(True)
             stmt = self.compile_expr(ctx, cmd["expr"])
@@ -360,6 +382,10 @@ class LuaBackend(
                 res = json_compact(value).decode("utf-8")
                 res = res.replace("\"", "\\\"").replace("\n", "\\n")
                 return f"cjson.decode(\"{res}\")"
+            if val_type == "dict":
+                res = json_compact(value).decode("utf-8")
+                res = res.replace("\"", "\\\"").replace("\n", "\\n")
+                return f"cjson.decode(\"{res}\")"
             if val_type == "none":
                 return "nil"
             raise ValueError(f"unknown value type {val_type} for {expr}")
@@ -391,8 +417,12 @@ class LuaBackend(
             return f"{expr['raw']}"
         if expr["kind"] == "array_at":
             return (
-                f"{self.compile_expr(ctx, expr['var'])}"
+                f"{self.compile_expr(ctx, expr['arr'])}"
                 f"[{self.compile_expr(ctx, expr['index'])} + 1]")
+        if expr["kind"] == "dict_key":
+            return (
+                f"{self.compile_expr(ctx, expr['obj'])}"
+                f"[{self.compile_expr(ctx, expr['key'])}]")
         if expr["kind"] == "array_len":
             return f"#{self.compile_expr(ctx, expr['var'])}"
         if expr["kind"] == "concat":

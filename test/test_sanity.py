@@ -1,3 +1,16 @@
+# Copyright 2024 Josua Krause
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 """Tests to verify unintuitive redis or lua behavior."""
 from test.util import get_test_config
 
@@ -62,6 +75,12 @@ def test_sanity() -> None:
     assert redis.get("bar") == "b"
     assert redis.set("baz", "c") is True
     assert redis.get("baz") == "c"
+
+    # type
+    check_expression(
+        "redis.call('type', KEYS[1])['ok']", "string", keys=["bar"])
+    check_expression(
+        "type(redis.call('type', KEYS[1])['ok'])", "string", keys=["bar"])
 
     # lpop
     check_expression("redis.call('lpop', KEYS[1])", "false", keys=["foo"])
@@ -133,6 +152,16 @@ def test_sanity() -> None:
     check_expression("redis.call('zadd', KEYS[1], 3, 'b')", "1", keys=["zbar"])
     assert redis.zpop_min("zbar", 2) == [("a", 2), ("b", 3)]
 
+    # scard
+    check_expression("redis.call('scard', KEYS[1])", "0", keys=["rset"])
+    check_expression(
+        "type(redis.call('scard', KEYS[1]))", "number", keys=["rset"])
+    assert redis.sadd("rset", "a", "b", "c")
+    check_expression("redis.call('scard', KEYS[1])", "3", keys=["rset"])
+    check_expression(
+        "type(redis.call('scard', KEYS[1]))", "number", keys=["rset"])
+    assert redis.scard("rset") == 3
+
 
 def test_ensure_name_available() -> None:
     """Verifies that new top level functions introduced in redipy do not exist
@@ -166,7 +195,8 @@ def test_ensure_name_available() -> None:
         "asintstr",
         "3.2",
         ValueError,
-        r"Error while executing script\nCode:\nreturn asintstr\(3\.2\)\n\n"
+        r"Error while executing script:.*user_script:[^:]*:[^\n]*asintstr"
+        r"[^\n]*\nCode:\nreturn asintstr\(3\.2\)\n\n"
         r"Context:\n  \n  \n  \n> return asintstr\(3\.2\)",
         [
             (

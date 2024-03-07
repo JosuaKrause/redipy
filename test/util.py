@@ -1,3 +1,16 @@
+# Copyright 2024 Josua Krause
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 """Utilities for the test module."""
 import json
 import os
@@ -6,11 +19,13 @@ from typing import TypeVar
 
 import pytest
 
+from redipy.api import RedisClientAPI
 from redipy.backend.backend import ExecFunction
 from redipy.backend.runtime import Runtime
 from redipy.graph.seq import SequenceObj
+from redipy.main import Redis
 from redipy.memory.rt import LocalRuntime
-from redipy.redis.conn import RedisConfig, RedisConnection
+from redipy.redis.conn import RedisConfig
 from redipy.symbolic.seq import FnContext
 from redipy.util import code_fmt, get_test_salt
 
@@ -62,14 +77,16 @@ def get_setup(
         Runtime: The runtime.
     """
     if rt_lua:
-        res: Runtime = RedisConnection(test_name, cfg=get_test_config())
-        if lua_script is not None:
 
-            def code_hook(code: list[str]) -> None:
-                code_str = code_fmt(code)
-                assert code_str == lua_script
+        def code_hook(code: list[str]) -> None:
+            code_str = code_fmt(code)
+            assert code_str == lua_script
 
-            res.set_code_hook(code_hook)
+        redis = Redis(
+            redis_module=test_name,
+            cfg=get_test_config(),
+            lua_code_hook=None if lua_script is None else code_hook)
+        res: Runtime = redis.get_redis_runtime()
     else:
         res = LocalRuntime()
 
@@ -83,7 +100,7 @@ def get_setup(
 
 
 def run_code(
-        rt: Runtime,
+        rt: RedisClientAPI,
         ctx: FnContext,
         *,
         tests: list[tuple[BT, BR]],
