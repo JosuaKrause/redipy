@@ -16,13 +16,13 @@ be executed alone and usually has no side-effects."""
 from typing import Literal, TypedDict
 
 
-LiteralValueType = str | int | float | bool | list | None
+LiteralValueType = str | int | float | bool | list | dict | None
 """A literal value."""
 JSONType = str | int | float | list | dict | None
 """A literal value that can be converted to JSON."""
 
 
-ValueType = Literal["str", "int", "float", "bool", "list", "none"]
+ValueType = Literal["str", "int", "float", "bool", "list", "dict", "none"]
 """Named literal value types."""
 
 
@@ -103,11 +103,17 @@ ArrayAtObj = TypedDict('ArrayAtObj', {
     "index": 'ExprObj',
 })
 """Reads an index from an array."""
+DictKeyObj = TypedDict('DictKeyObj', {
+    "kind": Literal["dict_key"],
+    "var": RefIdObj,
+    "key": 'ExprObj',
+})
+"""Reads a key from a dictionary."""
 ArrayLengthObj = TypedDict('ArrayLengthObj', {
     "kind": Literal["array_len"],
     "var": RefIdObj,
 })
-"""Reads the length of an array."""
+"""Reads the length of an array or dictionary."""
 ConcatObj = TypedDict('ConcatObj', {
     "kind": Literal["concat"],
     "strings": 'list[ExprObj]',
@@ -129,6 +135,7 @@ ExprObj = (
     | UnaryOpObj
     | BinaryOpObj
     | ArrayAtObj
+    | DictKeyObj
     | ArrayLengthObj
     | ConcatObj
     | CallObj

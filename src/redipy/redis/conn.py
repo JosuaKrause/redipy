@@ -542,7 +542,7 @@ class RedisConnection(Runtime[list[str]]):
         except ResponseError as rerr:
             if not f"{rerr}".startswith("WRONGTYPE"):
                 raise
-            raise TypeError("key already used with different type") from rerr
+            raise TypeError("key has a different type") from rerr
 
     def get_dynamic_script(self, code: str) -> RedisFunctionBytes:
         """
@@ -596,10 +596,10 @@ class RedisConnection(Runtime[list[str]]):
                     ctx = "\n".join((
                         f"{'>' if ix == context else ' '} {line}"
                         for (ix, line) in enumerate(res[1])))
-                    info = f"\nCode:\n{code}\n\nContext:\n{ctx}"
+                    info = f"{res[0]}\nCode:\n{code}\n\nContext:\n{ctx}"
             if info is None:
-                info = f": {exc}"
-            raise ValueError(f"Error while executing script{info}") from exc
+                info = f"{exc}"
+            raise ValueError(f"Error while executing script: {info}") from exc
 
         def execute_bytes_result(
                 *,

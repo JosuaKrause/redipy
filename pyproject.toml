@@ -126,6 +126,7 @@
 
 [tool.pylint.messages_control]
     disable = [
+        "bad-docstring-quotes",
         "docstring-first-line-empty",
         "duplicate-code",
         "fixme",

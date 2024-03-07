@@ -76,6 +76,19 @@ class Variable(Expr):
         """
         return ArrayAt(self, other)
 
+    def get_key(self, key: 'MixedType') -> 'Expr':
+        """
+        Accesses an element of the dictionary assuming that the variable points
+        to one.
+
+        Args:
+            key (MixedType): The key.
+
+        Returns:
+            Expr: The expression to access a key.
+        """
+        return DictKey(self, key)
+
     def set_index(self, index: int) -> None:
         """
         Sets the internal number of this variable.
@@ -176,6 +189,28 @@ class Variable(Expr):
                 "kind": "assign_at",
                 "assign": self.get_ref(),
                 "index": ix.compile(),
+                "value": expr.compile(),
+            })
+
+    def set_key(self, key: MixedType, val: MixedType) -> CmdHelper:
+        """
+        Sets the value for a given key of the dictionary assuming the variable
+        points to one.
+
+        Args:
+            key (MixedType): The key.
+            val (MixedType): The value to assign.
+
+        Returns:
+            CmdHelper: The assignment statement.
+        """
+        kval = lit_helper(key)
+        expr = lit_helper(val)
+        return CmdHelper(
+            lambda: {
+                "kind": "assign_key",
+                "assign": self.get_ref(),
+                "key": kval.compile(),
                 "value": expr.compile(),
             })
 
@@ -313,6 +348,28 @@ class ArrayAt(Expr):
             "kind": "array_at",
             "var": self._array.get_ref(),
             "index": self._index.compile(),
+        }
+
+
+class DictKey(Expr):
+    """Accesses a dictionary at a given key."""
+    def __init__(self, obj: Variable, key: MixedType) -> None:
+        """
+        Accesses a dictionary at a given key.
+
+        Args:
+            obj (Variable): The dictionary.
+            key (MixedType): The key.
+        """
+        super().__init__()
+        self._obj = obj
+        self._key = lit_helper(key)
+
+    def compile(self) -> ExprObj:
+        return {
+            "kind": "dict_key",
+            "var": self._obj.get_ref(),
+            "key": self._key.compile(),
         }
 
 

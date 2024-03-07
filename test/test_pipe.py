@@ -143,6 +143,6 @@ def test_pipe(rt_lua: bool) -> None:
     assert rt.hgetall("cval") == {"a": "0", "b": "1", "c": "2"}
     assert rt.hkeys("cval") == ["a", "b", "c"]
     assert rt.hvals("cval") == ["0", "1", "2"]
-    with pytest.raises(TypeError, match=r"key.*already used (as|with)"):
+    with pytest.raises(TypeError, match=r"key.*(ha|i)s a"):
         assert rt.lpop("cval")
     assert rt.get("late_val") == "c"

@@ -2,9 +2,13 @@
 
 ## [release candidate]
 
-### Added
+### Changed
 
 - Started renaming `set` to `set_value` and `get` to `get_value` ([#15])
+
+### Added
+
+- Add script functionality for dictionaries ([#15])
 - Redis keys functions: `TYPE`, `SCAN`, `KEYS` ([#15])
 - Redis set functions: `SADD`, `SREM`, `SISMEMBER`, `SCARD`, `SMEMBERS` ([#15])
 

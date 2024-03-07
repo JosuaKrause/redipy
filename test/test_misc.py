@@ -33,7 +33,7 @@ from redipy.util import lua_fmt
 
 
 MSG = (
-    "this message is emitted by test/test_misc.py#test_misc. "
+    "[TEST] this message is emitted by test/test_misc.py#test_misc. "
     "the output is not verified for the redis backend but if "
     "you see this message in the redis logs it means the test works."
 )
@@ -68,6 +68,9 @@ if (not (({CARD_CALL} > 0) and ({CARD_CALL} < 2))) then
     var_2 = false
 end
 if (tostring(nil) ~= "nil") then
+    var_2 = false
+end
+if (redis.call("type", key_0) ~= "zset") then
     var_2 = false
 end
 return cjson.encode(var_2)
@@ -106,6 +109,9 @@ def test_misc(rt_lua: bool) -> None:
 
     n_then, _ = ctx.if_(ToStr(None).ne_("nil"))
     n_then.add(lcl_res.assign(False))
+
+    t_then, _ = ctx.if_(zset.key_type().ne_("zset"))
+    t_then.add(lcl_res.assign(False))
 
     ctx.set_return_value(lcl_res)
 

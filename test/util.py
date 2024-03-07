@@ -19,6 +19,7 @@ from typing import TypeVar
 
 import pytest
 
+from redipy.api import RedisClientAPI
 from redipy.backend.backend import ExecFunction
 from redipy.backend.runtime import Runtime
 from redipy.graph.seq import SequenceObj
@@ -99,7 +100,7 @@ def get_setup(
 
 
 def run_code(
-        rt: Runtime,
+        rt: RedisClientAPI,
         ctx: FnContext,
         *,
         tests: list[tuple[BT, BR]],

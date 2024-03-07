@@ -34,7 +34,14 @@ AssignAtObj = TypedDict('AssignAtObj', {
     "index": ExprObj,
     "value": ExprObj,
 })
-"""Assigns an expression to an index of a reference."""
+"""Assigns an expression to an index of an array reference."""
+AssignKeyObj = TypedDict('AssignKeyObj', {
+    "kind": Literal["assign_key"],
+    "assign": RefIdObj,
+    "key": ExprObj,
+    "value": ExprObj,
+})
+"""Assigns an expression to a key of a dictionary reference."""
 StmtObj = TypedDict('StmtObj', {
     "kind": Literal["stmt"],
     "expr": ExprObj,
@@ -69,6 +76,7 @@ ReturnObj = TypedDict('ReturnObj', {
 CommandObj = (
     AssignmentObj
     | AssignAtObj
+    | AssignKeyObj
     | StmtObj
     | BranchObj
     | ForLoopObj

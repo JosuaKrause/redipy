@@ -126,7 +126,7 @@ def test_rt_errors(rt_lua: bool) -> None:
             else:
                 with pytest.raises(
                         TypeError,
-                        match=r"key.*already used (as|with)"):
+                        match=r"key.*(ha|i)s a"):
                     res = CHECKS[key_type_left](redis, key)
                     print(
                         f"got: {res} "

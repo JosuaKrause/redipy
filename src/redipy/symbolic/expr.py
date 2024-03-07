@@ -198,7 +198,7 @@ class Constant(Expr):
         }
 
 
-LiteralType = str | int | float | bool | list | None
+LiteralType = str | int | float | bool | list | dict | None
 """Literal values that transparently get converted to expressions."""
 MixedType = LiteralType | Expr
 """An expression or literal."""
@@ -262,6 +262,8 @@ class LiteralOp(Expr):
             return "str"
         if isinstance(value, list):
             return "list"
+        if isinstance(value, dict):
+            return "dict"
         raise ValueError(f"unknown type for: {value}")
 
     def compile(self) -> ExprObj:

@@ -54,6 +54,23 @@ class RDelFn(LocalRedisFunction):
         return sm.delete(key)
 
 
+class RTypeFn(LocalRedisFunction):
+    """Implements the type function."""
+    @staticmethod
+    def name() -> str:
+        return "type"
+
+    @staticmethod
+    def argc() -> ArgcSpec:
+        return {
+            "count": 0,
+        }
+
+    @staticmethod
+    def call(sm: Machine, key: str, args: list[JSONType]) -> JSONType:
+        return sm.key_type(key)
+
+
 class RSetFn(LocalRedisFunction):
     """Implements the set function."""
     @staticmethod
@@ -477,3 +494,90 @@ class RHGetAllFn(LocalRedisFunction):
     @staticmethod
     def call(sm: Machine, key: str, args: list[JSONType]) -> JSONType:
         return sm.hgetall(key)
+
+
+class RSAdd(LocalRedisFunction):
+    """Implements the sadd function."""
+    @staticmethod
+    def name() -> str:
+        return "sadd"
+
+    @staticmethod
+    def argc() -> ArgcSpec:
+        return {
+            "count": 1,
+            "at_least": True,
+        }
+
+    @staticmethod
+    def call(sm: Machine, key: str, args: list[JSONType]) -> JSONType:
+        return sm.sadd(key, *(f"{arg}" for arg in args))
+
+
+class RSRem(LocalRedisFunction):
+    """Implements the srem function."""
+    @staticmethod
+    def name() -> str:
+        return "srem"
+
+    @staticmethod
+    def argc() -> ArgcSpec:
+        return {
+            "count": 1,
+            "at_least": True,
+        }
+
+    @staticmethod
+    def call(sm: Machine, key: str, args: list[JSONType]) -> JSONType:
+        return sm.srem(key, *(f"{arg}" for arg in args))
+
+
+class RSIsMember(LocalRedisFunction):
+    """Implements the sismember function."""
+    @staticmethod
+    def name() -> str:
+        return "sismember"
+
+    @staticmethod
+    def argc() -> ArgcSpec:
+        return {
+            "count": 1,
+        }
+
+    @staticmethod
+    def call(sm: Machine, key: str, args: list[JSONType]) -> JSONType:
+        return sm.sismember(key, f"{args[0]}")
+
+
+class RSMembers(LocalRedisFunction):
+    """Implements the smembers function."""
+    @staticmethod
+    def name() -> str:
+        return "smembers"
+
+    @staticmethod
+    def argc() -> ArgcSpec:
+        return {
+            "count": 0,
+        }
+
+    @staticmethod
+    def call(sm: Machine, key: str, args: list[JSONType]) -> JSONType:
+        return sorted(sm.smembers(key))
+
+
+class RSCard(LocalRedisFunction):
+    """Implements the scard function."""
+    @staticmethod
+    def name() -> str:
+        return "scard"
+
+    @staticmethod
+    def argc() -> ArgcSpec:
+        return {
+            "count": 0,
+        }
+
+    @staticmethod
+    def call(sm: Machine, key: str, args: list[JSONType]) -> JSONType:
+        return sm.scard(key)

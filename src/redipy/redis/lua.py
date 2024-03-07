@@ -306,6 +306,15 @@ class LuaBackend(
                 return [f"{lcl_name}[{arr_ix} + 1] = {rhs}"]
             raise ValueError(
                 f"cannot assign to position of {cmd['assign']['kind']}")
+        if cmd["kind"] == "assign_key":
+            obj_key = self.compile_expr(ctx, cmd["key"])
+            rhs = self.compile_expr(ctx, cmd["value"])
+            assign_obj = cmd["assign"]
+            if assign_obj["kind"] == "var":
+                lcl_name = assign_obj["name"]
+                return [f"{lcl_name}[{obj_key}] = {rhs}"]
+            raise ValueError(
+                f"cannot assign to key of {cmd['assign']['kind']}")
         if cmd["kind"] == "stmt":
             ctx.set_expr_stmt(True)
             stmt = self.compile_expr(ctx, cmd["expr"])
@@ -373,6 +382,10 @@ class LuaBackend(
                 res = json_compact(value).decode("utf-8")
                 res = res.replace("\"", "\\\"").replace("\n", "\\n")
                 return f"cjson.decode(\"{res}\")"
+            if val_type == "dict":
+                res = json_compact(value).decode("utf-8")
+                res = res.replace("\"", "\\\"").replace("\n", "\\n")
+                return f"cjson.decode(\"{res}\")"
             if val_type == "none":
                 return "nil"
             raise ValueError(f"unknown value type {val_type} for {expr}")
@@ -406,6 +419,10 @@ class LuaBackend(
             return (
                 f"{self.compile_expr(ctx, expr['var'])}"
                 f"[{self.compile_expr(ctx, expr['index'])} + 1]")
+        if expr["kind"] == "dict_key":
+            return (
+                f"{self.compile_expr(ctx, expr['var'])}"
+                f"[{self.compile_expr(ctx, expr['key'])}]")
         if expr["kind"] == "array_len":
             return f"#{self.compile_expr(ctx, expr['var'])}"
         if expr["kind"] == "concat":

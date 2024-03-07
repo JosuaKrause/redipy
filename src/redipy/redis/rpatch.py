@@ -175,3 +175,30 @@ class RHashGetAllPatch(LuaRedisPatch):
             "args": [expr],
             "no_adjust": False,
         }
+
+
+class RIsMemberPatch(LuaRedisPatch):
+    """Converts the output of SISMEMBER into a proper boolean value."""
+    @staticmethod
+    def names() -> set[str]:
+        return {"sismember"}
+
+    def patch(
+            self,
+            name: str,
+            expr: CallObj,
+            args: list[ExprObj],
+            *,
+            is_expr_stmt: bool) -> ExprObj:
+        if is_expr_stmt:
+            return expr
+        return {
+            "kind": "binary",
+            "op": "ne",
+            "left": expr,
+            "right": {
+                "kind": "val",
+                "type": "int",
+                "value": 0,
+            },
+        }

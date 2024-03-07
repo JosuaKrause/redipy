@@ -136,15 +136,15 @@ class State:
         if key in self._deletes:
             return
         if key_type != "string" and key in self._vals:
-            raise TypeError(f"key {key} already used as string")
+            raise TypeError(f"key {key} is a string")
         if key_type != "list" and key in self._queues:
-            raise TypeError(f"key {key} already used as list")
+            raise TypeError(f"key {key} is a list")
         if key_type != "hash" and key in self._hashes:
-            raise TypeError(f"key {key} already used as hash")
+            raise TypeError(f"key {key} is a hash")
         if key_type != "set" and key in self._sets:
-            raise TypeError(f"key {key} already used as set")
+            raise TypeError(f"key {key} is a set")
         if key_type != "zset" and key in self._zorder:
-            raise TypeError(f"key {key} already used as zset")
+            raise TypeError(f"key {key} is a zset")
         if self._parent is not None:
             self._parent.verify_key(key_type, key)
 
