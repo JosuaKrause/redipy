@@ -176,6 +176,8 @@ class RedisWrapper:
                 if res is None:
                     res = self._redis_factory(cfg=self._cfg)
                     self._service_conn[ix] = res
+                else:
+                    pass  # pragme: no cover
         return res
 
     @contextlib.contextmanager

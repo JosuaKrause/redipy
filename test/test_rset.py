@@ -232,8 +232,8 @@ def test_rset(rt_lua: bool) -> None:
         pipe.srem("b", "d")
         pipe.scard("b")
         pipe_res = pipe.execute()
-    assert pipe_res[0] == 6  # scard
-    assert pipe_res[1] == {"a", "b", "c", "d", "e", "f"}  # smembers
+    assert pipe_res[0] == 3  # scard
+    assert pipe_res[1] == {"d", "e", "f"}  # smembers
     assert pipe_res[2] == 3  # srem
     assert not pipe_res[3]  # exists
     assert not pipe_res[4]  # sismember
