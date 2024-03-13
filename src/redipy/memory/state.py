@@ -95,6 +95,15 @@ class State:
         self._key_cache: list[str] | None = None
         self._delete_count: int = 0
 
+    def has_parent(self) -> bool:
+        """
+        Whether the state has a parent.
+
+        Returns:
+            bool: True, if this state has a parent.
+        """
+        return self._parent is not None
+
     def key_type(self, key: str) -> KeyType | None:
         """
         Computes the type of a given key.
@@ -936,6 +945,13 @@ class Machine(RedisAPI):
         # NOTE: get_all_keys cannot have duplicates
         return list(
             self._state.get_all_keys(match=match, filter_type=filter_type))
+
+    def flushall(self) -> None:
+        # NOTE: this method cannot be used in a pipeline as the effect
+        # is immediate!
+        if self._state.has_parent():
+            raise RuntimeError("cannot use flushall with a parent!")
+        self._state.reset()
 
     @overload
     def set(

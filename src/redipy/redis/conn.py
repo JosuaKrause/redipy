@@ -715,13 +715,6 @@ class RedisConnection(Runtime[list[str]]):
         with self.get_connection() as conn:
             conn.ping()
 
-    def flush_all(self) -> None:
-        """
-        Removes all keys from the redis database.
-        """
-        with self.get_connection() as conn:
-            conn.flushall()
-
     def keys_count(self, prefix: str) -> int:
         """
         Counts the number of keys with the given prefix. This method operates
@@ -843,6 +836,14 @@ class RedisConnection(Runtime[list[str]]):
             raise RuntimeError("type filtering not implemented yet!")
         with self.get_connection() as conn:
             return to_list_str(conn.keys(match), self.no_prefix)
+
+    def flushall(self) -> None:
+        if not self.get_prefix():
+            with self.get_connection() as conn:
+                conn.flushall()
+        else:
+            for key in self.iter_keys():
+                self.delete(key)
 
     @overload
     def set(

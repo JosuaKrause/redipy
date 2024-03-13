@@ -258,6 +258,9 @@ class Redis(RedisClientAPI):
             filter_type: KeyType | None = None) -> list[str]:
         return self._rt.keys_block(match=match, filter_type=filter_type)
 
+    def flushall(self) -> None:
+        return self._rt.flushall()
+
     @overload
     def set(
             self,

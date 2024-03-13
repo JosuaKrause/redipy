@@ -251,6 +251,10 @@ class LocalRuntime(Runtime[Cmd]):
         with self.lock():
             return self._sm.keys_block(match=match, filter_type=filter_type)
 
+    def flushall(self) -> None:
+        with self.lock():
+            return self._sm.flushall()
+
     @overload
     def set(
             self,

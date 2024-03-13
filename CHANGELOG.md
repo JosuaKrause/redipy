@@ -1,5 +1,11 @@
 # Changelog
 
+## [release candidate]
+
+### Added
+
+- Redis function `FLUSHALL` with implementation defined synchrony ([#16])
+
 ## [0.5.0] - 2024-03-06
 
 ### Changed
@@ -59,3 +65,4 @@
 [#3]: https://github.com/JosuaKrause/redipy/pull/3
 [#7]: https://github.com/JosuaKrause/redipy/pull/7
 [#15]: https://github.com/JosuaKrause/redipy/pull/15
+[#16]: https://github.com/JosuaKrause/redipy/pull/16

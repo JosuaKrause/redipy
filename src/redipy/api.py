@@ -882,6 +882,16 @@ class RedisAPI:
             return set(self.keys_block(match=match, filter_type=filter_type))
         return set(self.iter_keys(match=match, filter_type=filter_type))
 
+    def flushall(self) -> None:
+        """
+        Flushes all keys in the database. Whether the operation is asynchronous
+        is up to the implementation.
+
+        See also the redis documentation: https://redis.io/commands/flushall/
+        """
+        # FIXME: add `block: bool` argument
+        raise NotImplementedError()
+
     @overload
     def set(
             self,
