@@ -23,6 +23,7 @@ import pytest
 
 from redipy.api import KeyType, PipelineAPI
 from redipy.backend.runtime import Runtime
+from redipy.main import Redis
 from redipy.util import convert_pattern
 
 
@@ -368,7 +369,7 @@ def test_flushall(rt_lua: bool) -> None:
     """
     rt = get_setup("test_flushall", rt_lua)
 
-    rt_alt = get_setup("test_flushall_alt", rt_lua)
+    rt_alt = Redis(rt=get_setup("test_flushall_alt", rt_lua))
     assert rt_alt.keys() == set()
     # NOTE: this value must not be removed
     rt_alt.set_value("foo", "stayingalive")
@@ -402,7 +403,16 @@ def test_flushall(rt_lua: bool) -> None:
     rt.flushall()
     assert rt.keys() == set()
     assert rt_alt.get("foo") == "stayingalive"
+    assert rt_alt.key_type("foo") == "string"
+    assert rt_alt.keys_block() == ["foo"]
 
+    with rt_alt.pipeline() as pipe:
+        pipe.delete("foo")
+        pipe.key_type("foo")
+        pipe.set("foo", "bar")
+        assert pipe.execute() == [1, None, True]
+
+    assert rt_alt.get("foo") == "bar"
     rt_alt.flushall()
     assert rt_alt.keys() == set()
     assert rt_alt.get("foo") is None
