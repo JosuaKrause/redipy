@@ -2,8 +2,14 @@
 
 ## [release candidate]
 
+### Breaking
+
+- Removed `set` and `get` ([#17])
+
 ### Added
 
+- Redis function `EXPIRE` (`P*` versions and `PERSIST` as well) ([#17])
+- Redis function `TTL` ([#17])
 - Redis function `FLUSHALL` with implementation defined synchrony ([#17])
 
 ## [0.5.0] - 2024-03-06

@@ -375,10 +375,10 @@ def test_flushall(rt_lua: bool) -> None:
     rt_alt.set_value("foo", "stayingalive")
 
     assert rt.keys() == set()
-    assert rt_alt.get("foo") == "stayingalive"
+    assert rt_alt.get_value("foo") == "stayingalive"
     rt.flushall()
     assert rt.keys() == set()
-    assert rt_alt.get("foo") == "stayingalive"
+    assert rt_alt.get_value("foo") == "stayingalive"
 
     def gen(
             start: int,
@@ -399,20 +399,20 @@ def test_flushall(rt_lua: bool) -> None:
         keys[key] = key_type
 
     assert rt.keys() == set(keys.keys())
-    assert rt_alt.get("foo") == "stayingalive"
+    assert rt_alt.get_value("foo") == "stayingalive"
     rt.flushall()
     assert rt.keys() == set()
-    assert rt_alt.get("foo") == "stayingalive"
+    assert rt_alt.get_value("foo") == "stayingalive"
     assert rt_alt.key_type("foo") == "string"
     assert rt_alt.keys_block() == ["foo"]
 
     with rt_alt.pipeline() as pipe:
         pipe.delete("foo")
         pipe.key_type("foo")
-        pipe.set("foo", "bar")
+        pipe.set_value("foo", "bar")
         assert pipe.execute() == [1, None, True]
 
-    assert rt_alt.get("foo") == "bar"
+    assert rt_alt.get_value("foo") == "bar"
     rt_alt.flushall()
     assert rt_alt.keys() == set()
-    assert rt_alt.get("foo") is None
+    assert rt_alt.get_value("foo") is None

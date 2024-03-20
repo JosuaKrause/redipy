@@ -17,7 +17,14 @@ import datetime
 from collections.abc import Callable, Iterator
 from typing import Any, Literal, overload, TypeVar
 
-from redipy.api import KeyType, PipelineAPI, RSetMode, RSM_ALWAYS, Set
+from redipy.api import (
+    KeyType,
+    PipelineAPI,
+    REX_ALWAYS,
+    RExpireMode,
+    RSetMode,
+    RSM_ALWAYS,
+)
 from redipy.backend.runtime import Runtime
 from redipy.graph.expr import JSONType
 from redipy.memory.local import Cmd, LocalBackend
@@ -256,7 +263,7 @@ class LocalRuntime(Runtime[Cmd]):
             return self._sm.flushall()
 
     @overload
-    def set(
+    def set_value(
             self,
             key: str,
             value: str,
@@ -269,7 +276,7 @@ class LocalRuntime(Runtime[Cmd]):
         ...
 
     @overload
-    def set(
+    def set_value(
             self,
             key: str,
             value: str,
@@ -282,7 +289,7 @@ class LocalRuntime(Runtime[Cmd]):
         ...
 
     @overload
-    def set(
+    def set_value(
             self,
             key: str,
             value: str,
@@ -294,7 +301,7 @@ class LocalRuntime(Runtime[Cmd]):
             keep_ttl: bool = False) -> str | bool | None:
         ...
 
-    def set(
+    def set_value(
             self,
             key: str,
             value: str,
@@ -305,7 +312,7 @@ class LocalRuntime(Runtime[Cmd]):
             expire_in: float | None = None,
             keep_ttl: bool = False) -> str | bool | None:
         with self.lock():
-            return self._sm.set(
+            return self._sm.set_value(
                 key,
                 value,
                 mode=mode,
@@ -314,9 +321,25 @@ class LocalRuntime(Runtime[Cmd]):
                 expire_in=expire_in,
                 keep_ttl=keep_ttl)
 
-    def get(self, key: str) -> str | None:
+    def get_value(self, key: str) -> str | None:
         with self.lock():
-            return self._sm.get(key)
+            return self._sm.get_value(key)
+
+    def expire(
+            self,
+            key: str,
+            *,
+            mode: RExpireMode = REX_ALWAYS,
+            expire_timestamp: datetime.datetime | None = None,
+            expire_in: float | None = None) -> bool:
+        return self._sm.expire(
+            key,
+            mode=mode,
+            expire_timestamp=expire_timestamp,
+            expire_in=expire_in)
+
+    def ttl(self, key: str) -> float | None:
+        return self._sm.ttl(key)
 
     def incrby(self, key: str, inc: float | int) -> float:
         with self.lock():
@@ -456,7 +479,7 @@ class LocalRuntime(Runtime[Cmd]):
         with self.lock():
             return self._sm.scard(key)
 
-    def smembers(self, key: str) -> Set[str]:
+    def smembers(self, key: str) -> set[str]:
         with self.lock():
             return self._sm.smembers(key)
 
@@ -567,7 +590,7 @@ class LocalPipeline(PipelineAPI):
         self.add_cmd(lambda: sorted(self._sm.keys(
             match=match, filter_type=filter_type)))
 
-    def set(
+    def set_value(
             self,
             key: str,
             value: str,
@@ -577,7 +600,7 @@ class LocalPipeline(PipelineAPI):
             expire_timestamp: datetime.datetime | None = None,
             expire_in: float | None = None,
             keep_ttl: bool = False) -> None:
-        self.add_cmd(lambda: self._sm.set(
+        self.add_cmd(lambda: self._sm.set_value(
             key,
             value,
             mode=mode,
@@ -586,8 +609,24 @@ class LocalPipeline(PipelineAPI):
             expire_in=expire_in,
             keep_ttl=keep_ttl))
 
-    def get(self, key: str) -> None:
-        self.add_cmd(lambda: self._sm.get(key))
+    def get_value(self, key: str) -> None:
+        self.add_cmd(lambda: self._sm.get_value(key))
+
+    def expire(
+            self,
+            key: str,
+            *,
+            mode: RExpireMode = REX_ALWAYS,
+            expire_timestamp: datetime.datetime | None = None,
+            expire_in: float | None = None) -> None:
+        self.add_cmd(lambda: self._sm.expire(
+            key,
+            mode=mode,
+            expire_timestamp=expire_timestamp,
+            expire_in=expire_in))
+
+    def ttl(self, key: str) -> None:
+        self.add_cmd(lambda: self._sm.ttl(key))
 
     def incrby(self, key: str, inc: float | int) -> None:
         self.add_cmd(lambda: self._sm.incrby(key, inc))

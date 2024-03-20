@@ -162,26 +162,26 @@ def test_api(rt_lua: bool) -> None:
 
     check(
         "exists",
-        setup=lambda key: redis.set(key, "a"),
+        setup=lambda key: redis.set_value(key, "a"),
         normal=lambda key: redis.exists(key),
-        setup_pipe=lambda pipe, key: pipe.set(key, "a"),
+        setup_pipe=lambda pipe, key: pipe.set_value(key, "a"),
         pipeline=lambda pipe, key: pipe.exists(key),
         lua=lambda ctx, key: RedisVar(key).exists(),
         code="redis.call(\"exists\", key_0)",
-        teardown=lambda key: [redis.get(key), redis.delete(key)],
+        teardown=lambda key: [redis.get_value(key), redis.delete(key)],
         output_setup=True,
         output=1,
         output_teardown=["a", 1])
 
     check(
         "incrby",
-        setup=lambda key: redis.set(key, "0.25"),
+        setup=lambda key: redis.set_value(key, "0.25"),
         normal=lambda key: redis.incrby(key, 0.5),
-        setup_pipe=lambda pipe, key: pipe.set(key, "0.25"),
+        setup_pipe=lambda pipe, key: pipe.set_value(key, "0.25"),
         pipeline=lambda pipe, key: pipe.incrby(key, 0.5),
         lua=lambda ctx, key: RedisVar(key).incrby(0.5),
         code="tonumber(redis.call(\"incrbyfloat\", key_0, 0.5))",
-        teardown=lambda key: [redis.get(key), redis.delete(key)],
+        teardown=lambda key: [redis.get_value(key), redis.delete(key)],
         output_setup=True,
         output=0.75,
         output_teardown=["0.75", 1])

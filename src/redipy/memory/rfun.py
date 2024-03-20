@@ -107,7 +107,7 @@ class RSetFn(LocalRedisFunction):
             elif arg == "KEEPTTL":
                 keep_ttl = True
             pos += 1
-        return sm.set(
+        return sm.set_value(
             key,
             value,
             mode=mode,
@@ -130,7 +130,7 @@ class RGetFn(LocalRedisFunction):
 
     @staticmethod
     def call(sm: Machine, key: str, args: list[JSONType]) -> JSONType:
-        return sm.get(key)
+        return sm.get_value(key)
 
 
 class RIncrByFn(LocalRedisFunction):

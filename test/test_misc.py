@@ -130,8 +130,8 @@ def test_misc(rt_lua: bool) -> None:
         assert pipe.execute() == [3]
 
     def check_redis(redis: Redis) -> None:
-        assert redis.set("test_rt", "yes")
-        assert redis.get("test_rt") == "yes"
+        assert redis.set_value("test_rt", "yes")
+        assert redis.get_value("test_rt") == "yes"
         assert redis.delete("test_rt") == 1
 
     cfg = get_test_config()

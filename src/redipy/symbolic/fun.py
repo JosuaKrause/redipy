@@ -14,6 +14,14 @@
 """General functions for scripts."""
 from typing import Literal
 
+from redipy.api import (
+    REX_ALWAYS,
+    REX_EARLIER,
+    REX_EXPIRE,
+    REX_LATER,
+    REX_PERSIST,
+    RExpireMode,
+)
 from redipy.graph.expr import ExprObj
 from redipy.symbolic.expr import Constant, Expr, lit_helper, MixedType
 
@@ -182,6 +190,47 @@ class RedisObj:
             Expr: The function call.
         """
         return RedisFn(name, self.key(), *args, no_adjust=no_adjust)
+
+    def expire(
+            self,
+            *,
+            mode: RExpireMode = REX_ALWAYS,
+            expire_in: float | None = None) -> Expr:
+        """
+        Sets the expiration of the key.
+
+        Args:
+            mode (RExpireMode, optional): The expriation mode. Defaults to
+                REX_ALWAYS.
+            expire_in (float | None, optional): The expiration time in seconds.
+                If None it will persist the key. Defaults to None.
+
+        Returns:
+            Expr: The function call.
+        """
+        if expire_in is None:
+            return self.redis_fn("persist")
+        args: list[MixedType] = []
+        expire_milli = int(expire_in * 1000.0)
+        args.append(expire_milli)
+        if mode == REX_EXPIRE:
+            args.append("XX")
+        elif mode == REX_PERSIST:
+            args.append("NX")
+        elif mode == REX_LATER:
+            args.append("GT")
+        elif mode == REX_EARLIER:
+            args.append("LT")
+        return self.redis_fn("expire", *args)
+
+    def ttl(self) -> Expr:
+        """
+        Gets the time-to-live of the key.
+
+        Returns:
+            Expr: The function call.
+        """
+        return self.redis_fn("ttl")
 
     def exists(self) -> Expr:
         """

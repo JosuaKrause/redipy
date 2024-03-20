@@ -17,17 +17,22 @@ import collections
 import datetime
 import itertools
 import time
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from typing import Literal, overload
 
 from redipy.api import (
     KeyType,
     RedisAPI,
+    REX_ALWAYS,
+    REX_EARLIER,
+    REX_EXPIRE,
+    REX_LATER,
+    REX_PERSIST,
+    RExpireMode,
     RSetMode,
     RSM_ALWAYS,
     RSM_EXISTS,
     RSM_MISSING,
-    Set,
 )
 from redipy.util import convert_pattern, now, time_diff, to_number_str
 
@@ -457,7 +462,7 @@ class State:
         self._deletes.clear()
         self._flush_key_cache()
 
-    def _prepare_key_for_write(self, key: str, is_new: bool) -> None:
+    def _prepare_key_for_write(self, key: str, *, is_new: bool) -> None:
         """
         Prepares a key for writing by ensuring that it is not deleted.
 
@@ -598,7 +603,7 @@ class State:
         if key not in self._vals:
             self.verify_key("string", key)
             is_new = True
-        self._prepare_key_for_write(key, is_new)
+        self._prepare_key_for_write(key, is_new=is_new)
         self._vals[key] = (value, expire)
 
     def get_value(self, key: str) -> tuple[str, float | None] | None:
@@ -622,18 +627,62 @@ class State:
                 return self._parent.get_value(key)
         return res
 
-    def has_value(self, key: str) -> bool:
+    def expire(
+            self,
+            key: str,
+            expire_fn: Callable[[float | None], float | None]) -> bool:
         """
-        Whether the given key is associated with a value. Note, this is
-        different from whether the key exists.
+        Conditionally sets the expiration for the given string key. So far only
+        string keys support expiration and it will raise for other key types.
+
+        Args:
+            key (str): The key.
+            expire_fn (Callable[[float  |  None], float  |  None]): Function
+                to determine the new expiration value. The argument is the
+                previous expiration value.
+
+        Returns:
+            bool: Whether the expiration changed.
+        """
+        prev = self._vals.get(key)
+        if prev is None:
+            self.verify_key("string", key)
+            return False
+        self._prepare_key_for_write(key, is_new=False)
+        prev_value, prev_expire = prev
+        new_expire = expire_fn(prev_expire)
+        if new_expire == prev_expire:
+            return False
+        self._vals[key] = (prev_value, new_expire)
+        return True
+
+    def ttl(self, key: str) -> float | None:
+        """
+        Computes the time-to-live for the given string key. So far only string
+        keys support expiration and it will raise for other key types.
 
         Args:
             key (str): The key.
 
         Returns:
-            bool: If the key exists and its type is "string".
+            float | None: The time in seconds until the key expires. If the
+                value is `<= 0.0` it means the key does not have an expiration.
+                If the result is None the key does not exist.
         """
-        return self.get_value(key) is not None
+        res = self._vals.get(key)
+        if res is None:
+            self.verify_key("string", key)
+            if self._parent is not None and not self._is_pending_delete(key):
+                return self._parent.ttl(key)
+            return None
+        _, expire = res
+        if expire is None:
+            return -1.0
+        res_expire = expire - time.monotonic()
+        if res_expire <= 0.0:
+            self._clean_vals()
+            return None
+        return res_expire
 
     def get_queue(self, key: str) -> collections.deque[str]:
         """
@@ -656,7 +705,7 @@ class State:
                 res = collections.deque()
             self._queues[key] = res
             is_new = True
-        self._prepare_key_for_write(key, is_new)
+        self._prepare_key_for_write(key, is_new=is_new)
         return res
 
     def readonly_queue(self, key: str) -> collections.deque[str] | None:
@@ -716,7 +765,7 @@ class State:
                 res = {}
             self._hashes[key] = res
             is_new = True
-        self._prepare_key_for_write(key, is_new)
+        self._prepare_key_for_write(key, is_new=is_new)
         return res
 
     def readonly_hash(self, key: str) -> dict[str, str] | None:
@@ -760,7 +809,7 @@ class State:
                 res = set()
             self._sets[key] = res
             is_new = True
-        self._prepare_key_for_write(key, is_new)
+        self._prepare_key_for_write(key, is_new=is_new)
         return res
 
     def readonly_set(self, key: str) -> set[str] | None:
@@ -810,7 +859,7 @@ class State:
             self._zorder[key] = rorder
             self._zscores[key] = rscores
             is_new = True
-        self._prepare_key_for_write(key, is_new)
+        self._prepare_key_for_write(key, is_new=is_new)
         assert rscores is not None
         return (rorder, rscores)
 
@@ -954,7 +1003,7 @@ class Machine(RedisAPI):
         self._state.reset()
 
     @overload
-    def set(
+    def set_value(
             self,
             key: str,
             value: str,
@@ -967,7 +1016,7 @@ class Machine(RedisAPI):
         ...
 
     @overload
-    def set(
+    def set_value(
             self,
             key: str,
             value: str,
@@ -980,7 +1029,7 @@ class Machine(RedisAPI):
         ...
 
     @overload
-    def set(
+    def set_value(
             self,
             key: str,
             value: str,
@@ -992,7 +1041,7 @@ class Machine(RedisAPI):
             keep_ttl: bool = False) -> str | bool | None:
         ...
 
-    def set(
+    def set_value(
             self,
             key: str,
             value: str,
@@ -1026,12 +1075,46 @@ class Machine(RedisAPI):
             return prev_value
         return do_set
 
-    def get(self, key: str) -> str | None:
+    def get_value(self, key: str) -> str | None:
         res = self._state.get_value(key)
         if res is None:
             return None
         value, _ = res
         return value
+
+    def expire(
+            self,
+            key: str,
+            *,
+            mode: RExpireMode = REX_ALWAYS,
+            expire_timestamp: datetime.datetime | None = None,
+            expire_in: float | None = None) -> bool:
+        expire = compute_expire(
+            expire_timestamp=expire_timestamp, expire_in=expire_in)
+
+        def choose_expire(prev_expire: float | None) -> float | None:
+            if expire is None:
+                return None
+            if mode == REX_ALWAYS:
+                return expire
+            if mode == REX_PERSIST:
+                return expire if prev_expire is None else prev_expire
+            if mode == REX_EXPIRE:
+                return None if prev_expire is None else prev_expire
+            if mode == REX_EARLIER:
+                if prev_expire is None:
+                    return expire
+                return min(expire, prev_expire)
+            if mode == REX_LATER:
+                if prev_expire is None:
+                    return None
+                return max(expire, prev_expire)
+            raise ValueError(f"unknown mode: {mode}")
+
+        return self._state.expire(key, choose_expire)
+
+    def ttl(self, key: str) -> float | None:
+        return self._state.ttl(key)
 
     def incrby(self, key: str, inc: float | int) -> float:
         res = self._state.get_value(key)
@@ -1281,7 +1364,7 @@ class Machine(RedisAPI):
             return 0
         return len(obj)
 
-    def smembers(self, key: str) -> Set[str]:
+    def smembers(self, key: str) -> set[str]:
         obj = self._state.readonly_set(key)
         if obj is None:
             return set()
