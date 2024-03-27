@@ -234,7 +234,7 @@ def test_scan(
         expire(rt, actions, "h", expect=True, expire_in=1.0)
         expire(rt, actions, "i", expect=True, expire_in=0.3)
         expire(rt, actions, "j", expect=True, expire_in=1.0)
-        expire(rt, actions, "k", expect=True, expire_in=1.0)
+        expire(rt, actions, "k", expect=True, expire_in=0.5)
 
         ttl(rt, actions, "a", expect=False)
         ttl(rt, actions, "b", expect=True)
@@ -335,10 +335,10 @@ def test_scan(
         ttl(rt, actions, "e", expect=None)
         ttl(rt, actions, "f", expect=True)
         ttl(rt, actions, "g", expect=True)
-        ttl(rt, actions, "h", expect=True)
+        ttl(rt, actions, "h", expect=None)
         ttl(rt, actions, "i", expect=False)
         ttl(rt, actions, "j", expect=False)
-        ttl(rt, actions, "k", expect=None)
+        ttl(rt, actions, "k", expect=True)
 
         check(rt, actions, "a", None)
         check(rt, actions, "b", None)
@@ -347,10 +347,10 @@ def test_scan(
         check(rt, actions, "e", None)
         check(rt, actions, "f", 6)
         check(rt, actions, "g", 7)
-        check(rt, actions, "h", 8)
+        check(rt, actions, "h", None)
         check(rt, actions, "i", 9)
         check(rt, actions, "j", 10)
-        check(rt, actions, "k", None)
+        check(rt, actions, "k", 11)
 
     time.sleep(0.2)
 

@@ -386,6 +386,10 @@ class PipelineConnection(PipelineAPI):
         elif expire_timestamp is not None:
             expire = int(time_diff(now(), expire_timestamp) * 1000.0)
         if expire is None:
+            if mode == REX_EARLIER:
+                self._pipe.ping()  # nop
+                self.add_fixup(lambda _: False)
+                return
             self._pipe.persist(self.with_prefix(key))
         else:
             self._pipe.pexpire(
@@ -990,6 +994,8 @@ class RedisConnection(Runtime[list[str]]):
             expire = int(time_diff(now(), expire_timestamp) * 1000.0)
         with self.get_connection() as conn:
             if expire is None:
+                if mode == REX_EARLIER:
+                    return False
                 return conn.persist(self.with_prefix(key))
             res = int(conn.pexpire(
                 self.with_prefix(key),
