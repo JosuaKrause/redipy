@@ -19,7 +19,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from test.util import get_setup
-from typing import Any
+from typing import Any, TypeAlias
 
 import pytest
 
@@ -35,6 +35,9 @@ from redipy.api import (
 )
 from redipy.main import Redis
 from redipy.util import now
+
+
+Action: TypeAlias = tuple[Callable[[Any], bool], Callable[[Any], str]]
 
 
 KEY_TYPE_REG: list[KeyType] = [
@@ -120,32 +123,31 @@ def test_expire(
     print(f"is_pipe={is_pipe} rt_lua={rt_lua} types={types}")
 
     @contextmanager
-    def block() -> Iterator[
-            tuple[Redis | PipelineAPI, list[Callable[[Any], bool]]]]:
-        actions: list[Callable[[Any], bool]] = []
+    def block() -> Iterator[tuple[Redis | PipelineAPI, list[Action]]]:
+        actions: list[Action] = []
         if is_pipe:
             with redis.pipeline() as pipe:
                 yield pipe, actions
                 res = pipe.execute()
                 assert len(res) == len(actions)
-                for val, call in zip(res, actions):
-                    assert call(val)
+                for val, (call, msg) in zip(res, actions):
+                    assert call(val), msg(val)
         else:
             yield redis, actions
             assert len(actions) == 0
 
     def create(
             rt: Redis | PipelineAPI,
-            actions: list[Callable[[Any], bool]],
+            actions: list[Action],
             key: str,
             ix: int) -> None:
         DEFAULTS[types](rt, key, ix)
         if is_pipe:
-            actions.append(lambda _: True)
+            actions.append((lambda _: True, lambda _: "?"))
 
     def expire(
             rt: Redis | PipelineAPI,
-            actions: list[Callable[[Any], bool]],
+            actions: list[Action],
             key: str,
             *,
             expect: bool,
@@ -160,7 +162,9 @@ def test_expire(
                 mode=mode,
                 expire_in=expire_in,
                 expire_timestamp=expire_timestamp)
-            actions.append(lambda val: val == expect)
+            actions.append((
+                lambda val: val == expect,
+                lambda val: f"val={val} == expect={expect}"))
         else:
             assert expect == rt.expire(
                 key,
@@ -170,13 +174,13 @@ def test_expire(
 
     def ttl(
             rt: Redis | PipelineAPI,
-            actions: list[Callable[[Any], bool]],
+            actions: list[Action],
             key: str,
             *,
             expect: bool | None) -> None:
+        estr = None if expect is None else ("> 0.0" if expect else "<= 0.0")
 
         def check_ttl(res: float | None) -> bool:
-            print(f"ttl of key {key} is {res}")
             if expect is None:
                 return res is None
             if res is None:
@@ -187,28 +191,34 @@ def test_expire(
 
         if isinstance(rt, PipelineAPI):
             rt.ttl(key)
-            actions.append(check_ttl)
+            actions.append((
+                check_ttl,
+                lambda val: f"ttl of key {key} is {val} expected {estr}"))
         else:
             assert check_ttl(rt.ttl(key))
 
     def check(
             rt: Redis | PipelineAPI,
-            actions: list[Callable[[Any], bool]],
+            actions: list[Action],
             key: str,
             ix: int | None) -> None:
         if ix is None:
             if isinstance(rt, PipelineAPI):
                 PIPE_CHECKS[types](rt, key)
-                actions.append(PIPE_MISSING[types])
+                actions.append(
+                    (PIPE_MISSING[types], lambda val: f"{key} missing {val}"))
                 rt.exists(key)
-                actions.append(lambda val: val == 0)
+                actions.append(
+                    (lambda val: val == 0, lambda val: f"exists {val} != 0"))
             else:
                 assert MISSING[types](rt, key)
                 assert rt.exists(key) == 0
             return
         if isinstance(rt, PipelineAPI):
             PIPE_CHECKS[types](rt, key)
-            actions.append(lambda val: PIPE_EXPECTED[types](val, ix))
+            actions.append((
+                lambda val: PIPE_EXPECTED[types](val, ix),
+                lambda val: f"expected value with {key} and {ix} got {val}"))
         else:
             assert CHECKS[types](rt, key, ix)
 
@@ -225,7 +235,7 @@ def test_expire(
         create(rt, actions, "j", 10)
         create(rt, actions, "k", 11)
 
-    expire_timestamp = now() + timedelta(seconds=0.1)
+    expire_timestamp = now() + timedelta(seconds=0.3 if is_pipe else 0.1)
     with block() as (rt, actions):
         expire(rt, actions, "a", expect=False, mode=REX_EXPIRE, expire_in=0.1)
         expire(rt, actions, "b", expect=True, mode=REX_ALWAYS, expire_in=0.1)
