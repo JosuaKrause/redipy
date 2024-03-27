@@ -31,6 +31,7 @@ from redipy.graph.expr import JSONType
 from redipy.memory.local import Cmd, LocalBackend
 from redipy.memory.state import Machine, State
 from redipy.plugin import add_plugin, LocalGeneralFunction, LocalRedisFunction
+from redipy.util import now
 
 
 T = TypeVar('T')
@@ -97,7 +98,7 @@ class LocalRuntime(Runtime[Cmd]):
         def exec_call(execute: Callable[[], list]) -> list:
             with self.lock():
                 now_mono = time.monotonic()
-                self._sm.set_mono(now_mono)
+                self._sm.set_mono((now_mono, now()))
                 res = execute()
                 state = pipe.get_state()
                 self._sm.get_state().apply(state, now_mono)

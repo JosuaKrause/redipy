@@ -14,10 +14,10 @@
 """This module handles the internal state of the memory runtime."""
 import bisect
 import collections
-import datetime
 import itertools
 import time
 from collections.abc import Callable, Iterable
+from datetime import datetime
 from typing import Literal, overload, TypeVar
 
 from redipy.api import (
@@ -42,15 +42,17 @@ T = TypeVar('T')
 
 def compute_expire(
         now_mono: float,
+        now_ts: datetime,
         *,
-        expire_timestamp: datetime.datetime | None,
+        expire_timestamp: datetime | None,
         expire_in: float | None) -> float | None:
     """
     Computes the monotonic time point when a key should expire.
 
     Args:
-        now_mono (float): The current time.
-        expire_timestamp (datetime.datetime | None): An absolute timestamp.
+        now_mono (float): The current monotonic time.
+        now_ts (datetime): The current date time.
+        expire_timestamp (datetime | None): An absolute timestamp.
         expire_in (float | None): A relative time difference in seconds.
 
     Raises:
@@ -67,7 +69,7 @@ def compute_expire(
         raise ValueError(
             f"cannot set timestamp {expire_timestamp} "
             f"and duration {expire_in} at the same time")
-    return now_mono + time_diff(now(), expire_timestamp)
+    return now_mono + time_diff(now_ts, expire_timestamp)
 
 
 MIN_SCAN_LENGTH: int = 10
@@ -1084,27 +1086,39 @@ class Machine(RedisAPI):
         """
         super().__init__()
         self._state = state
-        self._now_mono: float | None = None
+        self._now_mono: tuple[float, datetime] | None = None
 
-    def set_mono(self, now_mono: float | None) -> None:
+    def set_mono(self, now_mono: tuple[float, datetime] | None) -> None:
         """
         Sets the current time.
 
         Args:
-            now_mono (float | None): The current time for pipelines. Otherwise
-                None.
+            now_mono (tuple[float, datetime] | None): The current time for
+                pipelines as monotonic time and datetime. Otherwise None.
         """
         self._now_mono = now_mono
 
     def get_mono(self) -> float:
         """
-        Returns the current time.
+        Returns the current monotonic time.
 
         Returns:
             float: The current time or the time associated with this machine if
                 it is a pipeline.
         """
-        return time.monotonic() if self._now_mono is None else self._now_mono
+        if self._now_mono is None:
+            return time.monotonic()
+        return self._now_mono[0]
+
+    def get_ts(self) -> datetime:
+        """
+        Returns the current time.
+
+        Returns:
+            datetime: The current time or the time associated with this machine
+                if it is a pipeline.
+        """
+        return now() if self._now_mono is None else self._now_mono[1]
 
     def get_state(self) -> State:
         """
@@ -1174,7 +1188,7 @@ class Machine(RedisAPI):
             *,
             mode: RSetMode,
             return_previous: Literal[True],
-            expire_timestamp: datetime.datetime | None,
+            expire_timestamp: datetime | None,
             expire_in: float | None,
             keep_ttl: bool) -> str | None:
         ...
@@ -1187,7 +1201,7 @@ class Machine(RedisAPI):
             *,
             mode: RSetMode,
             return_previous: Literal[False],
-            expire_timestamp: datetime.datetime | None,
+            expire_timestamp: datetime | None,
             expire_in: float | None,
             keep_ttl: bool) -> bool | None:
         ...
@@ -1200,7 +1214,7 @@ class Machine(RedisAPI):
             *,
             mode: RSetMode = RSM_ALWAYS,
             return_previous: bool = False,
-            expire_timestamp: datetime.datetime | None = None,
+            expire_timestamp: datetime | None = None,
             expire_in: float | None = None,
             keep_ttl: bool = False) -> str | bool | None:
         ...
@@ -1212,13 +1226,15 @@ class Machine(RedisAPI):
             *,
             mode: RSetMode = RSM_ALWAYS,
             return_previous: bool = False,
-            expire_timestamp: datetime.datetime | None = None,
+            expire_timestamp: datetime | None = None,
             expire_in: float | None = None,
             keep_ttl: bool = False) -> str | bool | None:
         state = self._state
         now_mono = self.get_mono()
+        now_ts = self.get_ts()
         expire = compute_expire(
             now_mono,
+            now_ts,
             expire_timestamp=expire_timestamp,
             expire_in=expire_in)
         prev_value = state.get_value(key, now_mono)
@@ -1248,12 +1264,14 @@ class Machine(RedisAPI):
             key: str,
             *,
             mode: RExpireMode = REX_ALWAYS,
-            expire_timestamp: datetime.datetime | None = None,
+            expire_timestamp: datetime | None = None,
             expire_in: float | None = None) -> bool:
         state = self._state
         now_mono = self.get_mono()
+        now_ts = self.get_ts()
         expire = compute_expire(
             now_mono,
+            now_ts,
             expire_timestamp=expire_timestamp,
             expire_in=expire_in)
 
