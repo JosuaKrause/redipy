@@ -1163,10 +1163,11 @@ class Machine(RedisAPI):
             expire_timestamp: datetime.datetime | None = None,
             expire_in: float | None = None,
             keep_ttl: bool = False) -> str | bool | None:
+        state = self._state
         now_mono = self.get_mono()
         expire = compute_expire(
             expire_timestamp=expire_timestamp, expire_in=expire_in)
-        prev_value = self._state.get_value(key, now_mono)
+        prev_value = state.get_value(key, now_mono)
         do_set = False
         if mode == RSM_ALWAYS:
             do_set = True
@@ -1177,8 +1178,8 @@ class Machine(RedisAPI):
         else:
             raise ValueError(f"unknown mode: {mode}")
         if do_set:
-            self._state.set_value(key, value, now_mono)
-            self._state.expire(
+            state.set_value(key, value, now_mono)
+            state.expire(
                 key, lambda prev_expire: prev_expire if keep_ttl else expire)
         if return_previous:
             return prev_value
@@ -1195,18 +1196,20 @@ class Machine(RedisAPI):
             mode: RExpireMode = REX_ALWAYS,
             expire_timestamp: datetime.datetime | None = None,
             expire_in: float | None = None) -> bool:
+        state = self._state
+        now_mono = self.get_mono()
         expire = compute_expire(
             expire_timestamp=expire_timestamp, expire_in=expire_in)
 
         def choose_expire(prev_expire: float | None) -> float | None:
             if expire is None:
-                return None
+                return prev_expire if mode == REX_EARLIER else None
             if mode == REX_ALWAYS:
                 return expire
             if mode == REX_PERSIST:
                 return expire if prev_expire is None else prev_expire
             if mode == REX_EXPIRE:
-                return None if prev_expire is None else prev_expire
+                return None if prev_expire is None else expire
             if mode == REX_EARLIER:
                 if prev_expire is None:
                     return expire
@@ -1217,7 +1220,9 @@ class Machine(RedisAPI):
                 return max(expire, prev_expire)
             raise ValueError(f"unknown mode: {mode}")
 
-        return self._state.expire(key, choose_expire)
+        if not state.is_alive(key, now_mono) or not state.exists(key):
+            return False
+        return state.expire(key, choose_expire)
 
     def ttl(self, key: str) -> float | None:
         now_mono = self.get_mono()

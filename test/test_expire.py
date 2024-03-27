@@ -65,8 +65,16 @@ CHECKS: dict[KeyType, Callable[[Redis, str, int], bool]] = {
 }
 
 
-PIPE_CHECKS: dict[
-        KeyType, Callable[[Redis | PipelineAPI, str], Any | None]] = {
+MISSING: dict[KeyType, Callable[[Redis, str], bool]] = {
+    "string": lambda rt, key: rt.get_value(key) is None,
+    "list": lambda rt, key: rt.lrange(key, 0, -1) == [],
+    "set": lambda rt, key: rt.smembers(key) == set(),
+    "zset": lambda rt, key: rt.zrange(key, 0, -1) == [],
+    "hash": lambda rt, key: rt.hgetall(key) == {},
+}
+
+
+PIPE_CHECKS: dict[KeyType, Callable[[PipelineAPI, str], None]] = {
     "string": lambda pipe, key: pipe.get_value(key),
     "list": lambda pipe, key: pipe.lrange(key, 0, -1),
     "set": lambda pipe, key: pipe.smembers(key),
@@ -84,10 +92,19 @@ PIPE_EXPECTED: dict[KeyType, Callable[[Any, int], bool]] = {
 }
 
 
+PIPE_MISSING: dict[KeyType, Callable[[Any], bool]] = {
+    "string": lambda res: res is None,
+    "list": lambda res: res == [],
+    "set": lambda res: res == set(),
+    "zset": lambda res: res == [],
+    "hash": lambda res: res == {},
+}
+
+
 @pytest.mark.parametrize("types", KEY_TYPE_REG)
 @pytest.mark.parametrize("is_pipe", [False, True])
-@pytest.mark.parametrize("rt_lua", [True, False])
-def test_scan(
+@pytest.mark.parametrize("rt_lua", [False, True])
+def test_expire(
         types: KeyType,
         is_pipe: bool,
         rt_lua: bool) -> None:
@@ -182,11 +199,11 @@ def test_scan(
         if ix is None:
             if isinstance(rt, PipelineAPI):
                 PIPE_CHECKS[types](rt, key)
-                actions.append(lambda val: val is None)
+                actions.append(PIPE_MISSING[types])
                 rt.exists(key)
                 actions.append(lambda val: val == 0)
             else:
-                assert PIPE_CHECKS[types](rt, key) is None
+                assert MISSING[types](rt, key)
                 assert rt.exists(key) == 0
             return
         if isinstance(rt, PipelineAPI):
