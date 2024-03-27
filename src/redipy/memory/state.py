@@ -18,7 +18,7 @@ import datetime
 import itertools
 import time
 from collections.abc import Callable, Iterable
-from typing import Literal, overload
+from typing import Literal, overload, TypeVar
 
 from redipy.api import (
     KeyType,
@@ -37,7 +37,11 @@ from redipy.api import (
 from redipy.util import convert_pattern, now, time_diff, to_number_str
 
 
+T = TypeVar('T')
+
+
 def compute_expire(
+        now_mono: float,
         *,
         expire_timestamp: datetime.datetime | None,
         expire_in: float | None) -> float | None:
@@ -45,6 +49,7 @@ def compute_expire(
     Computes the monotonic time point when a key should expire.
 
     Args:
+        now_mono (float): The current time.
         expire_timestamp (datetime.datetime | None): An absolute timestamp.
         expire_in (float | None): A relative time difference in seconds.
 
@@ -57,12 +62,12 @@ def compute_expire(
     if expire_timestamp is None:
         if expire_in is None:
             return None
-        return time.monotonic() + expire_in
+        return now_mono + expire_in
     if expire_in is not None:
         raise ValueError(
             f"cannot set timestamp {expire_timestamp} "
             f"and duration {expire_in} at the same time")
-    return time.monotonic() + time_diff(now(), expire_timestamp)
+    return now_mono + time_diff(now(), expire_timestamp)
 
 
 MIN_SCAN_LENGTH: int = 10
@@ -89,7 +94,7 @@ class State:
         """
         super().__init__()
         self._parent = parent
-        self._expire: dict[str, float | None] = {}
+        self._expire: dict[str, float] = {}
         self._vals: dict[str, str] = {}
         self._queues: dict[str, collections.deque[str]] = {}
         self._hashes: dict[str, dict[str, str]] = {}
@@ -121,7 +126,7 @@ class State:
         Returns:
             KeyType | None: The type of the key or None if it doesn't exist.
         """
-        if key in self._deletes:
+        if self._is_pending_delete(key):
             return None
         if key in self._vals:
             return "string"
@@ -149,7 +154,7 @@ class State:
         Raises:
             TypeError: If the key already exists with a different type.
         """
-        if key in self._deletes:
+        if self._is_pending_delete(key):
             return
         if key_type != "string" and key in self._vals:
             raise TypeError(f"key {key} is a string")
@@ -383,7 +388,7 @@ class State:
         Returns:
             bool: Whether it exists as any type.
         """
-        if key in self._deletes:
+        if self._is_pending_delete(key):
             return False
         if key in self._vals:
             return True
@@ -398,6 +403,35 @@ class State:
         if self._parent is not None:
             return self._parent.exists(key)
         return False
+
+    def copy_from_parent(self, key: str) -> None:
+        """
+        Copies the current value from the parent if the value of the key is not
+        already present in the own dictionary.
+
+        Args:
+            key (str): The key.
+        """
+        if self._is_pending_delete(key):
+            return
+        parent = self._parent
+        if parent is None:
+            return
+        parent.copy_from_parent(key)
+
+        def copy_over(from_dict: dict[str, T], to_dict: dict[str, T]) -> None:
+            if key in to_dict:
+                return
+            other = from_dict.get(key)
+            if other is not None:
+                to_dict[key] = other
+
+        copy_over(parent.raw_vals(), self._vals)
+        copy_over(parent.raw_queues(), self._queues)
+        copy_over(parent.raw_hashes(), self._hashes)
+        copy_over(parent.raw_sets(), self._sets)
+        copy_over(parent.raw_zorder(), self._zorder)
+        copy_over(parent.raw_zscores(), self._zscores)
 
     def delete(self, deletes: set[str]) -> None:
         """
@@ -529,7 +563,7 @@ class State:
         Returns:
             bool: Whether the key is alive.
         """
-        expire = self._expire.get(key)
+        expire = self.get_expire(key)
         if expire is None:
             return True
         if expire > now_mono:
@@ -552,12 +586,13 @@ class State:
             remove.add(key)
         self.delete(remove)
 
-    def raw_expirations(self) -> dict[str, float | None]:
+    def raw_expirations(self) -> dict[str, float]:
         """
         Raw access to the expiration dictionary.
 
         Returns:
             dict[str, float]: The actual expiration dictionary of this state.
+                Here persistent is represented as a value <= 0.
         """
         return self._expire
 
@@ -671,6 +706,24 @@ class State:
                 return self._parent.get_value(key, now_mono)
         return res
 
+    def get_expire(self, key: str) -> float | None:
+        """
+        Retrieves the expiration of the given key.
+
+        Args:
+            key (str): The key.
+
+        Returns:
+            float | None: The raw expiration.
+        """
+        res = self._expire.get(key)
+        if res is None:
+            if self._parent is not None and not self._is_pending_delete(key):
+                return self._parent.get_expire(key)
+        if res is not None and res <= 0.0:
+            res = None
+        return res
+
     def expire(
             self,
             key: str,
@@ -689,11 +742,12 @@ class State:
         """
         if not self.exists(key):
             return False
-        prev_expire = self._expire.get(key)
+        prev_expire = self.get_expire(key)
         new_expire = expire_fn(prev_expire)
         if new_expire == prev_expire:
             return False
-        self._expire[key] = new_expire
+        self.copy_from_parent(key)
+        self._expire[key] = -1.0 if new_expire is None else new_expire
         return True
 
     def ttl(self, key: str, now_mono: float) -> float | None:
@@ -709,12 +763,10 @@ class State:
                 value is `<= 0.0` it means the key does not have an expiration.
                 If the result is None the key does not exist.
         """
-        expire = self._expire.get(key)
+        expire = self.get_expire(key)
         if expire is None:
             if not self.exists(key):
                 return None
-            if self._parent is not None and not self._is_pending_delete(key):
-                return self._parent.ttl(key, now_mono)
             return -1.0
         res_expire = expire - now_mono
         if res_expire <= 0.0:
@@ -1166,7 +1218,9 @@ class Machine(RedisAPI):
         state = self._state
         now_mono = self.get_mono()
         expire = compute_expire(
-            expire_timestamp=expire_timestamp, expire_in=expire_in)
+            now_mono,
+            expire_timestamp=expire_timestamp,
+            expire_in=expire_in)
         prev_value = state.get_value(key, now_mono)
         do_set = False
         if mode == RSM_ALWAYS:
@@ -1199,7 +1253,9 @@ class Machine(RedisAPI):
         state = self._state
         now_mono = self.get_mono()
         expire = compute_expire(
-            expire_timestamp=expire_timestamp, expire_in=expire_in)
+            now_mono,
+            expire_timestamp=expire_timestamp,
+            expire_in=expire_in)
 
         def choose_expire(prev_expire: float | None) -> float | None:
             if expire is None:
