@@ -65,7 +65,8 @@ CHECKS: dict[KeyType, Callable[[Redis, str, int], bool]] = {
 }
 
 
-PIPE_CHECKS: dict[KeyType, Callable[[PipelineAPI, str], None]] = {
+PIPE_CHECKS: dict[
+        KeyType, Callable[[Redis | PipelineAPI, str], Any | None]] = {
     "string": lambda pipe, key: pipe.get_value(key),
     "list": lambda pipe, key: pipe.lrange(key, 0, -1),
     "set": lambda pipe, key: pipe.smembers(key),
@@ -180,9 +181,12 @@ def test_scan(
             ix: int | None) -> None:
         if ix is None:
             if isinstance(rt, PipelineAPI):
+                PIPE_CHECKS[types](rt, key)
+                actions.append(lambda val: val is None)
                 rt.exists(key)
                 actions.append(lambda val: val == 0)
             else:
+                assert PIPE_CHECKS[types](rt, key) is None
                 assert rt.exists(key) == 0
             return
         if isinstance(rt, PipelineAPI):
@@ -236,21 +240,6 @@ def test_scan(
         expire(rt, actions, "j", expect=True, expire_in=1.0)
         expire(rt, actions, "k", expect=True, expire_in=0.5)
 
-        ttl(rt, actions, "a", expect=False)
-        ttl(rt, actions, "b", expect=True)
-        ttl(rt, actions, "c", expect=True)
-        ttl(rt, actions, "d", expect=True)
-        ttl(rt, actions, "e", expect=False)
-        ttl(rt, actions, "f", expect=True)
-        ttl(rt, actions, "g", expect=True)
-        ttl(rt, actions, "h", expect=True)
-        ttl(rt, actions, "i", expect=True)
-        ttl(rt, actions, "j", expect=True)
-        ttl(rt, actions, "k", expect=True)
-        if is_pipe:
-            time.sleep(0.2)  # should execute before the pipe is executed
-
-    with block() as (rt, actions):
         check(rt, actions, "a", 1)
         check(rt, actions, "b", 2)
         check(rt, actions, "c", 3)
@@ -262,14 +251,14 @@ def test_scan(
         check(rt, actions, "i", 9)
         check(rt, actions, "j", 10)
         check(rt, actions, "k", 11)
-
-    time.sleep(0.2)
+        if is_pipe:
+            time.sleep(0.2)  # should execute before the pipe is executed
 
     with block() as (rt, actions):
         ttl(rt, actions, "a", expect=False)
-        ttl(rt, actions, "b", expect=None)
-        ttl(rt, actions, "c", expect=None)
-        ttl(rt, actions, "d", expect=None)
+        ttl(rt, actions, "b", expect=True)
+        ttl(rt, actions, "c", expect=True)
+        ttl(rt, actions, "d", expect=True)
         ttl(rt, actions, "e", expect=False)
         ttl(rt, actions, "f", expect=True)
         ttl(rt, actions, "g", expect=True)
@@ -278,6 +267,9 @@ def test_scan(
         ttl(rt, actions, "j", expect=True)
         ttl(rt, actions, "k", expect=True)
 
+    time.sleep(0.2)
+
+    with block() as (rt, actions):
         check(rt, actions, "a", 1)
         check(rt, actions, "b", None)
         check(rt, actions, "c", None)
@@ -290,6 +282,18 @@ def test_scan(
         check(rt, actions, "j", 10)
         check(rt, actions, "k", 11)
 
+        ttl(rt, actions, "a", expect=False)
+        ttl(rt, actions, "b", expect=None)
+        ttl(rt, actions, "c", expect=None)
+        ttl(rt, actions, "d", expect=None)
+        ttl(rt, actions, "e", expect=False)
+        ttl(rt, actions, "f", expect=True)
+        ttl(rt, actions, "g", expect=True)
+        ttl(rt, actions, "h", expect=True)
+        ttl(rt, actions, "i", expect=True)
+        ttl(rt, actions, "j", expect=True)
+        ttl(rt, actions, "k", expect=True)
+
     with block() as (rt, actions):
         expire(rt, actions, "a", expect=True, expire_in=0.1)
         expire(rt, actions, "b", expect=False, expire_in=0.1)
@@ -300,6 +304,18 @@ def test_scan(
         expire(rt, actions, "i", expect=True)
         expire(rt, actions, "j", expect=True, mode=REX_LATER)
         expire(rt, actions, "k", expect=False, mode=REX_EARLIER)
+
+        check(rt, actions, "a", 1)
+        check(rt, actions, "b", None)
+        check(rt, actions, "c", None)
+        check(rt, actions, "d", None)
+        check(rt, actions, "e", None)
+        check(rt, actions, "f", 6)
+        check(rt, actions, "g", 7)
+        check(rt, actions, "h", 8)
+        check(rt, actions, "i", 9)
+        check(rt, actions, "j", 10)
+        check(rt, actions, "k", 11)
 
         ttl(rt, actions, "a", expect=True)
         ttl(rt, actions, "b", expect=None)
@@ -313,21 +329,21 @@ def test_scan(
         ttl(rt, actions, "j", expect=False)
         ttl(rt, actions, "k", expect=True)
 
-        check(rt, actions, "a", 1)
+    time.sleep(0.2)
+
+    with block() as (rt, actions):
+        check(rt, actions, "a", None)
         check(rt, actions, "b", None)
         check(rt, actions, "c", None)
         check(rt, actions, "d", None)
         check(rt, actions, "e", None)
         check(rt, actions, "f", 6)
         check(rt, actions, "g", 7)
-        check(rt, actions, "h", 8)
+        check(rt, actions, "h", None)
         check(rt, actions, "i", 9)
         check(rt, actions, "j", 10)
         check(rt, actions, "k", 11)
 
-    time.sleep(0.2)
-
-    with block() as (rt, actions):
         ttl(rt, actions, "a", expect=None)
         ttl(rt, actions, "b", expect=None)
         ttl(rt, actions, "c", expect=None)
@@ -340,33 +356,9 @@ def test_scan(
         ttl(rt, actions, "j", expect=False)
         ttl(rt, actions, "k", expect=True)
 
-        check(rt, actions, "a", None)
-        check(rt, actions, "b", None)
-        check(rt, actions, "c", None)
-        check(rt, actions, "d", None)
-        check(rt, actions, "e", None)
-        check(rt, actions, "f", 6)
-        check(rt, actions, "g", 7)
-        check(rt, actions, "h", None)
-        check(rt, actions, "i", 9)
-        check(rt, actions, "j", 10)
-        check(rt, actions, "k", 11)
-
     time.sleep(0.2)
 
     with block() as (rt, actions):
-        ttl(rt, actions, "a", expect=None)
-        ttl(rt, actions, "b", expect=None)
-        ttl(rt, actions, "c", expect=None)
-        ttl(rt, actions, "d", expect=None)
-        ttl(rt, actions, "e", expect=None)
-        ttl(rt, actions, "f", expect=None)
-        ttl(rt, actions, "g", expect=None)
-        ttl(rt, actions, "h", expect=None)
-        ttl(rt, actions, "i", expect=False)
-        ttl(rt, actions, "j", expect=False)
-        ttl(rt, actions, "k", expect=None)
-
         check(rt, actions, "a", None)
         check(rt, actions, "b", None)
         check(rt, actions, "c", None)
@@ -378,5 +370,17 @@ def test_scan(
         check(rt, actions, "i", 9)
         check(rt, actions, "j", 10)
         check(rt, actions, "k", None)
+
+        ttl(rt, actions, "a", expect=None)
+        ttl(rt, actions, "b", expect=None)
+        ttl(rt, actions, "c", expect=None)
+        ttl(rt, actions, "d", expect=None)
+        ttl(rt, actions, "e", expect=None)
+        ttl(rt, actions, "f", expect=None)
+        ttl(rt, actions, "g", expect=None)
+        ttl(rt, actions, "h", expect=None)
+        ttl(rt, actions, "i", expect=False)
+        ttl(rt, actions, "j", expect=False)
+        ttl(rt, actions, "k", expect=None)
 
     # FIXME: test calling expire from a script

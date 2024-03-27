@@ -85,11 +85,12 @@ class State:
 
         Args:
             parent (State | None, optional): The optional parent whose values
-            this state shadows. Defaults to None.
+                this state shadows. Defaults to None.
         """
         super().__init__()
         self._parent = parent
-        self._vals: dict[str, tuple[str, float | None]] = {}
+        self._expire: dict[str, float | None] = {}
+        self._vals: dict[str, str] = {}
         self._queues: dict[str, collections.deque[str]] = {}
         self._hashes: dict[str, dict[str, str]] = {}
         self._sets: dict[str, set[str]] = {}
@@ -111,7 +112,8 @@ class State:
 
     def key_type(self, key: str) -> KeyType | None:
         """
-        Computes the type of a given key.
+        Computes the type of a given key. The function does not check
+        expiration.
 
         Args:
             key (str): The key.
@@ -138,7 +140,7 @@ class State:
     def verify_key(self, key_type: KeyType, key: str) -> None:
         """
         Ensures that the given key does not already exist with a different
-        type.
+        type. This does not check for expiration.
 
         Args:
             key_type (KeyType): The expected key type.
@@ -165,13 +167,17 @@ class State:
     def _flush_key_cache(self) -> None:
         self._key_cache = None
 
-    def _populate_key_cache(self) -> list[str]:
+    def _populate_key_cache(self, now_mono: float) -> list[str]:
         """
         Populates the key cache.
+
+        Args:
+            now_mono (float): The current time.
 
         Returns:
             list[str]: A sorted list of all keys.
         """
+        self.clean_vals(now_mono)
         pre = [
             *self._vals,
             *self._queues,
@@ -184,45 +190,50 @@ class State:
         else:
             # NOTE: no need to remove duplicates here as they are allowed
             # by the spec and are removed downstream which is much cheaper
-            parent_cache = self._parent.get_key_cache()
+            parent_cache = self._parent.get_key_cache(now_mono)
             key_cache = sorted(pre + parent_cache)
         self._key_cache = key_cache
         return key_cache
 
-    def get_key_cache(self) -> list[str]:
+    def get_key_cache(self, now_mono: float) -> list[str]:
         """
         Retrieves the full key cache. If necessary populates the key cache.
         The key cache is a sorted list of all keys. It is used for scanning
         keys.
+
+        Args:
+            now_mono (float): The current time.
 
         Returns:
             list[str]: A sorted list of all keys.
         """
         res = self._key_cache
         if res is None:
-            res = self._populate_key_cache()
+            res = self._populate_key_cache(now_mono)
         return res
 
-    def _start_ix(self, pattern_prefix: str) -> int:
+    def _start_ix(self, pattern_prefix: str, now_mono: float) -> int:
         """
         Computes the start index in the key cache for a given pattern prefix.
 
         Args:
             pattern_prefix (str): The pattern prefix is the longest prefix of
                 the pattern that does not include any wildcards or ranges.
+            now_mono (float): The current time.
 
         Returns:
             int: Where the key cache can be started to be scanned to
                 immediately retrieve keys starting with at least the pattern
                 prefix.
         """
-        return bisect.bisect_left(self.get_key_cache(), pattern_prefix)
+        return bisect.bisect_left(self.get_key_cache(now_mono), pattern_prefix)
 
     def _scan(
             self,
             cursor: int,
             length: int,
-            pattern_prefix: str | None) -> tuple[int, list[str]]:
+            pattern_prefix: str | None,
+            now_mono: float) -> tuple[int, list[str]]:
         """
         Internal scan. The result might include keys that will be filtered in
         the actual scan function.
@@ -247,6 +258,7 @@ class State:
             pattern_prefix (str | None): The pattern prefix is the longest
                 prefix of the pattern that does not include any wildcards or
                 ranges. If None, all keys are considered.
+            now_mono (float): The current time.
 
         Returns:
             tuple[int, list[str]]: A tuple of the next cursor and the returned
@@ -254,10 +266,10 @@ class State:
         """
         delete_count = self._delete_count
         if cursor == 0 and pattern_prefix is not None:
-            cursor = self._start_ix(pattern_prefix)
+            cursor = self._start_ix(pattern_prefix, now_mono)
         else:
             cursor = max(cursor - delete_count, 0)
-        key_cache = self.get_key_cache()
+        key_cache = self.get_key_cache(now_mono)
         end_ix = max(cursor + max(length, MIN_SCAN_LENGTH), 1)
         res = key_cache[cursor:end_ix]
         if end_ix >= len(key_cache):
@@ -269,6 +281,7 @@ class State:
     def scan_keys(
             self,
             cursor: int,
+            now_mono: float,
             *,
             count: int,
             match: str | None,
@@ -280,6 +293,7 @@ class State:
             cursor (int): The scan cursor. A value of 0 initiates the beginning
                 of the scan. All other values are defined internally and should
                 only be previous return values of scan.
+            now_mono (float): The current time.
             count (int): The length hint of the returned values. The actual
                 number of returned keys might differ.
             match (str | None): If not None a redis key pattern to filter
@@ -317,7 +331,7 @@ class State:
                 return keys
             return list(process_pat(process_type(keys)))
 
-        next_cursor, keys = self._scan(cursor, count, prefix)
+        next_cursor, keys = self._scan(cursor, count, prefix, now_mono)
         if prefix is not None and keys:
             last_key = keys[-1]
             last_key = last_key[:len(prefix)]
@@ -327,6 +341,7 @@ class State:
 
     def get_all_keys(
             self,
+            now_mono: float,
             *,
             match: str | None,
             filter_type: KeyType | None) -> Iterable[str]:
@@ -335,6 +350,7 @@ class State:
         fully inside a lock, no duplicate keys will be returned.
 
         Args:
+            now_mono (float): The current time.
             match (str | None): If not None a redis key pattern to filter
                 keys.
             filter_type (KeyType | None): If not None filter by key type.
@@ -346,7 +362,11 @@ class State:
         cursor = 0
         while True:
             cursor, keys = self.scan_keys(
-                cursor, count=count, match=match, filter_type=filter_type)
+                cursor,
+                now_mono,
+                count=count,
+                match=match,
+                filter_type=filter_type)
             yield from keys
             if cursor == 0:
                 break
@@ -354,7 +374,8 @@ class State:
 
     def exists(self, key: str) -> bool:
         """
-        Checks whether a given key exists.
+        Checks whether a given key exists. This method does not account for
+        expiration.
 
         Args:
             key (str): The key.
@@ -390,6 +411,8 @@ class State:
             self._deletes.update(deletes)
             has_delete = True
         for key in deletes:
+            if self._expire.pop(key, None) is not None:
+                has_delete = True
             if self._vals.pop(key, None) is not None:
                 has_delete = True
             if self._queues.pop(key, None) is not None:
@@ -406,7 +429,7 @@ class State:
             self._flush_key_cache()
             self._delete_count += 1
 
-    def apply(self, other: 'State') -> None:
+    def apply(self, other: 'State', now_mono: float) -> None:
         """
         Applies the given state. All updates that are different in the other
         state will be updated in the current state and all deleted keys in
@@ -418,7 +441,9 @@ class State:
 
         Args:
             other (State): The state to be applied to the current state.
+            now_mono (float): The current time.
         """
+        raw_expire = other.raw_expirations()
         raw_vals = other.raw_vals()
         raw_queues = other.raw_queues()
         raw_hashes = other.raw_hashes()
@@ -427,6 +452,7 @@ class State:
         raw_zscores = other.raw_zscores()
 
         new_keys: set[str] = set()  # NOTE: new means new for the given type
+        new_keys.update(set(raw_expire.keys()) - set(self._expire.keys()))
         new_keys.update(set(raw_vals.keys()) - set(self._vals.keys()))
         new_keys.update(set(raw_queues.keys()) - set(self._queues.keys()))
         new_keys.update(set(raw_hashes.keys()) - set(self._hashes.keys()))
@@ -437,13 +463,14 @@ class State:
         # different type
         self.delete(new_keys)
 
+        self._expire.update(raw_expire)
         self._vals.update(raw_vals)
         self._queues.update(raw_queues)
         self._hashes.update(raw_hashes)
         self._sets.update(raw_sets)
         self._zorder.update(raw_zorder)
         self._zscores.update(raw_zscores)
-        self._clean_vals()
+        self.clean_vals(now_mono)
         self.delete(other.raw_deletes())
 
         if new_keys:
@@ -453,6 +480,7 @@ class State:
         """
         Completely resets the state.
         """
+        self._expire.clear()
         self._vals.clear()
         self._queues.clear()
         self._hashes.clear()
@@ -490,45 +518,55 @@ class State:
         """
         return key in self._deletes
 
-    def _is_alive(self, value: tuple[str, float | None]) -> bool:
+    def is_alive(self, key: str, now_mono: float) -> bool:
         """
-        Checks whether the given value has expired.
+        Checks whether the given key has not expired.
 
         Args:
-            value (tuple[str, float  |  None]): Tuple of value and optional
-            expiration monotonic time point.
+            key (str): The key.
+            now_mono (float): The current time.
 
         Returns:
-            bool: Whether the value has expired.
+            bool: Whether the key is alive.
         """
-        _, expire = value
+        expire = self._expire.get(key)
         if expire is None:
             return True
-        now_mono = time.monotonic()
         if expire > now_mono:
             return True
         return False
 
-    def _clean_vals(self) -> None:
+    def clean_vals(self, now_mono: float) -> None:
         """
         Cleans up expired values by deleting them.
+
+        Args:
+            now_mono (float): The current time.
         """
         if self._parent is not None:
             return
         remove = set()
         for key, value in self._vals.items():
-            if self._is_alive(value):
+            if self.is_alive(value, now_mono):
                 continue
             remove.add(key)
         self.delete(remove)
 
-    def raw_vals(self) -> dict[str, tuple[str, float | None]]:
+    def raw_expirations(self) -> dict[str, float | None]:
+        """
+        Raw access to the expiration dictionary.
+
+        Returns:
+            dict[str, float]: The actual expiration dictionary of this state.
+        """
+        return self._expire
+
+    def raw_vals(self) -> dict[str, str]:
         """
         Raw access to the value dictionary.
 
         Returns:
-            dict[str, tuple[str, float | None]]: The actual value dictionary of
-            this state.
+            dict[str, str]: The actual value dictionary of this state.
         """
         return self._vals
 
@@ -539,7 +577,7 @@ class State:
 
         Returns:
             dict[str, collections.deque[str]]: The actual queue dictionary of
-            this state.
+                this state.
         """
         return self._queues
 
@@ -549,7 +587,7 @@ class State:
 
         Returns:
             dict[str, dict[str, str]]: The actual hashes dictionary of this
-            state.
+                state.
         """
         return self._hashes
 
@@ -577,7 +615,7 @@ class State:
 
         Returns:
             dict[str, dict[str, float]]: The actual zscores dictionary of this
-            state.
+                state.
         """
         return self._zscores
 
@@ -590,41 +628,47 @@ class State:
         """
         return self._deletes
 
-    def set_value(self, key: str, value: str, expire: float | None) -> None:
+    def set_value(self, key: str, value: str, now_mono: float) -> None:
         """
         Sets the value for the given key.
 
         Args:
             key (str): The key.
             value (str): The value.
-            expire (float | None): When the value should expire if at all.
+            now_mono (float): The current time.
         """
+        if not self.is_alive(key, now_mono):
+            self.clean_vals(now_mono)
         is_new = False
         if key not in self._vals:
             self.verify_key("string", key)
             is_new = True
         self._prepare_key_for_write(key, is_new=is_new)
-        self._vals[key] = (value, expire)
+        self._vals[key] = value
 
-    def get_value(self, key: str) -> tuple[str, float | None] | None:
+    def get_value(
+            self,
+            key: str,
+            now_mono: float) -> str | None:
         """
         Retrieves the value associated with the given key.
 
         Args:
             key (str): The key.
+            now_mono (float): The current time.
 
         Returns:
             tuple[str, float | None] | None: The value of the key and when it
-            will expire.
+                will expire.
         """
         res = self._vals.get(key)
-        if res is not None and not self._is_alive(res):
-            self._clean_vals()
+        if res is not None and not self.is_alive(key, now_mono):
+            self.clean_vals(now_mono)
             return None
         if res is None:
             self.verify_key("string", key)
             if self._parent is not None and not self._is_pending_delete(key):
-                return self._parent.get_value(key)
+                return self._parent.get_value(key, now_mono)
         return res
 
     def expire(
@@ -632,75 +676,73 @@ class State:
             key: str,
             expire_fn: Callable[[float | None], float | None]) -> bool:
         """
-        Conditionally sets the expiration for the given string key. So far only
-        string keys support expiration and it will raise for other key types.
+        Conditionally sets the expiration for the given key.
 
         Args:
             key (str): The key.
-            expire_fn (Callable[[float  |  None], float  |  None]): Function
+            expire_fn (Callable[[float | None], float | None]): Function
                 to determine the new expiration value. The argument is the
                 previous expiration value.
 
         Returns:
             bool: Whether the expiration changed.
         """
-        prev = self._vals.get(key)
-        if prev is None:
-            self.verify_key("string", key)
+        if not self.exists(key):
             return False
-        self._prepare_key_for_write(key, is_new=False)
-        prev_value, prev_expire = prev
+        prev_expire = self._expire.get(key)
         new_expire = expire_fn(prev_expire)
         if new_expire == prev_expire:
             return False
-        self._vals[key] = (prev_value, new_expire)
+        self._expire[key] = new_expire
         return True
 
-    def ttl(self, key: str) -> float | None:
+    def ttl(self, key: str, now_mono: float) -> float | None:
         """
-        Computes the time-to-live for the given string key. So far only string
-        keys support expiration and it will raise for other key types.
+        Computes the time-to-live for the given key.
 
         Args:
             key (str): The key.
+            now_mono (float): The current time.
 
         Returns:
             float | None: The time in seconds until the key expires. If the
                 value is `<= 0.0` it means the key does not have an expiration.
                 If the result is None the key does not exist.
         """
-        res = self._vals.get(key)
-        if res is None:
-            self.verify_key("string", key)
-            if self._parent is not None and not self._is_pending_delete(key):
-                return self._parent.ttl(key)
-            return None
-        _, expire = res
+        expire = self._expire.get(key)
         if expire is None:
+            if not self.exists(key):
+                return None
+            if self._parent is not None and not self._is_pending_delete(key):
+                return self._parent.ttl(key, now_mono)
             return -1.0
-        res_expire = expire - time.monotonic()
+        res_expire = expire - now_mono
         if res_expire <= 0.0:
-            self._clean_vals()
+            self.clean_vals(now_mono)
             return None
         return res_expire
 
-    def get_queue(self, key: str) -> collections.deque[str]:
+    def get_queue(self, key: str, now_mono: float) -> collections.deque[str]:
         """
         Returns a queue for writing. If the queue doesn't exist already it will
         be created.
 
         Args:
             key (str): The key.
+            now_mono (float): The current time.
 
         Returns:
             collections.deque[str]: The queue for writing.
         """
-        is_new = False
         res = self._queues.get(key)
+        if res is not None and not self.is_alive(key, now_mono):
+            self.clean_vals(now_mono)
+            res = None
+        is_new = False
         if res is None:
             self.verify_key("list", key)
             if self._parent is not None and not self._is_pending_delete(key):
-                res = collections.deque(self._parent.get_queue(key))
+                res = collections.deque(self._parent.get_queue(key, now_mono))
             else:
                 res = collections.deque()
             self._queues[key] = res
@@ -708,59 +750,69 @@ class State:
         self._prepare_key_for_write(key, is_new=is_new)
         return res
 
-    def readonly_queue(self, key: str) -> collections.deque[str] | None:
+    def readonly_queue(
+            self, key: str, now_mono: float) -> collections.deque[str] | None:
         """
         Returns a queue for reading only. If the queue doesn't exist None is
         returned.
 
         Args:
             key (str): The key.
+            now_mono (float): The current time.
 
         Returns:
             collections.deque[str] | None: The readonly queue. Make sure to not
-            modify it as it is not a copy. None if the queue doesn't exist.
+                modify it as it is not a copy. None if the queue doesn't exist.
         """
         res = self._queues.get(key)
+        if res is not None and not self.is_alive(key, now_mono):
+            self.clean_vals(now_mono)
+            return None
         if res is None:
             self.verify_key("list", key)
             if self._parent is None or self._is_pending_delete(key):
                 return None
-            return self._parent.readonly_queue(key)
+            return self._parent.readonly_queue(key, now_mono)
         return res
 
-    def queue_len(self, key: str) -> int:
+    def queue_len(self, key: str, now_mono: float) -> int:
         """
         Computes the length of a queue.
 
         Args:
             key (str): The key.
+            now_mono (float): The current time.
 
         Returns:
             int: The length of the queue.
         """
-        res = self.readonly_queue(key)
+        res = self.readonly_queue(key, now_mono)
         if res is None:
             self.verify_key("list", key)
             return 0
         return len(res)
 
-    def get_hash(self, key: str) -> dict[str, str]:
+    def get_hash(self, key: str, now_mono: float) -> dict[str, str]:
         """
         Returns a hash for writing. If the hash doesn't exist already it will
         be created.
 
         Args:
             key (str): The key.
+            now_mono (float): The current time.
 
         Returns:
             dict[str, str]: The hash for writing.
         """
-        is_new = False
         res = self._hashes.get(key)
+        if res is not None and not self.is_alive(key, now_mono):
+            self.clean_vals(now_mono)
+            res = None
+        is_new = False
         if res is None:
             self.verify_key("hash", key)
             if self._parent is not None and not self._is_pending_delete(key):
-                res = dict(self._parent.get_hash(key))
+                res = dict(self._parent.get_hash(key, now_mono))
             else:
                 res = {}
             self._hashes[key] = res
@@ -768,43 +820,52 @@ class State:
         self._prepare_key_for_write(key, is_new=is_new)
         return res
 
-    def readonly_hash(self, key: str) -> dict[str, str] | None:
+    def readonly_hash(
+            self, key: str, now_mono: float) -> dict[str, str] | None:
         """
         Returns a hash for reading only. If the hash doesn't exist None is
         returned.
 
         Args:
             key (str): The key.
+            now_mono (float): The current time.
 
         Returns:
             dict[str, str] | None: The readonly hash. Make sure to not
-            modify it as it is not a copy. None if the hash doesn't exist.
+                modify it as it is not a copy. None if the hash doesn't exist.
         """
         res = self._hashes.get(key)
+        if res is not None and not self.is_alive(key, now_mono):
+            self.clean_vals(now_mono)
+            return None
         if res is None:
             self.verify_key("hash", key)
             if self._parent is None or self._is_pending_delete(key):
                 return None
-            return self._parent.readonly_hash(key)
+            return self._parent.readonly_hash(key, now_mono)
         return res
 
-    def get_set(self, key: str) -> set[str]:
+    def get_set(self, key: str, now_mono: float) -> set[str]:
         """
         Returns a set for writing. If the set doesn't exist already it will
         be created.
 
         Args:
             key (str): The key.
+            now_mono (float): The current time.
 
         Returns:
             set[str]: The set for writing.
         """
-        is_new = False
         res = self._sets.get(key)
+        if res is not None and not self.is_alive(key, now_mono):
+            self.clean_vals(now_mono)
+            res = None
+        is_new = False
         if res is None:
             self.verify_key("set", key)
             if self._parent is not None and not self._is_pending_delete(key):
-                res = set(self._parent.get_set(key))
+                res = set(self._parent.get_set(key, now_mono))
             else:
                 res = set()
             self._sets[key] = res
@@ -812,45 +873,57 @@ class State:
         self._prepare_key_for_write(key, is_new=is_new)
         return res
 
-    def readonly_set(self, key: str) -> set[str] | None:
+    def readonly_set(self, key: str, now_mono: float) -> set[str] | None:
         """
         Returns a set for reading only. If the set doesn't exist None is
         returned.
 
         Args:
             key (str): The key.
+            now_mono (float): The current time.
 
         Returns:
             set[str] | None: The readonly set. Make sure to not
             modify it as it is not a copy. None if the set doesn't exist.
         """
         res = self._sets.get(key)
+        if res is not None and not self.is_alive(key, now_mono):
+            self.clean_vals(now_mono)
+            return None
         if res is None:
             self.verify_key("set", key)
             if self._parent is None or self._is_pending_delete(key):
                 return None
-            return self._parent.readonly_set(key)
+            return self._parent.readonly_set(key, now_mono)
         return res
 
-    def get_zset(self, key: str) -> tuple[list[str], dict[str, float]]:
+    def get_zset(
+            self,
+            key: str,
+            now_mono: float) -> tuple[list[str], dict[str, float]]:
         """
         Returns a zset for writing. If the zset doesn't exist already it
         will be created.
 
         Args:
             key (str): The key.
+            now_mono (float): The current time.
 
         Returns:
             tuple[list[str], dict[str, float]]: The tuple of zorder and zscores
             for writing.
         """
-        is_new = False
         rorder = self._zorder.get(key)
         rscores = self._zscores.get(key)
+        if rorder is not None and not self.is_alive(key, now_mono):
+            self.clean_vals(now_mono)
+            rorder = None
+            rscores = None
+        is_new = False
         if rorder is None:
             self.verify_key("zset", key)
             if self._parent is not None and not self._is_pending_delete(key):
-                porder, pscores = self._parent.get_zset(key)
+                porder, pscores = self._parent.get_zset(key, now_mono)
                 rorder = list(porder)
                 rscores = dict(pscores)
             else:
@@ -863,57 +936,67 @@ class State:
         assert rscores is not None
         return (rorder, rscores)
 
-    def readonly_zorder(self, key: str) -> list[str] | None:
+    def readonly_zorder(self, key: str, now_mono: float) -> list[str] | None:
         """
         Returns a zorder for reading only. If the zorder doesn't exist None is
         returned.
 
         Args:
             key (str): The key.
+            now_mono (float): The current time.
 
         Returns:
             list[str] | None: The readonly zorder. Make sure to not
             modify it as it is not a copy. None if the zorder doesn't exist.
         """
         res = self._zorder.get(key)
+        if res is not None and not self.is_alive(key, now_mono):
+            self.clean_vals(now_mono)
+            return None
         if res is None:
             self.verify_key("zset", key)
             if self._parent is None or self._is_pending_delete(key):
                 return None
-            return self._parent.readonly_zorder(key)
+            return self._parent.readonly_zorder(key, now_mono)
         return res
 
-    def readonly_zscores(self, key: str) -> dict[str, float] | None:
+    def readonly_zscores(
+            self, key: str, now_mono: float) -> dict[str, float] | None:
         """
         Returns a zscores for reading only. If the zscores doesn't exist None
         is returned.
 
         Args:
             key (str): The key.
+            now_mono (float): The current time.
 
         Returns:
             dict[str, float] | None: The readonly zscores. Make sure to not
             modify it as it is not a copy. None if the zscores doesn't exist.
         """
         res = self._zscores.get(key)
+        if res is not None and not self.is_alive(key, now_mono):
+            self.clean_vals(now_mono)
+            return None
         if res is None:
             self.verify_key("zset", key)
             if self._parent is None or self._is_pending_delete(key):
                 return None
-            return self._parent.readonly_zscores(key)
+            return self._parent.readonly_zscores(key, now_mono)
         return res
 
-    def zorder_len(self, key: str) -> int:
+    def zorder_len(self, key: str, now_mono: float) -> int:
         """
         Computes the length of a zorder.
 
         Args:
             key (str): The key.
+            now_mono (float): The current time.
 
         Returns:
             int: The length of the zorder.
         """
-        res = self.readonly_zorder(key)
+        res = self.readonly_zorder(key, now_mono)
         if res is None:
             self.verify_key("zset", key)
             return 0
@@ -922,6 +1005,7 @@ class State:
     def __str__(self) -> str:
         return (
             f"{self.__class__.__name__}["
+            f"expire={self._expire},"
             f"vals={self._vals},"
             f"queues={dict(self._queues)},"
             f"hashes={dict(self._hashes)},"
@@ -948,6 +1032,27 @@ class Machine(RedisAPI):
         """
         super().__init__()
         self._state = state
+        self._now_mono: float | None = None
+
+    def set_mono(self, now_mono: float | None) -> None:
+        """
+        Sets the current time.
+
+        Args:
+            now_mono (float | None): The current time for pipelines. Otherwise
+                None.
+        """
+        self._now_mono = now_mono
+
+    def get_mono(self) -> float:
+        """
+        Returns the current time.
+
+        Returns:
+            float: The current time or the time associated with this machine if
+                it is a pipeline.
+        """
+        return time.monotonic() if self._now_mono is None else self._now_mono
 
     def get_state(self) -> State:
         """
@@ -959,9 +1064,10 @@ class Machine(RedisAPI):
         return self._state
 
     def exists(self, *keys: str) -> int:
+        now_mono = self.get_mono()
         res = 0
         for key in keys:
-            if self._state.exists(key):
+            if self._state.exists(key) and self._state.is_alive(key, now_mono):
                 res += 1
         return res
 
@@ -971,6 +1077,9 @@ class Machine(RedisAPI):
         return res
 
     def key_type(self, key: str) -> KeyType | None:
+        now_mono = self.get_mono()
+        if not self._state.is_alive(key, now_mono):
+            return None
         return self._state.key_type(key)
 
     def scan(
@@ -980,8 +1089,10 @@ class Machine(RedisAPI):
             match: str | None = None,
             count: int | None = None,
             filter_type: KeyType | None = None) -> tuple[int, list[str]]:
+        now_mono = self.get_mono()
         return self._state.scan_keys(
             cursor,
+            now_mono,
             count=10 if count is None else count,
             match=match,
             filter_type=filter_type)
@@ -991,9 +1102,10 @@ class Machine(RedisAPI):
             *,
             match: str | None = None,
             filter_type: KeyType | None = None) -> list[str]:
+        now_mono = self.get_mono()
         # NOTE: get_all_keys cannot have duplicates
-        return list(
-            self._state.get_all_keys(match=match, filter_type=filter_type))
+        return list(self._state.get_all_keys(
+            now_mono, match=match, filter_type=filter_type))
 
     def flushall(self) -> None:
         # NOTE: this method cannot be used in a pipeline as the effect
@@ -1051,36 +1163,30 @@ class Machine(RedisAPI):
             expire_timestamp: datetime.datetime | None = None,
             expire_in: float | None = None,
             keep_ttl: bool = False) -> str | bool | None:
+        now_mono = self.get_mono()
         expire = compute_expire(
             expire_timestamp=expire_timestamp, expire_in=expire_in)
-        prev_value = None
-        prev_expire = None
-        prev = self._state.get_value(key)
-        if prev is not None:
-            prev_value, prev_expire = prev
-        if keep_ttl:
-            expire = prev_expire
+        prev_value = self._state.get_value(key, now_mono)
         do_set = False
         if mode == RSM_ALWAYS:
             do_set = True
         elif mode == RSM_EXISTS:
-            do_set = prev is not None
+            do_set = prev_value is not None
         elif mode == RSM_MISSING:
-            do_set = prev is None
+            do_set = prev_value is None
         else:
             raise ValueError(f"unknown mode: {mode}")
         if do_set:
-            self._state.set_value(key, value, expire)
+            self._state.set_value(key, value, now_mono)
+            self._state.expire(
+                key, lambda prev_expire: prev_expire if keep_ttl else expire)
         if return_previous:
             return prev_value
         return do_set
 
     def get_value(self, key: str) -> str | None:
-        res = self._state.get_value(key)
-        if res is None:
-            return None
-        value, _ = res
-        return value
+        now_mono = self.get_mono()
+        return self._state.get_value(key, now_mono)
 
     def expire(
             self,
@@ -1114,26 +1220,28 @@ class Machine(RedisAPI):
         return self._state.expire(key, choose_expire)
 
     def ttl(self, key: str) -> float | None:
-        return self._state.ttl(key)
+        now_mono = self.get_mono()
+        return self._state.ttl(key, now_mono)
 
     def incrby(self, key: str, inc: float | int) -> float:
-        res = self._state.get_value(key)
-        if res is None:
-            val = "0"
-            expire = None
+        now_mono = self.get_mono()
+        val = self._state.get_value(key, now_mono)
+        if val is None:
+            num = inc
         else:
-            val, expire = res
-        num = float(val) + inc
-        self._state.set_value(key, to_number_str(num), expire)
+            num = float(val) + inc
+        self._state.set_value(key, to_number_str(num), now_mono)
         return num
 
     def lpush(self, key: str, *values: str) -> int:
-        queue = self._state.get_queue(key)
+        now_mono = self.get_mono()
+        queue = self._state.get_queue(key, now_mono)
         queue.extendleft(values)
         return len(queue)
 
     def rpush(self, key: str, *values: str) -> int:
-        queue = self._state.get_queue(key)
+        now_mono = self.get_mono()
+        queue = self._state.get_queue(key, now_mono)
         queue.extend(values)
         return len(queue)
 
@@ -1155,7 +1263,8 @@ class Machine(RedisAPI):
             self,
             key: str,
             count: int | None = None) -> str | list[str] | None:
-        queue = self._state.get_queue(key)
+        now_mono = self.get_mono()
+        queue = self._state.get_queue(key, now_mono)
         if not queue:
             return None
         if count is None:
@@ -1190,7 +1299,8 @@ class Machine(RedisAPI):
             self,
             key: str,
             count: int | None = None) -> str | list[str] | None:
-        queue = self._state.get_queue(key)
+        now_mono = self.get_mono()
+        queue = self._state.get_queue(key, now_mono)
         if not queue:
             return None
         if count is None:
@@ -1208,7 +1318,8 @@ class Machine(RedisAPI):
         return res if res else None
 
     def lrange(self, key: str, start: int, stop: int) -> list[str]:
-        queue = self._state.readonly_queue(key)
+        now_mono = self.get_mono()
+        queue = self._state.readonly_queue(key, now_mono)
         if queue is None:
             return []
         if start >= len(queue):
@@ -1226,11 +1337,13 @@ class Machine(RedisAPI):
         return res
 
     def llen(self, key: str) -> int:
-        return self._state.queue_len(key)
+        now_mono = self.get_mono()
+        return self._state.queue_len(key, now_mono)
 
     def zadd(self, key: str, mapping: dict[str, float]) -> int:
+        now_mono = self.get_mono()
         count = 0
-        zorder, zscores = self._state.get_zset(key)
+        zorder, zscores = self._state.get_zset(key, now_mono)
         for name, score in mapping.items():
             if name not in zscores:
                 zorder.append(name)
@@ -1244,7 +1357,8 @@ class Machine(RedisAPI):
             key: str,
             count: int = 1,
             ) -> list[tuple[str, float]]:
-        zorder, zscores = self._state.get_zset(key)
+        now_mono = self.get_mono()
+        zorder, zscores = self._state.get_zset(key, now_mono)
         res = []
         remain = 1 if count is None else count
         while remain > 0 and zorder:
@@ -1259,7 +1373,8 @@ class Machine(RedisAPI):
             key: str,
             count: int = 1,
             ) -> list[tuple[str, float]]:
-        zorder, zscores = self._state.get_zset(key)
+        now_mono = self.get_mono()
+        zorder, zscores = self._state.get_zset(key, now_mono)
         res = []
         remain = 1 if count is None else count
         while remain > 0 and zorder:
@@ -1270,7 +1385,8 @@ class Machine(RedisAPI):
         return res
 
     def zrange(self, key: str, start: int, stop: int) -> list[str]:
-        zorder = self._state.readonly_zorder(key)
+        now_mono = self.get_mono()
+        zorder = self._state.readonly_zorder(key, now_mono)
         if zorder is None:
             return []
         astop: int | None = stop
@@ -1281,16 +1397,19 @@ class Machine(RedisAPI):
         return zorder[start:astop]
 
     def zcard(self, key: str) -> int:
-        return self._state.zorder_len(key)
+        now_mono = self.get_mono()
+        return self._state.zorder_len(key, now_mono)
 
     def hset(self, key: str, mapping: dict[str, str]) -> int:
-        obj = self._state.get_hash(key)
+        now_mono = self.get_mono()
+        obj = self._state.get_hash(key, now_mono)
         res = len(set(mapping.keys()).difference(obj.keys()))
         obj.update(mapping)
         return res
 
     def hdel(self, key: str, *fields: str) -> int:
-        obj = self._state.get_hash(key)
+        now_mono = self.get_mono()
+        obj = self._state.get_hash(key, now_mono)
         res = 0
         for field in fields:
             if obj.pop(field, None) is not None:
@@ -1300,13 +1419,15 @@ class Machine(RedisAPI):
         return res
 
     def hget(self, key: str, field: str) -> str | None:
-        res = self._state.readonly_hash(key)
+        now_mono = self.get_mono()
+        res = self._state.readonly_hash(key, now_mono)
         if res is None:
             return None
         return res.get(field)
 
     def hmget(self, key: str, *fields: str) -> dict[str, str | None]:
-        res = self._state.readonly_hash(key)
+        now_mono = self.get_mono()
+        res = self._state.readonly_hash(key, now_mono)
         if res is None:
             return {}
         return {
@@ -1315,37 +1436,43 @@ class Machine(RedisAPI):
         }
 
     def hincrby(self, key: str, field: str, inc: float | int) -> float:
-        res = self._state.get_hash(key)
+        now_mono = self.get_mono()
+        res = self._state.get_hash(key, now_mono)
         num = float(res.get(field, 0)) + inc
         res[field] = to_number_str(num)
         return num
 
     def hkeys(self, key: str) -> list[str]:
-        res = self._state.readonly_hash(key)
+        now_mono = self.get_mono()
+        res = self._state.readonly_hash(key, now_mono)
         if res is None:
             return []
         return list(res.keys())
 
     def hvals(self, key: str) -> list[str]:
-        res = self._state.readonly_hash(key)
+        now_mono = self.get_mono()
+        res = self._state.readonly_hash(key, now_mono)
         if res is None:
             return []
         return list(res.values())
 
     def hgetall(self, key: str) -> dict[str, str]:
-        res = self._state.readonly_hash(key)
+        now_mono = self.get_mono()
+        res = self._state.readonly_hash(key, now_mono)
         if res is None:
             return {}
         return dict(res)
 
     def sadd(self, key: str, *values: str) -> int:
-        obj = self._state.get_set(key)
+        now_mono = self.get_mono()
+        obj = self._state.get_set(key, now_mono)
         before = len(obj)
         obj.update(values)
         return len(obj) - before
 
     def srem(self, key: str, *values: str) -> int:
-        obj = self._state.get_set(key)
+        now_mono = self.get_mono()
+        obj = self._state.get_set(key, now_mono)
         before = len(obj)
         obj.difference_update(set(values))
         if not obj:
@@ -1353,19 +1480,22 @@ class Machine(RedisAPI):
         return before - len(obj)
 
     def sismember(self, key: str, value: str) -> bool:
-        obj = self._state.readonly_set(key)
+        now_mono = self.get_mono()
+        obj = self._state.readonly_set(key, now_mono)
         if obj is None:
             return False
         return value in obj
 
     def scard(self, key: str) -> int:
-        obj = self._state.readonly_set(key)
+        now_mono = self.get_mono()
+        obj = self._state.readonly_set(key, now_mono)
         if obj is None:
             return 0
         return len(obj)
 
     def smembers(self, key: str) -> set[str]:
-        obj = self._state.readonly_set(key)
+        now_mono = self.get_mono()
+        obj = self._state.readonly_set(key, now_mono)
         if obj is None:
             return set()
         return set(obj)

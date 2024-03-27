@@ -14,6 +14,7 @@
 """The runtime for the memory backend."""
 import contextlib
 import datetime
+import time
 from collections.abc import Callable, Iterator
 from typing import Any, Literal, overload, TypeVar
 
@@ -95,10 +96,13 @@ class LocalRuntime(Runtime[Cmd]):
 
         def exec_call(execute: Callable[[], list]) -> list:
             with self.lock():
+                now_mono = time.monotonic()
+                self._sm.set_mono(now_mono)
                 res = execute()
                 state = pipe.get_state()
-                self._sm.get_state().apply(state)
+                self._sm.get_state().apply(state, now_mono)
                 state.reset()
+                self._sm.set_mono(None)
                 return res
 
         pipe = LocalPipeline(self, self._sm.get_state(), exec_call)
