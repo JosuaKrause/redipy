@@ -39,7 +39,7 @@ def get_worker_id(client: RedisClientAPI, heartbeat_key: str) -> str:
     worker_num = 0
     while True:
         worker_id = f"w{worker_num:08x}"
-        if not client.set(
+        if not client.set_value(
                 f"{heartbeat_key}:{worker_id}", "init", mode="if_missing"):
             worker_num += 1
             continue
@@ -62,7 +62,8 @@ def worker_heartbeat(
         heartbeat_key (str): The heartbeat key base.
     """
     while True:
-        client.set(f"{heartbeat_key}:{worker_id}", "alive", expire_in=2.0)
+        client.set_value(
+            f"{heartbeat_key}:{worker_id}", "alive", expire_in=2.0)
         time.sleep(1.0)
 
 

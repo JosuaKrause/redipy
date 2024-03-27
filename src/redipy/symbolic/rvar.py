@@ -19,7 +19,7 @@ from redipy.symbolic.fun import RedisObj
 
 class RedisVar(RedisObj):
     """A redis variable."""
-    def set(
+    def set_value(
             self,
             value: MixedType,
             *,
@@ -63,7 +63,7 @@ class RedisVar(RedisObj):
             args.append("KEEPTTL")
         return self.redis_fn("set", value, *args)
 
-    def get(
+    def get_value(
             self,
             *,
             default: MixedType = None,

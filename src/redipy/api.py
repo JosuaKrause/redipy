@@ -17,13 +17,10 @@ RedisClientAPI."""
 import contextlib
 import datetime
 from collections.abc import Iterable, Iterator
-from typing import cast, get_args, Literal, overload, TypeAlias
+from typing import cast, get_args, Literal, overload
 
 from redipy.backend.backend import ExecFunction
 from redipy.symbolic.seq import FnContext
-
-
-Set: TypeAlias = set
 
 
 RSetMode = Literal[
@@ -40,6 +37,30 @@ This is equivalent to the NX flag."""
 RSM_EXISTS: RSetMode = "if_exists"
 """The value will only be set when the key did exist.
 This is equivalent to the XX flag."""
+
+
+RExpireMode = Literal[
+    "always",
+    "if_persist",  # NX
+    "if_expire",  # XX
+    "if_later",  # GT
+    "if_earlier",  # LT
+]
+"""The conditions on when to expire a value for the expire command."""
+REX_ALWAYS: RExpireMode = "always"
+"""The expiration will always be set."""
+REX_PERSIST: RExpireMode = "if_persist"
+"""The expiration will be set only if there is no previous expiration.
+This is equivalent to the NX flag."""
+REX_EXPIRE: RExpireMode = "if_expire"
+"""The expiration will be set only if there is a previous expiration.
+This is equivalent to the XX flag."""
+REX_LATER: RExpireMode = "if_later"
+"""The expiration will be set only if it is later than the previous expiration.
+This is equivalent to the GT flag."""
+REX_EARLIER: RExpireMode = "if_earlier"
+"""The expiration will be set only if it is earlier than the previous
+expiration. This is equivalent to the LT flag."""
 
 
 KeyType = Literal[
@@ -192,47 +213,6 @@ class PipelineAPI:
         """
         raise NotImplementedError()
 
-    def set(
-            self,
-            key: str,
-            value: str,
-            *,
-            mode: RSetMode = RSM_ALWAYS,
-            return_previous: bool = False,
-            expire_timestamp: datetime.datetime | None = None,
-            expire_in: float | None = None,
-            keep_ttl: bool = False) -> None:
-        """
-        Sets a value for a given key. The value can be scheduled to expire.
-
-        See also the redis documentation: https://redis.io/commands/set/
-
-        The pipeline value depends on the return_previous argument.
-
-        Args:
-            key (str): The key.
-
-            value (str): The value.
-
-            mode (RSetMode, optional): Under which condition to set the value
-            valid values are RSM_ALWAYS, RSM_MISSING, and RSM_EXISTS.
-            RSM_MISSING is the equivalent of setting the NX flag. RSM_EXISTS is
-            the equivalent of the XX flag. Defaults to RSM_ALWAYS.
-
-            return_previous (bool, optional): Whether to return the previous
-            value associated with the key. Defaults to False.
-
-            expire_timestamp (datetime.datetime | None, optional): A timestamp
-            on when to expire the key. Defaults to None.
-
-            expire_in (float | None, optional): A relative time in seconds on
-            when to expire the key. Defaults to None.
-
-            keep_ttl (bool, optional): Whether to keep previous expiration
-            times. Defaults to False.
-        """
-        raise NotImplementedError()
-
     def set_value(
             self,
             key: str,
@@ -256,42 +236,22 @@ class PipelineAPI:
             value (str): The value.
 
             mode (RSetMode, optional): Under which condition to set the value
-            valid values are RSM_ALWAYS, RSM_MISSING, and RSM_EXISTS.
-            RSM_MISSING is the equivalent of setting the NX flag. RSM_EXISTS is
-            the equivalent of the XX flag. Defaults to RSM_ALWAYS.
+                valid values are RSM_ALWAYS, RSM_MISSING, and RSM_EXISTS.
+                RSM_MISSING is the equivalent of setting the NX flag.
+                RSM_EXISTS is the equivalent of the XX flag. Defaults to
+                RSM_ALWAYS.
 
             return_previous (bool, optional): Whether to return the previous
-            value associated with the key. Defaults to False.
+                value associated with the key. Defaults to False.
 
             expire_timestamp (datetime.datetime | None, optional): A timestamp
-            on when to expire the key. Defaults to None.
+                on when to expire the key. Defaults to None.
 
             expire_in (float | None, optional): A relative time in seconds on
-            when to expire the key. Defaults to None.
+                when to expire the key. Defaults to None.
 
             keep_ttl (bool, optional): Whether to keep previous expiration
-            times. Defaults to False.
-        """
-        self.set(
-            key,
-            value,
-            mode=mode,
-            return_previous=return_previous,
-            expire_timestamp=expire_timestamp,
-            expire_in=expire_in,
-            keep_ttl=keep_ttl)
-
-    def get(self, key: str) -> None:
-        """
-        Retrieves the value for the given key.
-
-        See also the redis documentation: https://redis.io/commands/get/
-
-        The pipeline value is the value or None if the key does not exists or
-        the value has expired.
-
-        Args:
-            key (str): The key.
+                times. Defaults to False.
         """
         raise NotImplementedError()
 
@@ -307,7 +267,60 @@ class PipelineAPI:
         Args:
             key (str): The key.
         """
-        self.get(key)
+        raise NotImplementedError()
+
+    def expire(
+            self,
+            key: str,
+            *,
+            mode: RExpireMode = REX_ALWAYS,
+            expire_timestamp: datetime.datetime | None = None,
+            expire_in: float | None = None) -> None:
+        """
+        Sets or removes the expiration time of a key. The expiration can either
+        be a timestamp or a relative amount. If no time is set the expiration
+        is removed and the key persists.
+
+        See also the redis documentation:
+        https://redis.io/commands/expire/
+        and https://redis.io/commands/expireat/
+        and https://redis.io/commands/expiretime/
+        and https://redis.io/commands/persist/
+        and https://redis.io/commands/pexpire/
+        and https://redis.io/commands/pexpireat/
+        and https://redis.io/commands/pexpiretime/
+
+        The pipeline value is set to whether a change in expiration occurred.
+
+        Args:
+            key (str): The key.
+
+            mode (RExpireMode, optional): The expiration mode. Defaults to
+                REX_ALWAYS. The mode is ignored if all expirations are None.
+
+            expire_timestamp (datetime.datetime | None, optional): A timestamp
+                on when to expire the key. Defaults to None.
+
+            expire_in (float | None, optional): A relative time in seconds on
+                when to expire the key. Defaults to None.
+        """
+        raise NotImplementedError()
+
+    def ttl(self, key: str) -> None:
+        """
+        Retrieves the time-to-live for a key.
+
+        See also the redis documentation:
+        https://redis.io/commands/ttl/ and https://redis.io/commands/pttl/
+
+        The pipeline value is set to the time to live in seconds with
+        millisecond precision. If the key is persistent the time is `<= 0.0`.
+        If the key does not exist None is returned.
+
+        Args:
+            key (str): The key.
+        """
+        raise NotImplementedError()
 
     def incrby(self, key: str, inc: float | int) -> None:
         """
@@ -860,7 +873,7 @@ class RedisAPI:
             *,
             match: str | None = None,
             filter_type: KeyType | None = None,
-            block: bool = True) -> Set[str]:
+            block: bool = True) -> set[str]:
         """
         Retrieves all matching keys.
 
@@ -882,86 +895,14 @@ class RedisAPI:
             return set(self.keys_block(match=match, filter_type=filter_type))
         return set(self.iter_keys(match=match, filter_type=filter_type))
 
-    @overload
-    def set(
-            self,
-            key: str,
-            value: str,
-            *,
-            mode: RSetMode,
-            return_previous: Literal[True],
-            expire_timestamp: datetime.datetime | None,
-            expire_in: float | None,
-            keep_ttl: bool) -> str | None:
-        ...
-
-    @overload
-    def set(
-            self,
-            key: str,
-            value: str,
-            *,
-            mode: RSetMode,
-            return_previous: Literal[False],
-            expire_timestamp: datetime.datetime | None,
-            expire_in: float | None,
-            keep_ttl: bool) -> bool | None:
-        ...
-
-    @overload
-    def set(
-            self,
-            key: str,
-            value: str,
-            *,
-            mode: RSetMode = RSM_ALWAYS,
-            return_previous: bool = False,
-            expire_timestamp: datetime.datetime | None = None,
-            expire_in: float | None = None,
-            keep_ttl: bool = False) -> str | bool | None:
-        ...
-
-    def set(
-            self,
-            key: str,
-            value: str,
-            *,
-            mode: RSetMode = RSM_ALWAYS,
-            return_previous: bool = False,
-            expire_timestamp: datetime.datetime | None = None,
-            expire_in: float | None = None,
-            keep_ttl: bool = False) -> str | bool | None:
+    def flushall(self) -> None:
         """
-        Sets a value for a given key. The value can be scheduled to expire.
+        Flushes all keys in the database. Whether the operation is asynchronous
+        is up to the implementation.
 
-        See also the redis documentation: https://redis.io/commands/set/
-
-        Args:
-            key (str): The key.
-
-            value (str): The value.
-
-            mode (RSetMode, optional): Under which condition to set the value
-            valid values are RSM_ALWAYS, RSM_MISSING, and RSM_EXISTS.
-            RSM_MISSING is the equivalent of setting the NX flag. RSM_EXISTS is
-            the equivalent of the XX flag. Defaults to RSM_ALWAYS.
-
-            return_previous (bool, optional): Whether to return the previous
-            value associated with the key. Defaults to False.
-
-            expire_timestamp (datetime.datetime | None, optional): A timestamp
-            on when to expire the key. Defaults to None.
-
-            expire_in (float | None, optional): A relative time in seconds on
-            when to expire the key. Defaults to None.
-
-            keep_ttl (bool, optional): Whether to keep previous expiration
-            times. Defaults to False.
-
-        Returns:
-            str | bool | None: The return value depends on the return_previous
-            argument.
+        See also the redis documentation: https://redis.io/commands/flushall/
         """
+        # FIXME: add `block: bool` argument
         raise NotImplementedError()
 
     @overload
@@ -1024,47 +965,26 @@ class RedisAPI:
             value (str): The value.
 
             mode (RSetMode, optional): Under which condition to set the value
-            valid values are RSM_ALWAYS, RSM_MISSING, and RSM_EXISTS.
-            RSM_MISSING is the equivalent of setting the NX flag. RSM_EXISTS is
-            the equivalent of the XX flag. Defaults to RSM_ALWAYS.
+                valid values are RSM_ALWAYS, RSM_MISSING, and RSM_EXISTS.
+                RSM_MISSING is the equivalent of setting the NX flag.
+                RSM_EXISTS is the equivalent of the XX flag. Defaults to
+                RSM_ALWAYS.
 
             return_previous (bool, optional): Whether to return the previous
-            value associated with the key. Defaults to False.
+                value associated with the key. Defaults to False.
 
             expire_timestamp (datetime.datetime | None, optional): A timestamp
-            on when to expire the key. Defaults to None.
+                on when to expire the key. Defaults to None.
 
             expire_in (float | None, optional): A relative time in seconds on
-            when to expire the key. Defaults to None.
+                when to expire the key. Defaults to None.
 
             keep_ttl (bool, optional): Whether to keep previous expiration
-            times. Defaults to False.
+                times. Defaults to False.
 
         Returns:
             str | bool | None: The return value depends on the return_previous
-            argument.
-        """
-        return self.set(
-            key,
-            value,
-            mode=mode,
-            return_previous=return_previous,
-            expire_timestamp=expire_timestamp,
-            expire_in=expire_in,
-            keep_ttl=keep_ttl)
-
-    def get(self, key: str) -> str | None:
-        """
-        Retrieves the value for the given key.
-
-        See also the redis documentation: https://redis.io/commands/get/
-
-        Args:
-            key (str): The key.
-
-        Returns:
-            str | None: The value or None if the key does not exists or the
-            value has expired.
+                argument.
         """
         raise NotImplementedError()
 
@@ -1081,7 +1001,62 @@ class RedisAPI:
             str | None: The value or None if the key does not exists or the
             value has expired.
         """
-        return self.get(key)
+        raise NotImplementedError()
+
+    def expire(
+            self,
+            key: str,
+            *,
+            mode: RExpireMode = REX_ALWAYS,
+            expire_timestamp: datetime.datetime | None = None,
+            expire_in: float | None = None) -> bool:
+        """
+        Sets or removes the expiration time of a key. The expiration can either
+        be a timestamp or a relative amount. If no time is set the expiration
+        is removed and the key persists.
+
+        See also the redis documentation:
+        https://redis.io/commands/expire/
+        and https://redis.io/commands/expireat/
+        and https://redis.io/commands/expiretime/
+        and https://redis.io/commands/persist/
+        and https://redis.io/commands/pexpire/
+        and https://redis.io/commands/pexpireat/
+        and https://redis.io/commands/pexpiretime/
+
+        Args:
+            key (str): The key.
+
+            mode (RExpireMode, optional): The expiration mode. Defaults to
+                REX_ALWAYS. The mode is ignored if all expirations are None.
+
+            expire_timestamp (datetime.datetime | None, optional): A timestamp
+                on when to expire the key. Defaults to None.
+
+            expire_in (float | None, optional): A relative time in seconds on
+                when to expire the key. Defaults to None.
+
+        Returns:
+            bool: Whether a change in expiration occurred.
+        """
+        raise NotImplementedError()
+
+    def ttl(self, key: str) -> float | None:
+        """
+        Retrieves the time-to-live for a key.
+
+        See also the redis documentation:
+        https://redis.io/commands/ttl/ and https://redis.io/commands/pttl/
+
+        Args:
+            key (str): The key.
+
+        Returns:
+            float | None: The time to live in seconds with millisecond
+                precision. If the key is persistent the time is `<= 0.0`.
+                If the key does not exist None is returned.
+        """
+        raise NotImplementedError()
 
     def incrby(self, key: str, inc: float | int) -> float:
         """
@@ -1538,7 +1513,7 @@ class RedisAPI:
         """
         raise NotImplementedError()
 
-    def smembers(self, key: str) -> Set[str]:
+    def smembers(self, key: str) -> set[str]:
         """
         Returns all elements of the set given by the key.
 

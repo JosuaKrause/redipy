@@ -37,11 +37,16 @@ from redipy.api import (
     as_key_type,
     KeyType,
     PipelineAPI,
+    REX_ALWAYS,
+    REX_EARLIER,
+    REX_EXPIRE,
+    REX_LATER,
+    REX_PERSIST,
+    RExpireMode,
     RSetMode,
     RSM_ALWAYS,
     RSM_EXISTS,
     RSM_MISSING,
-    Set,
 )
 from redipy.backend.runtime import Runtime
 from redipy.redis.lua import LuaBackend
@@ -328,7 +333,7 @@ class PipelineConnection(PipelineAPI):
         self._pipe.keys(match)
         self.add_fixup(lambda vals: to_list_str(vals, self.no_prefix))
 
-    def set(
+    def set_value(
             self,
             key: str,
             value: str,
@@ -340,6 +345,10 @@ class PipelineConnection(PipelineAPI):
             keep_ttl: bool = False) -> None:
         expire = None
         if expire_in is not None:
+            if expire_timestamp is not None:
+                raise ValueError(
+                    f"expire_in {expire_in} and "
+                    f"expire_timestamp {expire_timestamp} cannot be both set")
             expire = int(expire_in * 1000.0)
         elif expire_timestamp is not None:
             expire = int(time_diff(now(), expire_timestamp) * 1000.0)
@@ -356,9 +365,53 @@ class PipelineConnection(PipelineAPI):
         else:
             self.add_fixup(bool)
 
-    def get(self, key: str) -> None:
+    def get_value(self, key: str) -> None:
         self._pipe.get(self.with_prefix(key))
         self.add_fixup(to_maybe_str)
+
+    def expire(
+            self,
+            key: str,
+            *,
+            mode: RExpireMode = REX_ALWAYS,
+            expire_timestamp: datetime.datetime | None = None,
+            expire_in: float | None = None) -> None:
+        expire = None
+        if expire_in is not None:
+            if expire_timestamp is not None:
+                raise ValueError(
+                    f"expire_in {expire_in} and "
+                    f"expire_timestamp {expire_timestamp} cannot be both set")
+            expire = int(expire_in * 1000.0)
+        elif expire_timestamp is not None:
+            expire = int(time_diff(now(), expire_timestamp) * 1000.0)
+        if expire is None:
+            if mode == REX_EARLIER:
+                self._pipe.ping()  # nop
+                self.add_fixup(lambda _: False)
+                return
+            self._pipe.persist(self.with_prefix(key))
+        else:
+            self._pipe.pexpire(
+                self.with_prefix(key),
+                nx=(mode == REX_PERSIST),
+                xx=(mode == REX_EXPIRE),
+                gt=(mode == REX_LATER),
+                lt=(mode == REX_EARLIER),
+                time=expire)
+        self.add_fixup(bool)
+
+    def ttl(self, key: str) -> None:
+        self._pipe.pttl(self.with_prefix(key))
+
+        def process_result(res: int) -> float | None:
+            if res == -1:
+                return -1.0
+            if res == -2:
+                return None
+            return res / 1000.0
+
+        self.add_fixup(process_result)
 
     def incrby(self, key: str, inc: float | int) -> None:
         self._pipe.incrbyfloat(self.with_prefix(key), inc)
@@ -715,13 +768,6 @@ class RedisConnection(Runtime[list[str]]):
         with self.get_connection() as conn:
             conn.ping()
 
-    def flush_all(self) -> None:
-        """
-        Removes all keys from the redis database.
-        """
-        with self.get_connection() as conn:
-            conn.flushall()
-
     def keys_count(self, prefix: str) -> int:
         """
         Counts the number of keys with the given prefix. This method operates
@@ -844,8 +890,16 @@ class RedisConnection(Runtime[list[str]]):
         with self.get_connection() as conn:
             return to_list_str(conn.keys(match), self.no_prefix)
 
+    def flushall(self) -> None:
+        if not self.get_prefix():
+            with self.get_connection() as conn:
+                conn.flushall()
+        else:
+            for key in self.iter_keys():
+                self.delete(key)
+
     @overload
-    def set(
+    def set_value(
             self,
             key: str,
             value: str,
@@ -858,7 +912,7 @@ class RedisConnection(Runtime[list[str]]):
         ...
 
     @overload
-    def set(
+    def set_value(
             self,
             key: str,
             value: str,
@@ -871,7 +925,7 @@ class RedisConnection(Runtime[list[str]]):
         ...
 
     @overload
-    def set(
+    def set_value(
             self,
             key: str,
             value: str,
@@ -883,7 +937,7 @@ class RedisConnection(Runtime[list[str]]):
             keep_ttl: bool = False) -> str | bool | None:
         ...
 
-    def set(
+    def set_value(
             self,
             key: str,
             value: str,
@@ -893,12 +947,16 @@ class RedisConnection(Runtime[list[str]]):
             expire_timestamp: datetime.datetime | None = None,
             expire_in: float | None = None,
             keep_ttl: bool = False) -> str | bool | None:
+        expire = None
+        if expire_in is not None:
+            if expire_timestamp is not None:
+                raise ValueError(
+                    f"expire_in {expire_in} and "
+                    f"expire_timestamp {expire_timestamp} cannot be both set")
+            expire = int(expire_in * 1000.0)
+        elif expire_timestamp is not None:
+            expire = int(time_diff(now(), expire_timestamp) * 1000.0)
         with self.get_connection() as conn:
-            expire = None
-            if expire_in is not None:
-                expire = int(expire_in * 1000.0)
-            elif expire_timestamp is not None:
-                expire = int(time_diff(now(), expire_timestamp) * 1000.0)
             res = conn.set(
                 self.with_prefix(key),
                 value,
@@ -914,9 +972,48 @@ class RedisConnection(Runtime[list[str]]):
                 return False
             return res
 
-    def get(self, key: str) -> str | None:
+    def get_value(self, key: str) -> str | None:
         with self.get_connection() as conn:
             return to_maybe_str(conn.get(self.with_prefix(key)))
+
+    def expire(
+            self,
+            key: str,
+            *,
+            mode: RExpireMode = REX_ALWAYS,
+            expire_timestamp: datetime.datetime | None = None,
+            expire_in: float | None = None) -> bool:
+        expire = None
+        if expire_in is not None:
+            if expire_timestamp is not None:
+                raise ValueError(
+                    f"expire_in {expire_in} and "
+                    f"expire_timestamp {expire_timestamp} cannot be both set")
+            expire = int(expire_in * 1000.0)
+        elif expire_timestamp is not None:
+            expire = int(time_diff(now(), expire_timestamp) * 1000.0)
+        with self.get_connection() as conn:
+            if expire is None:
+                if mode == REX_EARLIER:
+                    return False
+                return conn.persist(self.with_prefix(key))
+            res = int(conn.pexpire(
+                self.with_prefix(key),
+                nx=(mode == REX_PERSIST),
+                xx=(mode == REX_EXPIRE),
+                gt=(mode == REX_LATER),
+                lt=(mode == REX_EARLIER),
+                time=expire))
+            return res != 0
+
+    def ttl(self, key: str) -> float | None:
+        with self.get_connection() as conn:
+            res = conn.pttl(self.with_prefix(key))
+            if res == -1:
+                return -1.0
+            if res == -2:
+                return None
+            return res / 1000.0
 
     def incrby(self, key: str, inc: float | int) -> float:
         with self.get_connection() as conn:
@@ -1081,6 +1178,6 @@ class RedisConnection(Runtime[list[str]]):
         with self.get_connection() as conn:
             return int(conn.scard(self.with_prefix(key)))
 
-    def smembers(self, key: str) -> Set[str]:
+    def smembers(self, key: str) -> set[str]:
         with self.get_connection() as conn:
             return set(to_list_str(conn.smembers(self.with_prefix(key))))

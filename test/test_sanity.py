@@ -47,7 +47,7 @@ def test_sanity() -> None:
     check_expression("redis.call('get', KEYS[1])", "false", keys=["foo"])
     check_expression(
         "type(redis.call('get', KEYS[1]))", "boolean", keys=["foo"])
-    assert redis.get("foo") is None
+    assert redis.get_value("foo") is None
 
     # set
     check_expression(
@@ -72,9 +72,9 @@ def test_sanity() -> None:
     check_expression("redis.call('get', KEYS[1])", "b", keys=["bar"])
     check_expression(
         "type(redis.call('get', KEYS[1]))", "string", keys=["bar"])
-    assert redis.get("bar") == "b"
-    assert redis.set("baz", "c") is True
-    assert redis.get("baz") == "c"
+    assert redis.get_value("bar") == "b"
+    assert redis.set_value("baz", "c") is True
+    assert redis.get_value("baz") == "c"
 
     # type
     check_expression(

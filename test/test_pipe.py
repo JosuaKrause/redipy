@@ -70,8 +70,8 @@ def test_pipe(rt_lua: bool) -> None:
     assert zmax_zset == [("c", 1)]
     assert zcard_zset == 1
 
-    rt.set("value", "5")
-    rt.set("third", "3")
+    rt.set_value("value", "5")
+    rt.set_value("third", "3")
     rt.lpush("lval", "1")
     rt.hset("hval", {"b": "b"})
     rt.zadd("zval", {"c": 1.0})
@@ -80,10 +80,10 @@ def test_pipe(rt_lua: bool) -> None:
     with rt.pipeline() as pipe:
         pipe.delete("value")
         pipe.exists("value")
-        pipe.set("value", "10")
+        pipe.set_value("value", "10")
         pipe.exists("value")
         v_0, v_1, v_2, v_3 = pipe.execute()
-        pipe.set("other", "a")
+        pipe.set_value("other", "a")
         pipe.delete("third")
         v_4, v_5 = pipe.execute()
         pipe.delete("lval")
@@ -102,11 +102,11 @@ def test_pipe(rt_lua: bool) -> None:
         pipe.exists("cval")
         pipe.hset("cval", {"a": "0", "b": "1", "c": "2"})
         v_15, v_16, v_17 = pipe.execute()
-        pipe.set("late_val", "a")
+        pipe.set_value("late_val", "a")
         pipe.delete("late_val")
-        pipe.set("late_val", "b")
+        pipe.set_value("late_val", "b")
         pipe.delete("late_val")
-        pipe.set("late_val", "c")
+        pipe.set_value("late_val", "c")
         v_18, v_19, v_20, v_21, v_22 = pipe.execute()
     assert v_0 == True  # noqa
     assert v_1 == 0
@@ -134,9 +134,9 @@ def test_pipe(rt_lua: bool) -> None:
     assert rt.exists("value") == 1
     assert rt.exists("other") == 1
     assert rt.exists("third") == 0
-    assert rt.get("value") == "10"
-    assert rt.get("other") == "a"
-    assert rt.get("third") is None
+    assert rt.get_value("value") == "10"
+    assert rt.get_value("other") == "a"
+    assert rt.get_value("third") is None
     assert rt.lpop("lval") == "2"
     assert rt.hgetall("hval") == {"a": "a"}
     assert rt.zpop_max("zval", 3) == [("b", 1.5), ("a", 0.5)]
@@ -145,4 +145,4 @@ def test_pipe(rt_lua: bool) -> None:
     assert rt.hvals("cval") == ["0", "1", "2"]
     with pytest.raises(TypeError, match=r"key.*(ha|i)s a"):
         assert rt.lpop("cval")
-    assert rt.get("late_val") == "c"
+    assert rt.get_value("late_val") == "c"

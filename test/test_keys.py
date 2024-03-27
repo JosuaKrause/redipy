@@ -23,6 +23,7 @@ import pytest
 
 from redipy.api import KeyType, PipelineAPI
 from redipy.backend.runtime import Runtime
+from redipy.main import Redis
 from redipy.util import convert_pattern
 
 
@@ -356,3 +357,62 @@ def test_keys(
         assert scan_arr == []
 
     assert rt_alt.get_value("foo") == "clobber"
+
+
+@pytest.mark.parametrize("rt_lua", [False, True])
+def test_flushall(rt_lua: bool) -> None:
+    """
+    Test flushall command.
+
+    Args:
+        rt_lua (bool): Whether to use the redis or memory runtime.
+    """
+    rt = get_setup("test_flushall", rt_lua)
+
+    rt_alt = Redis(rt=get_setup("test_flushall_alt", rt_lua))
+    assert rt_alt.keys() == set()
+    # NOTE: this value must not be removed
+    rt_alt.set_value("foo", "stayingalive")
+
+    assert rt.keys() == set()
+    assert rt_alt.get_value("foo") == "stayingalive"
+    rt.flushall()
+    assert rt.keys() == set()
+    assert rt_alt.get_value("foo") == "stayingalive"
+
+    def gen(
+            start: int,
+            stop: int,
+            step: int = 1) -> Iterable[tuple[KeyType, str]]:
+        yield from ((
+            KEY_TYPE_REG[ix % len(KEY_TYPE_REG)],
+            f"k{ix}",
+        ) for ix in range(start, stop, step))
+
+    def extract(key: str) -> int:
+        return int(key[1:])
+
+    keys: dict[str, KeyType] = {}
+    for key_type, key in gen(0, 100):
+        ix = extract(key)
+        DEFAULTS[key_type](rt, key, ix)
+        keys[key] = key_type
+
+    assert rt.keys() == set(keys.keys())
+    assert rt_alt.get_value("foo") == "stayingalive"
+    rt.flushall()
+    assert rt.keys() == set()
+    assert rt_alt.get_value("foo") == "stayingalive"
+    assert rt_alt.key_type("foo") == "string"
+    assert rt_alt.keys_block() == ["foo"]
+
+    with rt_alt.pipeline() as pipe:
+        pipe.delete("foo")
+        pipe.key_type("foo")
+        pipe.set_value("foo", "bar")
+        assert pipe.execute() == [1, None, True]
+
+    assert rt_alt.get_value("foo") == "bar"
+    rt_alt.flushall()
+    assert rt_alt.keys() == set()
+    assert rt_alt.get_value("foo") is None

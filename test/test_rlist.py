@@ -95,6 +95,7 @@ def test_rlist(rt_lua: bool) -> None:
     ctx.set_return_value(None)
 
     rt.rpush("a", "5", "2", "3", "7", "9", "8", "8", "1", "4")
+    assert rt.lrange("a", -1, -1) == ["4"]
     rt.lpush("d", "9", "8", "7", "6", "5", "4", "3", "2", "1")
 
     def tester(

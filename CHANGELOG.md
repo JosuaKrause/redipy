@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.0] - 2024-03-27
+
+### Breaking
+
+- Removed `set` and `get` ([#17])
+
+### Added
+
+- Redis function `EXPIRE` (`P*` versions and `PERSIST` as well) ([#17])
+- Redis function `TTL` ([#17])
+- Redis function `FLUSHALL` with implementation defined synchrony ([#17])
+
 ## [0.5.0] - 2024-03-06
 
 ### Changed
@@ -59,3 +71,4 @@
 [#3]: https://github.com/JosuaKrause/redipy/pull/3
 [#7]: https://github.com/JosuaKrause/redipy/pull/7
 [#15]: https://github.com/JosuaKrause/redipy/pull/15
+[#17]: https://github.com/JosuaKrause/redipy/pull/17

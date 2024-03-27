@@ -22,9 +22,10 @@ from redipy.api import (
     KeyType,
     PipelineAPI,
     RedisClientAPI,
+    REX_ALWAYS,
+    RExpireMode,
     RSetMode,
     RSM_ALWAYS,
-    Set,
 )
 from redipy.backend.backend import ExecFunction
 from redipy.backend.runtime import Runtime
@@ -258,8 +259,11 @@ class Redis(RedisClientAPI):
             filter_type: KeyType | None = None) -> list[str]:
         return self._rt.keys_block(match=match, filter_type=filter_type)
 
+    def flushall(self) -> None:
+        return self._rt.flushall()
+
     @overload
-    def set(
+    def set_value(
             self,
             key: str,
             value: str,
@@ -272,7 +276,7 @@ class Redis(RedisClientAPI):
         ...
 
     @overload
-    def set(
+    def set_value(
             self,
             key: str,
             value: str,
@@ -285,7 +289,7 @@ class Redis(RedisClientAPI):
         ...
 
     @overload
-    def set(
+    def set_value(
             self,
             key: str,
             value: str,
@@ -297,7 +301,7 @@ class Redis(RedisClientAPI):
             keep_ttl: bool = False) -> str | bool | None:
         ...
 
-    def set(
+    def set_value(
             self,
             key: str,
             value: str,
@@ -307,7 +311,7 @@ class Redis(RedisClientAPI):
             expire_timestamp: datetime.datetime | None = None,
             expire_in: float | None = None,
             keep_ttl: bool = False) -> str | bool | None:
-        return self._rt.set(
+        return self._rt.set_value(
             key,
             value,
             mode=mode,
@@ -316,8 +320,24 @@ class Redis(RedisClientAPI):
             expire_in=expire_in,
             keep_ttl=keep_ttl)
 
-    def get(self, key: str) -> str | None:
-        return self._rt.get(key)
+    def get_value(self, key: str) -> str | None:
+        return self._rt.get_value(key)
+
+    def expire(
+            self,
+            key: str,
+            *,
+            mode: RExpireMode = REX_ALWAYS,
+            expire_timestamp: datetime.datetime | None = None,
+            expire_in: float | None = None) -> bool:
+        return self._rt.expire(
+            key,
+            mode=mode,
+            expire_timestamp=expire_timestamp,
+            expire_in=expire_in)
+
+    def ttl(self, key: str) -> float | None:
+        return self._rt.ttl(key)
 
     def incrby(self, key: str, inc: float | int) -> float:
         return self._rt.incrby(key, inc)
@@ -433,5 +453,5 @@ class Redis(RedisClientAPI):
     def scard(self, key: str) -> int:
         return self._rt.scard(key)
 
-    def smembers(self, key: str) -> Set[str]:
+    def smembers(self, key: str) -> set[str]:
         return self._rt.smembers(key)

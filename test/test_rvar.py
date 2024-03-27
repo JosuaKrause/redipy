@@ -78,9 +78,9 @@ def test_rvar() -> None:
     ctx = FnContext()
     a = ctx.add_arg("a")
     k = RedisVar(ctx.add_key("k"))
-    b_then, _ = ctx.if_(ToNum(k.get(no_adjust=True).or_(0)).le_(a))
-    b_then.add(k.set(a))
-    res = ctx.add_local(k.get())
+    b_then, _ = ctx.if_(ToNum(k.get_value(no_adjust=True).or_(0)).le_(a))
+    b_then.add(k.set_value(a))
+    res = ctx.add_local(k.get_value())
     r_then, _ = ctx.if_(res.ne_(None))
     r_then.add(res.assign(ToNum(res)))
     ctx.set_return_value(res)
@@ -93,14 +93,14 @@ def test_rvar() -> None:
     lrt = LocalRuntime()
     run_lcl = lcl.create_executable(lcl_code, lrt)
 
-    lrt.set("pos", "5")
+    lrt.set_value("pos", "5")
     for (k_in, a_in, expect_out) in RUN_TESTS:
         is_out = run_lcl(keys={"k": k_in}, args={"a": a_in})
         assert is_out == expect_out
-    assert lrt.get("foo") == "9"
-    assert lrt.get("bar") == "7"
-    assert lrt.get("neg") == "1"
-    assert lrt.get("pos") == "6"
+    assert lrt.get_value("foo") == "9"
+    assert lrt.get_value("bar") == "7"
+    assert lrt.get_value("neg") == "1"
+    assert lrt.get_value("pos") == "6"
 
     lua = LuaBackend()
     lua_code = lua.translate(compiled)
@@ -109,14 +109,14 @@ def test_rvar() -> None:
     rrt = RedisConnection("test_rvar", cfg=get_test_config())
     run_redis = lua.create_executable(lua_code, rrt)
 
-    rrt.set("pos", "5")
+    rrt.set_value("pos", "5")
     for (k_in, a_in, expect_out) in RUN_TESTS:
         is_out = run_redis(keys={"k": k_in}, args={"a": a_in})
         assert is_out == expect_out
-    assert rrt.get("foo") == "9"
-    assert rrt.get("bar") == "7"
-    assert rrt.get("neg") == "1"
-    assert rrt.get("pos") == "6"
+    assert rrt.get_value("foo") == "9"
+    assert rrt.get_value("bar") == "7"
+    assert rrt.get_value("neg") == "1"
+    assert rrt.get_value("pos") == "6"
 
 
 @pytest.mark.parametrize("rt_lua", [False, True])
@@ -129,8 +129,6 @@ def test_set_ext_args(rt_lua: bool) -> None:
     """
     rt = get_setup(
         "test_set_ext_args", rt_lua, no_compile_hook=True)
-
-    # FIXME: test expire_timestamp
 
     def fun_check(
             key: str,
@@ -183,30 +181,30 @@ def test_set_ext_args(rt_lua: bool) -> None:
         assert res[0] == type_str
         assert res[1] == value_str
 
-    assert rt.get("bar") is None
-    assert rt.set("bar", "a") is True
-    assert rt.get("bar") == "a"
-    assert rt.set("bar", "c", mode=RSM_MISSING) is False
-    assert rt.get("bar") == "a"
-    assert rt.set("bar", "b", return_previous=True, expire_in=0.1) == "a"
-    assert rt.get("bar") == "b"
-    assert rt.set("bar", "c", mode=RSM_MISSING, keep_ttl=True) is False
-    assert rt.get("bar") == "b"
-    assert rt.set("bar", "e", mode=RSM_EXISTS, keep_ttl=True) is True
-    assert rt.get("bar") == "e"
+    assert rt.get_value("bar") is None
+    assert rt.set_value("bar", "a") is True
+    assert rt.get_value("bar") == "a"
+    assert rt.set_value("bar", "c", mode=RSM_MISSING) is False
+    assert rt.get_value("bar") == "a"
+    assert rt.set_value("bar", "b", return_previous=True, expire_in=0.1) == "a"
+    assert rt.get_value("bar") == "b"
+    assert rt.set_value("bar", "c", mode=RSM_MISSING, keep_ttl=True) is False
+    assert rt.get_value("bar") == "b"
+    assert rt.set_value("bar", "e", mode=RSM_EXISTS, keep_ttl=True) is True
+    assert rt.get_value("bar") == "e"
 
     with rt.pipeline() as pipe:
-        pipe.get("baz")  # 0
-        pipe.set("baz", "-", mode=RSM_EXISTS)  # 1
-        pipe.get("baz")  # 2
-        pipe.set("baz", "a")  # 3
-        pipe.get("baz")  # 4
-        pipe.set("baz", "b", mode=RSM_EXISTS)  # 5
-        pipe.get("baz")  # 6
-        pipe.set("baz", "c", mode=RSM_MISSING)  # 7
-        pipe.get("baz")  # 8
-        pipe.set("baz", "d", return_previous=True, expire_in=0.1)  # 9
-        pipe.get("baz")  # 10
+        pipe.get_value("baz")  # 0
+        pipe.set_value("baz", "-", mode=RSM_EXISTS)  # 1
+        pipe.get_value("baz")  # 2
+        pipe.set_value("baz", "a")  # 3
+        pipe.get_value("baz")  # 4
+        pipe.set_value("baz", "b", mode=RSM_EXISTS)  # 5
+        pipe.get_value("baz")  # 6
+        pipe.set_value("baz", "c", mode=RSM_MISSING)  # 7
+        pipe.get_value("baz")  # 8
+        pipe.set_value("baz", "d", return_previous=True, expire_in=0.1)  # 9
+        pipe.get_value("baz")  # 10
         pipe_res = pipe.execute()
     assert pipe_res[0] is None
     assert pipe_res[1] is False
@@ -220,60 +218,63 @@ def test_set_ext_args(rt_lua: bool) -> None:
     assert pipe_res[9] == "b"
     assert pipe_res[10] == "d"
 
-    assert rt.get("foo") is None
+    assert rt.get_value("foo") is None
     fun_check(
         "foo",
         "a",
-        lambda rvar, name: rvar.set(name),
+        lambda rvar, name: rvar.set_value(name),
         "boolean",
         "true",
         "(redis.call(\"set\", key_0, arg_0) ~= false)")
-    assert rt.get("foo") == "a"
+    assert rt.get_value("foo") == "a"
     fun_check(
         "foo",
         "c",
-        lambda rvar, name: rvar.set(name, mode=RSM_MISSING),
+        lambda rvar, name: rvar.set_value(name, mode=RSM_MISSING),
         "boolean",
         "false",
         "(redis.call(\"set\", key_0, arg_0, \"NX\") ~= false)")
-    assert rt.get("foo") == "a"
+    assert rt.get_value("foo") == "a"
     fun_check(
         "foo",
         "b",
-        lambda rvar, name: rvar.set(name, return_previous=True, expire_in=0.1),
+        lambda rvar, name: rvar.set_value(
+            name, return_previous=True, expire_in=0.1),
         "string",
         "a",
         "redis.call(\"set\", key_0, arg_0, \"GET\", \"PX\", 100)")
-    assert rt.get("foo") == "b"
+    assert rt.get_value("foo") == "b"
     fun_check(
         "foo",
         "c",
-        lambda rvar, name: rvar.set(name, mode=RSM_MISSING, keep_ttl=True),
+        lambda rvar, name: rvar.set_value(
+            name, mode=RSM_MISSING, keep_ttl=True),
         "boolean",
         "false",
         "(redis.call(\"set\", key_0, arg_0, \"NX\", \"KEEPTTL\") ~= false)")
-    assert rt.get("foo") == "b"
+    assert rt.get_value("foo") == "b"
     fun_check(
         "foo",
         "e",
-        lambda rvar, name: rvar.set(name, mode=RSM_EXISTS, keep_ttl=True),
+        lambda rvar, name: rvar.set_value(
+            name, mode=RSM_EXISTS, keep_ttl=True),
         "boolean",
         "true",
         "(redis.call(\"set\", key_0, arg_0, \"XX\", \"KEEPTTL\") ~= false)")
-    assert rt.get("foo") == "e"
+    assert rt.get_value("foo") == "e"
 
     time.sleep(0.1)
 
-    assert rt.set("bar", "d", mode=RSM_MISSING) is True
-    assert rt.get("bar") == "d"
+    assert rt.set_value("bar", "d", mode=RSM_MISSING) is True
+    assert rt.get_value("bar") == "d"
 
-    assert rt.get("baz") is None
+    assert rt.get_value("baz") is None
 
     fun_check(
         "foo",
         "d",
-        lambda rvar, name: rvar.set(name, mode=RSM_MISSING),
+        lambda rvar, name: rvar.set_value(name, mode=RSM_MISSING),
         "boolean",
         "true",
         "(redis.call(\"set\", key_0, arg_0, \"NX\") ~= false)")
-    assert rt.get("foo") == "d"
+    assert rt.get_value("foo") == "d"
