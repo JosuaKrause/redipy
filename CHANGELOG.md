@@ -1,6 +1,6 @@
 # Changelog
 
-## [release candidate]
+## [0.6.0] - 2024-03-27
 
 ### Breaking
 
