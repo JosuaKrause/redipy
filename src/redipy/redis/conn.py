@@ -26,6 +26,7 @@ from typing import (
     overload,
     Protocol,
     TypedDict,
+    TypeVar,
 )
 
 from redis import Redis
@@ -58,6 +59,9 @@ from redipy.util import (
     to_list_str,
     to_maybe_str,
 )
+
+
+T = TypeVar('T')
 
 
 RedisConfig = TypedDict('RedisConfig', {
@@ -723,26 +727,36 @@ class RedisConnection(Runtime[list[str]]):
     def wait_for(
             self,
             key: str,
-            predicate: Callable[[], bool],
-            granularity: float = 30.0) -> None:
+            predicate: Callable[[], T],
+            granularity: float = 30.0) -> T | None:
         """
         Waits until the condition is met.
 
         Args:
             key (str): The key used for the pubsub channel.
 
-            predicate (Callable[[], bool]): The condition.
+            predicate (Callable[[], T]): The condition. If the result can be
+                interpreted as True (via `bool`) the wait terminates and the
+                result will be returned.
 
             granularity (float, optional): Maximum wait between predicate
             checks in seconds. Defaults to 30.0.
+
+        Returns:
+            T | None: The result of the condition is returned if the wait was
+                successful. Otherwise None is returned.
         """
-        if predicate():
-            return
+        res = predicate()
+        if bool(res):
+            return res
         with self.get_connection() as conn:
             with conn.pubsub() as psub:
                 psub.subscribe(self.get_pubsub_key(key))
                 try:
-                    while not predicate():
+                    while True:
+                        res = predicate()
+                        if bool(res):
+                            return res
                         psub.get_message(
                             ignore_subscribe_messages=True,
                             timeout=granularity)
