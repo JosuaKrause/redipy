@@ -15,6 +15,7 @@
 import contextlib
 import datetime
 import threading
+import time
 import uuid
 from collections.abc import Callable, Iterable, Iterator
 from typing import (
@@ -728,7 +729,7 @@ class RedisConnection(Runtime[list[str]]):
             self,
             key: str,
             predicate: Callable[[], T],
-            granularity: float = 30.0) -> T | None:
+            timeout: float = 30.0) -> T | None:
         """
         Waits until the condition is met.
 
@@ -739,8 +740,8 @@ class RedisConnection(Runtime[list[str]]):
                 interpreted as True (via `bool`) the wait terminates and the
                 result will be returned.
 
-            granularity (float, optional): Maximum wait between predicate
-            checks in seconds. Defaults to 30.0.
+            timeout (float, optional): Maximum wait before giving up and
+                returning None. Defaults to 30.0.
 
         Returns:
             T | None: The result of the condition is returned if the wait was
@@ -753,13 +754,16 @@ class RedisConnection(Runtime[list[str]]):
             with conn.pubsub() as psub:
                 psub.subscribe(self.get_pubsub_key(key))
                 try:
+                    start_time = time.monotonic()
                     while True:
                         res = predicate()
                         if bool(res):
                             return res
+                        if time.monotonic() - start_time > timeout:
+                            return None
                         psub.get_message(
                             ignore_subscribe_messages=True,
-                            timeout=granularity)
+                            timeout=timeout)
                         while psub.get_message() is not None:  # flushing queue
                             pass
                 finally:
