@@ -488,6 +488,18 @@ class LocalRuntime(Runtime[Cmd]):
         with self.lock():
             return self._sm.smembers(key)
 
+    def publish(self, key: str, msg: str) -> None:
+        with self.lock():
+            return self._sm.publish(key, msg)
+
+    def wait_for(
+            self,
+            key: str,
+            predicate: Callable[[], T],
+            timeout: float | None) -> T | None:
+        with self.lock():
+            return self._sm.wait_for(key, predicate, timeout)
+
     def __str__(self) -> str:
         return f"{self.__class__.__name__}[{self._sm.get_state()}]"
 

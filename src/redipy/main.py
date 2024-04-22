@@ -16,7 +16,7 @@ can be instantiated with different backends."""
 import contextlib
 import datetime
 from collections.abc import Callable, Iterator
-from typing import Literal, overload
+from typing import Literal, overload, TypeVar
 
 from redipy.api import (
     KeyType,
@@ -33,6 +33,9 @@ from redipy.graph.seq import SequenceObj
 from redipy.memory.rt import LocalRuntime
 from redipy.redis.conn import RedisConfig, RedisConnection, RedisFactory
 from redipy.symbolic.seq import FnContext
+
+
+T = TypeVar('T')
 
 
 class Redis(RedisClientAPI):
@@ -455,3 +458,13 @@ class Redis(RedisClientAPI):
 
     def smembers(self, key: str) -> set[str]:
         return self._rt.smembers(key)
+
+    def publish(self, key: str, msg: str) -> None:
+        return self._rt.publish(key, msg)
+
+    def wait_for(
+            self,
+            key: str,
+            predicate: Callable[[], T],
+            timeout: float | None) -> T | None:
+        return self._rt.wait_for(key, predicate, timeout)

@@ -1076,6 +1076,23 @@ def normalize_values(res: Any) -> Any:
     return res
 
 
+def reject_patterns(key: str) -> str:
+    """
+    Rejects a key if it is a pattern. This method should only be used for
+    partially implemented functions that would break if a user attempted to
+    use a pattern as input.
+
+    Args:
+        key (str): The key.
+
+    Returns:
+        str: The key.
+    """
+    if "*" in key or "?" in key or "[" in key:
+        raise ValueError(f"{key=} must not be a pattern")
+    return key
+
+
 def convert_pattern(pattern: str) -> tuple[str, re.Pattern]:
     """
     Convert a redis pattern into a prefix and a regular expression.

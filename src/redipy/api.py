@@ -16,11 +16,14 @@ in RedisAPI and once in PipelineAPI. Additional functionality is added via
 RedisClientAPI."""
 import contextlib
 import datetime
-from collections.abc import Iterable, Iterator
-from typing import cast, get_args, Literal, overload
+from collections.abc import Callable, Iterable, Iterator
+from typing import cast, get_args, Literal, overload, TypeVar
 
 from redipy.backend.backend import ExecFunction
 from redipy.symbolic.seq import FnContext
+
+
+T = TypeVar('T')
 
 
 RSetMode = Literal[
@@ -1524,6 +1527,45 @@ class RedisAPI:
 
         Returns:
             set[str]: All elements of the set.
+        """
+        raise NotImplementedError()
+
+    def publish(self, key: str, msg: str) -> None:
+        """
+        Publishes a message on a pubsub channel.
+
+        See also the redis documentation: https://redis.io/commands/publish/
+
+        Args:
+            key (str): The pubsub key.
+            msg (str): The message.
+        """
+        raise NotImplementedError()
+
+    def wait_for(
+            self,
+            key: str,
+            predicate: Callable[[], T],
+            timeout: float | None) -> T | None:
+        """
+        Waits on a pubsub channel until a certain condition is met. This
+        ignores messages sent on the channel but instead checks the provided
+        condition once a message has been received. If the condition is
+        satisfied, its result is returned.
+
+        Args:
+            key (str): The pubsub key.
+            predicate (Callable[[], T]): If the result of this condition can
+                be converted to `True` via `bool` the condition is considered
+                satisfied and its result is returned.
+            timeout (float | None): If the predicate has not been fullfilled
+                within the time set by the timeout in seconds the function
+                returns None. If timeout is set to None the function will wait
+                indefinitely.
+
+        Returns:
+            T | None: The result of the condition is returned or None if the
+                function timed out.
         """
         raise NotImplementedError()
 

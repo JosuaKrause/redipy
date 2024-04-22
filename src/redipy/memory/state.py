@@ -15,6 +15,7 @@
 import bisect
 import collections
 import itertools
+import threading
 import time
 from collections.abc import Callable, Iterable
 from datetime import datetime
@@ -34,7 +35,13 @@ from redipy.api import (
     RSM_EXISTS,
     RSM_MISSING,
 )
-from redipy.util import convert_pattern, now, time_diff, to_number_str
+from redipy.util import (
+    convert_pattern,
+    now,
+    reject_patterns,
+    time_diff,
+    to_number_str,
+)
 
 
 T = TypeVar('T')
@@ -1087,6 +1094,8 @@ class Machine(RedisAPI):
         super().__init__()
         self._state = state
         self._now_mono: tuple[float, datetime] | None = None
+        # FIXME: for now we implement pubsub in the machine
+        self._pubsub: dict[str, threading.Condition] = {}
 
     def set_mono(self, now_mono: tuple[float, datetime] | None) -> None:
         """
@@ -1578,6 +1587,29 @@ class Machine(RedisAPI):
         if obj is None:
             return set()
         return set(obj)
+
+    def publish(self, key: str, msg: str) -> None:
+        # FIXME: we do not support patterns or messages yet
+        pubsub_key = reject_patterns(key)
+        listen = self._pubsub.get(pubsub_key)
+        if listen is None:
+            return
+        with listen:
+            listen.notify_all()
+
+    def wait_for(
+            self,
+            key: str,
+            predicate: Callable[[], T],
+            timeout: float | None) -> T | None:
+        # FIXME: we do not support patterns or messages yet
+        pubsub_key = reject_patterns(key)
+        listen = self._pubsub.get(pubsub_key)
+        if listen is None:
+            listen = threading.Condition()
+            self._pubsub[pubsub_key] = listen
+        with listen:
+            return listen.wait_for(predicate, timeout)
 
     def __str__(self) -> str:
         return (

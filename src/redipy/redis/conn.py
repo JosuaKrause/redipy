@@ -729,24 +729,7 @@ class RedisConnection(Runtime[list[str]]):
             self,
             key: str,
             predicate: Callable[[], T],
-            timeout: float = 30.0) -> T | None:
-        """
-        Waits until the condition is met.
-
-        Args:
-            key (str): The key used for the pubsub channel.
-
-            predicate (Callable[[], T]): The condition. If the result can be
-                interpreted as True (via `bool`) the wait terminates and the
-                result will be returned.
-
-            timeout (float, optional): Maximum wait before giving up and
-                returning None. Defaults to 30.0.
-
-        Returns:
-            T | None: The result of the condition is returned if the wait was
-                successful. Otherwise None is returned.
-        """
+            timeout: float | None) -> T | None:
         res = predicate()
         if bool(res):
             return res
@@ -759,15 +742,24 @@ class RedisConnection(Runtime[list[str]]):
                         res = predicate()
                         if bool(res):
                             return res
-                        if time.monotonic() - start_time > timeout:
+                        so_far = time.monotonic() - start_time
+                        if timeout is not None and so_far > timeout:
                             return None
+                        if timeout is None:
+                            wait_time = None
+                        else:
+                            wait_time = max(0, timeout - so_far)
                         psub.get_message(
                             ignore_subscribe_messages=True,
-                            timeout=timeout)
+                            timeout=cast(float, wait_time))
                         while psub.get_message() is not None:  # flushing queue
                             pass
                 finally:
                     psub.unsubscribe()
+
+    def publish(self, key: str, msg: str) -> None:
+        with self.get_connection() as conn:
+            conn.publish(self.get_pubsub_key(key), msg)
 
     def notify_all(self, key: str) -> None:
         """
@@ -776,8 +768,7 @@ class RedisConnection(Runtime[list[str]]):
         Args:
             key (str): The key used for the pubsub channel.
         """
-        with self.get_connection() as conn:
-            conn.publish(self.get_pubsub_key(key), "notify")
+        self.publish(key, "notify")
 
     def ping(self) -> None:
         """

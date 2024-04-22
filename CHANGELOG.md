@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.7.0] - 2024-04-21
+
+### Added
+
+- Partial support for pubsub channels ([#18])
+
 ## [0.6.0] - 2024-03-27
 
 ### Breaking
@@ -72,3 +78,4 @@
 [#7]: https://github.com/JosuaKrause/redipy/pull/7
 [#15]: https://github.com/JosuaKrause/redipy/pull/15
 [#17]: https://github.com/JosuaKrause/redipy/pull/17
+[#18]: https://github.com/JosuaKrause/redipy/pull/18
