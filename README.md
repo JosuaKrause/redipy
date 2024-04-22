@@ -34,13 +34,8 @@ that implement the same functionality, such as:
 
 This [medium article][medium] explores some of the rationale behind the library.
 
-### Warning
-
-This library is still early in development and [not all Redis functions are
-available yet][implemented]!
 If you need certain functionality or found a bug, have a look at the
 [contributing](#contributing) section.
-It is easy to add Redis functions to the API.
 
 ## Installation<a id="installation"></a>
 You can install `redipy` using pip:
@@ -401,8 +396,9 @@ class RStack:
 ## Limitations<a id="limitations"></a>
 The current limitations of `redipy` are:
 
-- Not all Redis commands are supported yet: This will eventually be resolved.
-  See [this issue to see the progress][implemented].
+- Some Redis commands are not supported yet: This is likely due to redundant
+  functionality. For all other cases it will eventually be resolved.
+  Check [this issue to see the status of redis functions][implemented].
 - The API differs slightly: Most notably stored values are always strings
   (i.e., the bytes returned by Redis are decoded as utf-8).
 - The semantic of Redis functions inside scripts has been altered to feel more
