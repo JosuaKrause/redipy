@@ -1084,18 +1084,29 @@ class Machine(RedisAPI):
     """
     A Machine manages the state of a memory runtime and exposes the redis API.
     """
-    def __init__(self, state: State) -> None:
+    def __init__(self, state: State, plock: threading.RLock) -> None:
         """
         Creates a Machine.
 
         Args:
             state (State): The associated state.
+            plock (RLock): The pubsub lock.
         """
         super().__init__()
         self._state = state
         self._now_mono: tuple[float, datetime] | None = None
         # FIXME: for now we implement pubsub in the machine
-        self._pubsub: dict[str, threading.Condition] = {}
+        self._pubsub: dict[str, tuple[threading.Condition, int]] = {}
+        self._plock = plock
+
+    def plock(self) -> threading.RLock:
+        """
+        The pubsub lock.
+
+        Returns:
+            threading.RLock: The pubsub lock.
+        """
+        return self._plock
 
     def set_mono(self, now_mono: tuple[float, datetime] | None) -> None:
         """
@@ -1591,10 +1602,11 @@ class Machine(RedisAPI):
     def publish(self, key: str, msg: str) -> None:
         # FIXME: we do not support patterns or messages yet
         pubsub_key = reject_patterns(key)
-        listen = self._pubsub.get(pubsub_key)
-        if listen is None:
-            return
-        with listen:
+        with self.plock():
+            channel = self._pubsub.get(pubsub_key)
+            if channel is None:
+                return
+            listen, _ = channel
             listen.notify_all()
 
     def wait_for(
@@ -1604,12 +1616,26 @@ class Machine(RedisAPI):
             timeout: float | None) -> T | None:
         # FIXME: we do not support patterns or messages yet
         pubsub_key = reject_patterns(key)
-        listen = self._pubsub.get(pubsub_key)
-        if listen is None:
-            listen = threading.Condition()
-            self._pubsub[pubsub_key] = listen
-        with listen:
-            return listen.wait_for(predicate, timeout)
+        plock = self.plock()
+        with plock:
+            channel = self._pubsub.get(pubsub_key)
+            try:
+                if channel is None:
+                    listen = threading.Condition(plock)
+                    before_count = 0
+                else:
+                    listen, before_count = channel
+                self._pubsub[pubsub_key] = (listen, before_count + 1)
+                res = listen.wait_for(predicate, timeout)
+            finally:
+                channel = self._pubsub.get(pubsub_key)
+                if channel is not None:
+                    listen, after_count = channel
+                    if after_count > 1:
+                        self._pubsub[pubsub_key] = (listen, after_count - 1)
+                    else:
+                        self._pubsub.pop(pubsub_key, None)
+        return res
 
     def __str__(self) -> str:
         return (

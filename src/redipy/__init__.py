@@ -20,6 +20,7 @@ The most common symbols of redipy are reexported at the top level for easy
 access."""
 from typing import Any
 
+import redipy.helpers  # pylint: disable=unused-import  # noqa
 import redipy.plugin  # pylint: disable=unused-import  # noqa
 import redipy.script  # pylint: disable=unused-import  # noqa
 from redipy.api import (
@@ -78,6 +79,7 @@ def __getattr__(name: str) -> Any:
 
 __all__ = [
     "ExecFunction",
+    "helpers",
     "LocalRuntime",
     "PipelineAPI",
     "plugin",
