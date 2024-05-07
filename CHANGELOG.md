@@ -1,5 +1,11 @@
 # Changelog
 
+## [release candidate]
+
+### Added
+
+- `LSET` and `LINDEX` ([#19])
+
 ## [0.7.0] - 2024-04-21
 
 ### Added
@@ -79,3 +85,4 @@
 [#15]: https://github.com/JosuaKrause/redipy/pull/15
 [#17]: https://github.com/JosuaKrause/redipy/pull/17
 [#18]: https://github.com/JosuaKrause/redipy/pull/18
+[#19]: https://github.com/JosuaKrause/redipy/pull/19

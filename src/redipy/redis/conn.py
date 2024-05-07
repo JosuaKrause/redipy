@@ -454,6 +454,14 @@ class PipelineConnection(PipelineAPI):
         self._pipe.lrange(self.with_prefix(key), start, stop)
         self.add_fixup(to_list_str)
 
+    def lset(self, key: str, index: int, value: str) -> None:
+        self._pipe.lset(self.with_prefix(key), index, value)
+        self.add_fixup(lambda _: None)
+
+    def lindex(self, key: str, index: int) -> None:
+        self._pipe.lindex(self.with_prefix(key), index)
+        self.add_fixup(to_maybe_str)
+
     def llen(self, key: str) -> None:
         self._pipe.llen(self.with_prefix(key))
         self.add_fixup(int)
@@ -1087,6 +1095,14 @@ class RedisConnection(Runtime[list[str]]):
     def lrange(self, key: str, start: int, stop: int) -> list[str]:
         with self.get_connection() as conn:
             return to_list_str(conn.lrange(self.with_prefix(key), start, stop))
+
+    def lset(self, key: str, index: int, value: str) -> None:
+        with self.get_connection() as conn:
+            conn.lset(self.with_prefix(key), index, value)
+
+    def lindex(self, key: str, index: int) -> str | None:
+        with self.get_connection() as conn:
+            return to_maybe_str(conn.lindex(self.with_prefix(key), index))
 
     def llen(self, key: str) -> int:
         with self.get_connection() as conn:

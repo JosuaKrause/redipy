@@ -407,6 +407,14 @@ class LocalRuntime(Runtime[Cmd]):
         with self.lock():
             return self._sm.lrange(key, start, stop)
 
+    def lset(self, key: str, index: int, value: str) -> None:
+        with self.lock():
+            self._sm.lset(key, index, value)
+
+    def lindex(self, key: str, index: int) -> str | None:
+        with self.lock():
+            return self._sm.lindex(key, index)
+
     def llen(self, key: str) -> int:
         with self.lock():
             return self._sm.llen(key)
@@ -674,6 +682,12 @@ class LocalPipeline(PipelineAPI):
 
     def lrange(self, key: str, start: int, stop: int) -> None:
         self.add_cmd(lambda: self._sm.lrange(key, start, stop))
+
+    def lset(self, key: str, index: int, value: str) -> None:
+        self.add_cmd(lambda: self._sm.lset(key, index, value))
+
+    def lindex(self, key: str, index: int) -> None:
+        self.add_cmd(lambda: self._sm.lindex(key, index))
 
     def llen(self, key: str) -> None:
         self.add_cmd(lambda: self._sm.llen(key))

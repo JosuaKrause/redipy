@@ -24,7 +24,8 @@ K = TypeVar('K')
 V = TypeVar('V')
 
 
-class RCache(Generic[K, V]):
+class RCache(Generic[K, V]):  # pylint: disable=too-few-public-methods
+    """A redis based cache with in-flight computation detection."""
     def __init__(
             self,
             rt: RedisClientAPI,
@@ -34,6 +35,26 @@ class RCache(Generic[K, V]):
             compute: Callable[[K], V],
             value_store: Callable[[V], str],
             value_read: Callable[[str], V]) -> None:
+        """
+        Creates a redis based cache.
+
+        Args:
+            rt (RedisClientAPI): The redis client.
+
+            prefix (str): The key prefix.
+
+            hasher (Callable[[K], str]): Function to create a hash for a given
+                key.
+
+            compute (Callable[[K], V]): Compute the actual value for a given
+                key.
+
+            value_store (Callable[[V], str]): Convert the value into a string
+                for storing. The string must never be empty.
+
+            value_read (Callable[[str], V]): Convert a string into a value for
+                retrieving.
+        """
         self._rt = rt
         self._prefix = prefix
         self._hasher = hasher
@@ -48,6 +69,26 @@ class RCache(Generic[K, V]):
         return f"{prefix}{hash_str}"
 
     def get_value(self, key: K, *, timeout: float = 300.0) -> V:
+        """
+        Retrieves the value of the given key. If the value is not already
+        cached it is computed. If a value is being computed elsewhere at the
+        moment the function call blocks until the computation is complete.
+        During this, if timeout is reached, the computation will start again.
+
+        Args:
+            key (K): The key.
+
+            timeout (float, optional): Timeout before starting to compute the
+                value ourself if another computation was already in-flight
+                in seconds. Defaults to 300.0.
+
+        Raises:
+            ValueError: If the value string is the empty string after
+                converting the result.
+
+        Returns:
+            V: The result value.
+        """
         rt = self._rt
         hash_str = self._hasher(key)
         rkey = self._redis_key(hash_str)

@@ -1435,6 +1435,21 @@ class Machine(RedisAPI):
         queue.rotate(start)
         return res
 
+    def lset(self, key: str, index: int, value: str) -> None:
+        now_mono = self.get_mono()
+        queue = self._state.get_queue(key, now_mono)
+        queue[index] = value
+
+    def lindex(self, key: str, index: int) -> str | None:
+        now_mono = self.get_mono()
+        queue = self._state.readonly_queue(key, now_mono)
+        if not queue:
+            return None
+        try:
+            return queue[index]
+        except IndexError:
+            return None
+
     def llen(self, key: str) -> int:
         now_mono = self.get_mono()
         return self._state.queue_len(key, now_mono)
