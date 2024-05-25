@@ -37,7 +37,7 @@ help:
 export LC_ALL=C
 export LANG=C
 
-PYTHON=python
+PYTHON?=python
 
 lint-comment:
 	! ./sh/findpy.sh \
