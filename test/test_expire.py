@@ -140,7 +140,7 @@ def test_expire(
                 yield redis, actions
                 assert len(actions) == 0
         finally:
-            pass
+            pass  # NOTE: making pylint happy
 
     def create(
             rt: Redis | PipelineAPI,

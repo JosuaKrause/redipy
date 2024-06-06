@@ -654,6 +654,8 @@ class RedisConnection(Runtime[list[str]]):
                     yield client
             except ResponseError as e:
                 handle_err(e)
+            finally:
+                pass  # NOTE: making pylint happy
 
         def handle_err(exc: ResponseError) -> NoReturn:
             info = None
