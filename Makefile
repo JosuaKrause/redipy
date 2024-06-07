@@ -106,13 +106,13 @@ requirements-complete:
 	PYTHON=$(PYTHON) ./sh/requirements_complete.sh $(FILE)
 
 name:
-	git describe --tags --match `git tag --merged | sort -rV | head -n 1`
+	@git describe --tags --match `git tag --merged | sort -rV | head -n 1`
 
 git-check:
-	./sh/git_check.sh
+	@./sh/git_check.sh
 
 git-check-publish: git-check
-	./sh/git_check.sh
+	@./sh/git_check.sh
 
 pack: clean
 	./sh/pack.sh
@@ -155,10 +155,10 @@ allapps:
 	| sed -e 's/^.\///' -e 's/\/__main__.py$$//' -e 's/.py$$//'
 
 version:
-	./sh/version.sh
+	@./sh/version.sh
 
 version-tag:
-	./sh/version.sh --tag
+	@./sh/version.sh --tag
 
 version-next:
-	./sh/version.sh --tag --next
+	@./sh/version.sh --tag --next
