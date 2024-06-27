@@ -1,10 +1,15 @@
 # Changelog
 
-## [release candidate]
+## [0.7.1] - 2024-07-27
 
 ### Added
 
 - `LSET` and `LINDEX` ([#19])
+- Start helpers module for common use cases ([#19])
+
+### Bug-Fixes
+
+- Fix bug when using `PUBSUB` locally ([#19])
 
 ## [0.7.0] - 2024-04-21
 
