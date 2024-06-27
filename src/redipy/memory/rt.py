@@ -14,6 +14,7 @@
 """The runtime for the memory backend."""
 import contextlib
 import datetime
+import threading
 import time
 from collections.abc import Callable, Iterator
 from typing import Any, Literal, overload, TypeVar
@@ -51,7 +52,8 @@ class LocalRuntime(Runtime[Cmd]):
     """The runtime of the memory backend."""
     def __init__(self) -> None:
         super().__init__()
-        self._sm = Machine(State())
+        self._plock = threading.RLock()
+        self._sm = Machine(State(), self._plock)
         self._rfuns: dict[str, LocalRedisFunction] = {}
         self._gfuns: dict[str, LocalGeneralFunction] = {}
         self.add_redis_function_plugin("redipy.memory.rfun")
@@ -106,7 +108,8 @@ class LocalRuntime(Runtime[Cmd]):
                 self._sm.set_mono(None)
                 return res
 
-        pipe = LocalPipeline(self, self._sm.get_state(), exec_call)
+        pipe = LocalPipeline(
+            self, self._sm.get_state(), exec_call, self._plock)
         yield pipe
         if pipe.has_pending():
             pipe.execute()
@@ -404,6 +407,14 @@ class LocalRuntime(Runtime[Cmd]):
         with self.lock():
             return self._sm.lrange(key, start, stop)
 
+    def lset(self, key: str, index: int, value: str) -> None:
+        with self.lock():
+            self._sm.lset(key, index, value)
+
+    def lindex(self, key: str, index: int) -> str | None:
+        with self.lock():
+            return self._sm.lindex(key, index)
+
     def llen(self, key: str) -> int:
         with self.lock():
             return self._sm.llen(key)
@@ -489,16 +500,16 @@ class LocalRuntime(Runtime[Cmd]):
             return self._sm.smembers(key)
 
     def publish(self, key: str, msg: str) -> None:
-        with self.lock():
-            return self._sm.publish(key, msg)
+        # NOTE: has its own lock
+        return self._sm.publish(key, msg)
 
     def wait_for(
             self,
             key: str,
             predicate: Callable[[], T],
             timeout: float | None) -> T | None:
-        with self.lock():
-            return self._sm.wait_for(key, predicate, timeout)
+        # NOTE: has its own lock
+        return self._sm.wait_for(key, predicate, timeout)
 
     def __str__(self) -> str:
         return f"{self.__class__.__name__}[{self._sm.get_state()}]"
@@ -513,7 +524,8 @@ class LocalPipeline(PipelineAPI):
             self,
             rt: LocalRuntime,
             parent: State,
-            exec_call: Callable[[Callable[[], list]], list]) -> None:
+            exec_call: Callable[[Callable[[], list]], list],
+            plock: threading.RLock) -> None:
         """
         Creates a new pipeline. Do not manually create a pipeline. Use the
         `pipeline` function of the runtime instead.
@@ -524,12 +536,14 @@ class LocalPipeline(PipelineAPI):
             parent (State): The memory state.
 
             exec_call (Callable[[Callable[[], list]], list]): Function that is
-            called with the results of the pipeline when calling execute. This
-            can be used to finalize the results before returning them.
+                called with the results of the pipeline when calling execute.
+                This can be used to finalize the results before returning them.
+
+            plock (threading.RLock): Lock for pubsub channels.
         """
         super().__init__()
         self._rt = rt
-        self._sm = Machine(State(parent))
+        self._sm = Machine(State(parent), plock)
         self._exec_call = exec_call
         self._cmd_queue: list[Callable[[], Any]] = []
 
@@ -668,6 +682,12 @@ class LocalPipeline(PipelineAPI):
 
     def lrange(self, key: str, start: int, stop: int) -> None:
         self.add_cmd(lambda: self._sm.lrange(key, start, stop))
+
+    def lset(self, key: str, index: int, value: str) -> None:
+        self.add_cmd(lambda: self._sm.lset(key, index, value))
+
+    def lindex(self, key: str, index: int) -> None:
+        self.add_cmd(lambda: self._sm.lindex(key, index))
 
     def llen(self, key: str) -> None:
         self.add_cmd(lambda: self._sm.llen(key))

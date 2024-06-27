@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.7.1] - 2024-07-27
+
+### Added
+
+- `LSET` and `LINDEX` ([#19])
+- Start helpers module for common use cases ([#19])
+
+### Bug-Fixes
+
+- Fix bug when using `PUBSUB` locally ([#19])
+
 ## [0.7.0] - 2024-04-21
 
 ### Added
@@ -79,3 +90,4 @@
 [#15]: https://github.com/JosuaKrause/redipy/pull/15
 [#17]: https://github.com/JosuaKrause/redipy/pull/17
 [#18]: https://github.com/JosuaKrause/redipy/pull/18
+[#19]: https://github.com/JosuaKrause/redipy/pull/19

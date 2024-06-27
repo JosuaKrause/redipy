@@ -441,6 +441,43 @@ class PipelineAPI:
         """
         raise NotImplementedError()
 
+    def lset(self, key: str, index: int, value: str) -> None:
+        """
+        Sets the value of a list element at the given index. The index can be
+        negative to index from the back. The function will raise if the index
+        is out of bounds.
+
+        See also the redis documentation: https://redis.io/commands/lset/
+
+        The pipeline value is None.
+
+        Args:
+            key (str): The key.
+
+            index (int): The index. Can be negative to index from the back.
+
+            value (str): The value.
+        """
+        raise NotImplementedError()
+
+    def lindex(self, key: str, index: int) -> None:
+        """
+        Retrieves the value of a list element at the given index. The index can
+        be negative to index from the back. None is returned for an out of
+        bounds index.
+
+        See also the redis documentation: https://redis.io/commands/lindex/
+
+        The pipeline value is the value at the index or None if the index was
+        out of bounds.
+
+        Args:
+            key (str): The key.
+
+            index (int): The index. Can be negative to index from the back.
+        """
+        raise NotImplementedError()
+
     def llen(self, key: str) -> None:
         """
         Computes the length of the list associated with the key.
@@ -1209,6 +1246,42 @@ class RedisAPI:
 
         Returns:
             list[str]: The elements.
+        """
+        raise NotImplementedError()
+
+    def lset(self, key: str, index: int, value: str) -> None:
+        """
+        Sets the value of a list element at the given index. The index can be
+        negative to index from the back. The function will raise if the index
+        is out of bounds.
+
+        See also the redis documentation: https://redis.io/commands/lset/
+
+        Args:
+            key (str): The key.
+
+            index (int): The index. Can be negative to index from the back.
+
+            value (str): The value.
+        """
+        raise NotImplementedError()
+
+    def lindex(self, key: str, index: int) -> str | None:
+        """
+        Retrieves the value of a list element at the given index. The index can
+        be negative to index from the back. None is returned for an out of
+        bounds index.
+
+        See also the redis documentation: https://redis.io/commands/lindex/
+
+        Args:
+            key (str): The key.
+
+            index (int): The index. Can be negative to index from the back.
+
+        Returns:
+            str | None: The value at the index or None if the index was out of
+                bounds.
         """
         raise NotImplementedError()
 

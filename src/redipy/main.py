@@ -394,6 +394,12 @@ class Redis(RedisClientAPI):
     def lrange(self, key: str, start: int, stop: int) -> list[str]:
         return self._rt.lrange(key, start, stop)
 
+    def lset(self, key: str, index: int, value: str) -> None:
+        self._rt.lset(key, index, value)
+
+    def lindex(self, key: str, index: int) -> str | None:
+        return self._rt.lindex(key, index)
+
     def llen(self, key: str) -> int:
         return self._rt.llen(key)
 

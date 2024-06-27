@@ -128,16 +128,19 @@ def test_expire(
     @contextmanager
     def block() -> Iterator[tuple[Redis | PipelineAPI, list[Action]]]:
         actions: list[Action] = []
-        if is_pipe:
-            with redis.pipeline() as pipe:
-                yield pipe, actions
-                res = pipe.execute()
-                assert len(res) == len(actions)
-                for val, (call, msg) in zip(res, actions):
-                    assert call(val), msg(val)
-        else:
-            yield redis, actions
-            assert len(actions) == 0
+        try:
+            if is_pipe:
+                with redis.pipeline() as pipe:
+                    yield pipe, actions
+                    res = pipe.execute()
+                    assert len(res) == len(actions)
+                    for val, (call, msg) in zip(res, actions):
+                        assert call(val), msg(val)
+            else:
+                yield redis, actions
+                assert len(actions) == 0
+        finally:
+            pass  # NOTE: making pylint happy
 
     def create(
             rt: Redis | PipelineAPI,
