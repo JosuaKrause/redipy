@@ -14,8 +14,10 @@
 """A wrapper for easier redis function definition."""
 from typing import Protocol
 
+from redipy.api import PipelineAPI, RedisAPI
 from redipy.backend.backend import ExecFunction
 from redipy.backend.runtime import Runtime
+from redipy.graph.expr import JSONType
 from redipy.symbolic.expr import MixedType
 from redipy.symbolic.seq import FnContext
 
@@ -36,13 +38,20 @@ class FunctionBuilder(Protocol):  # pylint: disable=too-few-public-methods
         """
 
 
-def redis_fn(builder: FunctionBuilder, rt: Runtime) -> ExecFunction:
+def redis_call(
+        builder: FunctionBuilder,
+        rt: Runtime | None = None) -> ExecFunction:
     """
-    Convenience wrapper to define redis scripts.
+    Convenience wrapper to define redis scripts. Avoid using the wrapper for
+    inner functions to prevent the script from being created over and over
+    again.
 
     Args:
         builder (FunctionBuilder): Function to build the redis script.
-        rt (Runtime): The runtime to register the script with.
+
+        rt (Runtime | None, optional): The runtime to register the script with.
+            If no runtime is provided, a runtime needs to be provided at call
+            time. Defaults to None.
 
     Returns:
         ExecFunction: The callable redis script.
@@ -50,4 +59,23 @@ def redis_fn(builder: FunctionBuilder, rt: Runtime) -> ExecFunction:
     ctx = FnContext()
     return_value = builder(ctx)
     ctx.set_return_value(return_value)
-    return rt.register_script(ctx)
+    if rt is not None:
+        return rt.register_script(ctx)
+
+    script: ExecFunction | None = None
+
+    def executor(
+            *,
+            keys: dict[str, str],
+            args: dict[str, JSONType],
+            client: RedisAPI | PipelineAPI | None = None) -> JSONType:
+        nonlocal script
+
+        if script is None:
+            if not isinstance(client, Runtime):
+                raise TypeError(
+                    f"{client=} ({type(client).__name__}) must have runtime!")
+            script = client.register_script(ctx)
+        return script(keys=keys, args=args, client=client)
+
+    return executor
