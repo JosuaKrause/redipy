@@ -75,6 +75,7 @@ RedisServerConfig = TypedDict('RedisServerConfig', {
 })
 RedisMemoryConfig = TypedDict('RedisMemoryConfig', {
     "kind": Literal['memory'],
+    "prefix": NotRequired[str],  # FIXME implement
 })
 RedisConfig = RedisServerConfig | RedisMemoryConfig
 
