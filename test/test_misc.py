@@ -135,6 +135,7 @@ def test_misc(rt_lua: bool) -> None:
         assert redis.delete("test_rt") == 1
 
     cfg = get_test_config()
+    assert "kind" not in cfg or cfg["kind"] == "server"
     check_redis(Redis(
         "infer",
         redis_module="test_misc",

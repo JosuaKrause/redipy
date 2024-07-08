@@ -65,13 +65,19 @@ from redipy.util import (
 T = TypeVar('T')
 
 
-RedisConfig = TypedDict('RedisConfig', {
+RedisServerConfig = TypedDict('RedisServerConfig', {
+    "kind": NotRequired[Literal['server']],
     "host": str,
     "port": int,
     "passwd": str,
     "prefix": NotRequired[str],
     "path": NotRequired[str],
 })
+RedisMemoryConfig = TypedDict('RedisMemoryConfig', {
+    "kind": Literal['memory'],
+    "prefix": NotRequired[str],  # FIXME implement
+})
+RedisConfig = RedisServerConfig | RedisMemoryConfig
 
 
 class RedisFactory(Protocol):  # pylint: disable=too-few-public-methods
@@ -165,6 +171,8 @@ class RedisWrapper:
 
     @staticmethod
     def _create_connection(*, cfg: RedisConfig) -> Redis:
+        if "kind" in cfg and cfg["kind"] == "memory":
+            return Redis()
         return Redis(
             host=cfg["host"],
             port=cfg["port"],
