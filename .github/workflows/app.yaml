@@ -9,6 +9,8 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: read
 
 jobs:
   lints_pipeline:
@@ -16,18 +18,19 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python: ['3.11']
+        python: ['3.12', '3.15']
     env:
       ENV: CI
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Set up Python ${{ matrix.python }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v7
       with:
         python-version: ${{ matrix.python }}
         cache: 'pip'
+        cache-dependency-path: 'requirements*.txt'
 
     - name: Install dependencies
       run: |
@@ -73,9 +76,11 @@ jobs:
       run: |
         make lint-type-check
 
+    # parallel pylint pickles its state via dill which does not support
+    # Python 3.15 yet (https://github.com/uqfoundation/dill/issues/753)
     - name: Lint Code (pylint)
       run: |
-        make lint-pylint
+        make lint-pylint PYLINT_JOBS=${{ matrix.python == '3.15' && '1' || '6' }}
 
 
   tests_pipeline:
@@ -83,55 +88,72 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python: ['3.11']
+        python: ['3.12', '3.15']
+        redis: ['8']
         ci_node_total: [3]
         ci_node_index: [0, 1, 2]
+        include:
+          # additionally run the full suite against the previous Redis major
+          # in a single (unsharded) job; its timings and coverage are not
+          # merged by the coverage pipeline
+          - python: '3.12'
+            redis: '7'
+            ci_node_total: 1
+            ci_node_index: 0
     env:
       ENV: CI
+    services:
+      redis:
+        image: redis:${{ matrix.redis }}
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Set up Python ${{ matrix.python }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v7
       with:
         python-version: ${{ matrix.python }}
         cache: 'pip'
+        cache-dependency-path: 'requirements*.txt'
 
-    - name: Start Redis
-      uses: supercharge/redis-github-action@1.4.0
-      with:
-        redis-version: 7
-        redis-port: 6380
-
+    # restore only: the merged timings are saved by the coverage pipeline
     - name: Restore test-result Cache
-      uses: actions/cache@v3
+      uses: actions/cache/restore@v6
       with:
         path: test-results/*
-        key:  test-results-v1-${{ matrix.python }}-${{ hashFiles('test/*.py') }}-${{ hashFiles('test/data/*') }}-${{ github.sha }}-${{ matrix.ci_node_index }}
+        key:  test-results-v1-${{ matrix.python }}-${{ hashFiles('test/*.py') }}-${{ hashFiles('test/data/*') }}
         restore-keys: |
-          test-results-v1-${{ matrix.python }}-${{ hashFiles('test/*.py') }}-${{ hashFiles('test/data/*') }}
           test-results-v1-${{ matrix.python }}-
 
     - name: Install dependencies
       run: |
         make install PYTHON=python
 
-    - name: Run test on Node ${{ matrix.ci_node_index }}
+    - name: Run test on Node ${{ matrix.ci_node_index }} (Redis ${{ matrix.redis }})
       run: |
         PYTHON_NAME="${{ matrix.python }}" CUR_NODE_IX="${{ matrix.ci_node_index }}" TOTAL_NODES="${{ matrix.ci_node_total }}" make split-test
 
     - name: Upload Artifact(results)
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v7
       with:
-        name: results-${{ matrix.python }}-${{ matrix.ci_node_index }}
+        name: results-${{ matrix.python }}-redis${{ matrix.redis }}-${{ matrix.ci_node_index }}
         path: test-results/results-${{ matrix.python }}-${{ matrix.ci_node_index }}.xml
+        if-no-files-found: error
 
     - name: Upload Artifact(coverage reports)
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v7
       with:
-        name: coverage-${{ matrix.python }}-${{ matrix.ci_node_index }}
+        name: coverage-${{ matrix.python }}-redis${{ matrix.redis }}-${{ matrix.ci_node_index }}
         path: .coverage
+        include-hidden-files: true
+        if-no-files-found: error
 
     - name: Git Check (tests may not alter any git visible files)
       run: |
@@ -145,25 +167,26 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python: ['3.11']
+        python: ['3.12', '3.15']
     env:
       ENV: CI
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Set up Python ${{ matrix.python }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v7
       with:
         python-version: ${{ matrix.python }}
         cache: 'pip'
+        cache-dependency-path: 'requirements*.txt'
 
     - name: Install dependencies
       run: |
         make install PYTHON=python
 
     - name: Restore test-result Cache
-      uses: actions/cache@v3
+      uses: actions/cache@v6
       with:
         path: test-results/*
         key:  test-results-v1-${{ matrix.python }}-${{ hashFiles('test/*.py') }}-${{ hashFiles('test/data/*') }}
@@ -173,18 +196,29 @@ jobs:
         rm -r test-results/ || true
         mkdir -p test-results/parts/
 
-    - name: Download all results and coverage
-      uses: actions/download-artifact@v3
+    - name: Download results
+      uses: actions/download-artifact@v8
+      with:
+        pattern: results-${{ matrix.python }}-redis8-*
+        path: test-results/parts/
+        merge-multiple: true
+
+    - name: Download coverage reports
+      uses: actions/download-artifact@v8
+      with:
+        pattern: coverage-${{ matrix.python }}-redis8-*
+        path: coverage-parts/
 
     - name: Merge results
       run: |
-        mv results-${{ matrix.python }}-*/results-${{ matrix.python }}-* test-results/parts/
+        ls -la test-results/parts/
         python -m test merge --dir test-results --out-fname results.xml
         tail -v -n +1 test-results/*.xml
 
     - name: Merge coverage reports
       run: |
-        coverage combine coverage*/.coverage
+        ls -la coverage-parts/*/
+        coverage combine coverage-parts/*/.coverage
         coverage xml -o coverage/reports/xml_report.xml
         coverage html -d coverage/reports/html_report
         coverage report

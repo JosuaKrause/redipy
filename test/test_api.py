@@ -87,8 +87,10 @@ def test_api(rt_lua: bool) -> None:
             *,
             setup: Callable[[str], JSONType],
             normal: Callable[[str], JSONType],
-            setup_pipe: Callable[[PipelineAPI, str], None],
-            pipeline: Callable[[PipelineAPI, str], None],
+            # NOTE: return values are `object` so we can verify that pipeline
+            # commands indeed return `None` at runtime
+            setup_pipe: Callable[[PipelineAPI, str], object],
+            pipeline: Callable[[PipelineAPI, str], object],
             lua: Callable[[FnContext, KeyVariable], Expr],
             code: str,
             teardown: Callable[[str], JSONType],
