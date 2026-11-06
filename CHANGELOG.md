@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.8.0] - 2026-11-06
+
+### Breaking
+
+- Require Python 3.12 or newer and redis-py 7 or newer ([#22])
+- The memory backend rejects commands without keys or values (e.g. `DEL` with no keys, `HDEL` with no fields), like real Redis ([#21])
+
+### Added
+
+- `redis_call` and `FunctionBuilder` for wrapping redis functions ([#20])
+- The memory backend accepts a configuration ([#20])
+
+### Changed
+
+- Connect with `retry_on_error` instead of the deprecated `retry_on_timeout` ([#22])
+
 ## [0.7.1] - 2024-07-27
 
 ### Added
@@ -91,3 +107,6 @@
 [#17]: https://github.com/JosuaKrause/redipy/pull/17
 [#18]: https://github.com/JosuaKrause/redipy/pull/18
 [#19]: https://github.com/JosuaKrause/redipy/pull/19
+[#20]: https://github.com/JosuaKrause/redipy/pull/20
+[#21]: https://github.com/JosuaKrause/redipy/pull/21
+[#22]: https://github.com/JosuaKrause/redipy/pull/22
