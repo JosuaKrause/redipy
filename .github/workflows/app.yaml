@@ -76,9 +76,11 @@ jobs:
       run: |
         make lint-type-check
 
+    # parallel pylint pickles its state via dill which does not support
+    # Python 3.15 yet (https://github.com/uqfoundation/dill/issues/753)
     - name: Lint Code (pylint)
       run: |
-        make lint-pylint
+        make lint-pylint PYLINT_JOBS=${{ matrix.python == '3.15' && '1' || '6' }}
 
 
   tests_pipeline:
