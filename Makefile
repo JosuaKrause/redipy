@@ -38,6 +38,7 @@ export LC_ALL=C
 export LANG=C
 
 PYTHON?=python
+PYLINT_JOBS?=6
 
 lint-comment:
 	! ./sh/findpy.sh \
@@ -74,7 +75,7 @@ lint-pycodestyle-debug:
 
 lint-pylint:
 	./sh/findpy.sh | sort
-	./sh/findpy.sh | sort | xargs --no-run-if-empty pylint -j 6 -v
+	./sh/findpy.sh | sort | xargs --no-run-if-empty pylint -j $(PYLINT_JOBS) -v
 
 lint-type-check:
 	mypy .
