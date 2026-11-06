@@ -90,6 +90,7 @@ PIPE_EXPECTED: dict[KeyType, Callable[[Any, int], bool]] = {
 @pytest.mark.parametrize("count", [30, 200, 500, 1000, 2000, 10000, 100000])
 @pytest.mark.parametrize("rt_lua", [False, True])
 def test_scan(
+        *,
         types: KeyType | None,
         k_add: int | None,
         k_del: int | None,

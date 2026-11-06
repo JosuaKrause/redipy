@@ -125,6 +125,7 @@ def enqueue_task(
         client: RedisClientAPI,
         queue_key: str,
         info_key: str,
+        *,
         priority: float,
         task_id: str,
         task_payload: float) -> None:
@@ -248,7 +249,12 @@ def produce_task_loop(
         task_id = f"t{task_num:08x}"
         task_payload = random.choice([0, 0.25, 0.5, 0.75, 1.0])
         enqueue_task(
-            client, queue_key, info_key, priority, task_id, task_payload)
+            client,
+            queue_key,
+            info_key,
+            priority=priority,
+            task_id=task_id,
+            task_payload=task_payload)
         time.sleep(0.25)
         task_num += 1
 

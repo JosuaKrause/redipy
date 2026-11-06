@@ -34,6 +34,7 @@ from redis import Redis
 from redis.client import Pipeline
 from redis.commands.core import Script
 from redis.exceptions import ResponseError
+from redis.exceptions import TimeoutError as RedisTimeoutError
 
 from redipy.api import (
     as_key_type,
@@ -170,7 +171,10 @@ class RedisWrapper:
             port=cfg["port"],
             db=0,
             password=cfg["passwd"],
-            retry_on_timeout=True,
+            # NOTE: `retry_on_timeout` is deprecated since redis-py 6.
+            # Timeouts are retried by default now but we keep requesting it
+            # explicitly in the supported way.
+            retry_on_error=[RedisTimeoutError],
             health_check_interval=45,
             client_name=f"rc-{uuid.uuid4().hex}")
 

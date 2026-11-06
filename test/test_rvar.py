@@ -134,6 +134,7 @@ def test_set_ext_args(rt_lua: bool) -> None:
             key: str,
             name: str,
             expr: Callable[[RedisVar, Expr], Expr],
+            *,
             type_str: str,
             value_str: str,
             lua_snippet: str) -> None:
@@ -223,44 +224,48 @@ def test_set_ext_args(rt_lua: bool) -> None:
         "foo",
         "a",
         lambda rvar, name: rvar.set_value(name),
-        "boolean",
-        "true",
-        "(redis.call(\"set\", key_0, arg_0) ~= false)")
+        type_str="boolean",
+        value_str="true",
+        lua_snippet="(redis.call(\"set\", key_0, arg_0) ~= false)")
     assert rt.get_value("foo") == "a"
     fun_check(
         "foo",
         "c",
         lambda rvar, name: rvar.set_value(name, mode=RSM_MISSING),
-        "boolean",
-        "false",
-        "(redis.call(\"set\", key_0, arg_0, \"NX\") ~= false)")
+        type_str="boolean",
+        value_str="false",
+        lua_snippet="(redis.call(\"set\", key_0, arg_0, \"NX\") ~= false)")
     assert rt.get_value("foo") == "a"
     fun_check(
         "foo",
         "b",
         lambda rvar, name: rvar.set_value(
             name, return_previous=True, expire_in=0.1),
-        "string",
-        "a",
-        "redis.call(\"set\", key_0, arg_0, \"GET\", \"PX\", 100)")
+        type_str="string",
+        value_str="a",
+        lua_snippet="redis.call(\"set\", key_0, arg_0, \"GET\", \"PX\", 100)")
     assert rt.get_value("foo") == "b"
     fun_check(
         "foo",
         "c",
         lambda rvar, name: rvar.set_value(
             name, mode=RSM_MISSING, keep_ttl=True),
-        "boolean",
-        "false",
-        "(redis.call(\"set\", key_0, arg_0, \"NX\", \"KEEPTTL\") ~= false)")
+        type_str="boolean",
+        value_str="false",
+        lua_snippet=(
+            "(redis.call(\"set\", key_0, arg_0, \"NX\", \"KEEPTTL\")"
+            " ~= false)"))
     assert rt.get_value("foo") == "b"
     fun_check(
         "foo",
         "e",
         lambda rvar, name: rvar.set_value(
             name, mode=RSM_EXISTS, keep_ttl=True),
-        "boolean",
-        "true",
-        "(redis.call(\"set\", key_0, arg_0, \"XX\", \"KEEPTTL\") ~= false)")
+        type_str="boolean",
+        value_str="true",
+        lua_snippet=(
+            "(redis.call(\"set\", key_0, arg_0, \"XX\", \"KEEPTTL\")"
+            " ~= false)"))
     assert rt.get_value("foo") == "e"
 
     time.sleep(0.1)
@@ -274,7 +279,7 @@ def test_set_ext_args(rt_lua: bool) -> None:
         "foo",
         "d",
         lambda rvar, name: rvar.set_value(name, mode=RSM_MISSING),
-        "boolean",
-        "true",
-        "(redis.call(\"set\", key_0, arg_0, \"NX\") ~= false)")
+        type_str="boolean",
+        value_str="true",
+        lua_snippet="(redis.call(\"set\", key_0, arg_0, \"NX\") ~= false)")
     assert rt.get_value("foo") == "d"
