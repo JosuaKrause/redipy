@@ -21,6 +21,8 @@ from collections.abc import Callable, Iterable
 from datetime import datetime
 from typing import Literal, overload, TypeVar
 
+from redis.exceptions import DataError, ResponseError
+
 from redipy.api import (
     KeyType,
     RedisAPI,
@@ -85,6 +87,19 @@ MIN_SCAN_LENGTH: int = 10
 
 KEYS_MAX_SCAN: int = 10000
 """The internal maximum length for `scan` used by `keys`."""
+
+
+def wrong_args(cmd: str) -> ResponseError:
+    """
+    Creates the error redis raises if a command gets too few arguments.
+
+    Args:
+        cmd (str): The redis command name (lower case).
+
+    Returns:
+        ResponseError: The error to raise.
+    """
+    return ResponseError(f"wrong number of arguments for '{cmd}' command")
 
 
 class State:
@@ -1150,6 +1165,8 @@ class Machine(RedisAPI):
         return self._state
 
     def exists(self, *keys: str) -> int:
+        if not keys:
+            raise wrong_args("exists")
         now_mono = self.get_mono()
         res = 0
         for key in keys:
@@ -1158,6 +1175,8 @@ class Machine(RedisAPI):
         return res
 
     def delete(self, *keys: str) -> int:
+        if not keys:
+            raise wrong_args("del")
         res = self.exists(*keys)
         self._state.delete(set(keys))
         return res
@@ -1333,12 +1352,16 @@ class Machine(RedisAPI):
         return num
 
     def lpush(self, key: str, *values: str) -> int:
+        if not values:
+            raise wrong_args("lpush")
         now_mono = self.get_mono()
         queue = self._state.get_queue(key, now_mono)
         queue.extendleft(values)
         return len(queue)
 
     def rpush(self, key: str, *values: str) -> int:
+        if not values:
+            raise wrong_args("rpush")
         now_mono = self.get_mono()
         queue = self._state.get_queue(key, now_mono)
         queue.extend(values)
@@ -1455,6 +1478,9 @@ class Machine(RedisAPI):
         return self._state.queue_len(key, now_mono)
 
     def zadd(self, key: str, mapping: dict[str, float]) -> int:
+        if not mapping:
+            raise DataError(
+                "ZADD requires at least one element/score pair")
         now_mono = self.get_mono()
         count = 0
         zorder, zscores = self._state.get_zset(key, now_mono)
@@ -1515,6 +1541,8 @@ class Machine(RedisAPI):
         return self._state.zorder_len(key, now_mono)
 
     def hset(self, key: str, mapping: dict[str, str]) -> int:
+        if not mapping:
+            raise DataError("'hset' with no key value pairs")
         now_mono = self.get_mono()
         obj = self._state.get_hash(key, now_mono)
         res = len(set(mapping.keys()).difference(obj.keys()))
@@ -1522,6 +1550,8 @@ class Machine(RedisAPI):
         return res
 
     def hdel(self, key: str, *fields: str) -> int:
+        if not fields:
+            raise wrong_args("hdel")
         now_mono = self.get_mono()
         obj = self._state.get_hash(key, now_mono)
         res = 0
@@ -1540,6 +1570,11 @@ class Machine(RedisAPI):
         return res.get(field)
 
     def hmget(self, key: str, *fields: str) -> dict[str, str | None]:
+        if not fields:
+            # NOTE: the redis client rejects this before the server sees it
+            raise TypeError(
+                "HashCommands.hmget() missing 1 required positional "
+                "argument: 'keys'")
         now_mono = self.get_mono()
         res = self._state.readonly_hash(key, now_mono)
         if res is None:
@@ -1578,6 +1613,8 @@ class Machine(RedisAPI):
         return dict(res)
 
     def sadd(self, key: str, *values: str) -> int:
+        if not values:
+            raise wrong_args("sadd")
         now_mono = self.get_mono()
         obj = self._state.get_set(key, now_mono)
         before = len(obj)
@@ -1585,6 +1622,8 @@ class Machine(RedisAPI):
         return len(obj) - before
 
     def srem(self, key: str, *values: str) -> int:
+        if not values:
+            raise wrong_args("srem")
         now_mono = self.get_mono()
         obj = self._state.get_set(key, now_mono)
         before = len(obj)
