@@ -108,7 +108,8 @@ def test_rt_errors(rt_lua: bool) -> None:
     rt = get_setup("test_rt_errors", rt_lua)
     redis = Redis(rt=rt)
 
-    assert redis.scan(0) == (0, [])
+    # NOTE: SCAN walks the whole db; other tests may have left keys there
+    assert not redis.keys()
 
     for ix, key_type in enumerate(KEY_TYPE_REG):
         key = f"k{ix}"

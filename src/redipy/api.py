@@ -1666,6 +1666,7 @@ class RedisClientAPI(RedisAPI):
             ctx (FnContext): The script to register.
 
         Returns:
-            ExecFunction: A python that can be called to execute the script.
+            ExecFunction: A python function that can be called to execute the
+                script.
         """
         raise NotImplementedError()

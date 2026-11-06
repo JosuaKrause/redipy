@@ -37,6 +37,7 @@ from redipy.backend.runtime import Runtime
 from redipy.main import Redis
 from redipy.memory.rt import LocalRuntime
 from redipy.redis.conn import RedisConfig, RedisConnection, RedisFactory
+from redipy.symbolic.wrap import FunctionBuilder, redis_call
 
 
 PACKAGE_VERSION: str | None = None
@@ -79,10 +80,12 @@ def __getattr__(name: str) -> Any:
 
 __all__ = [
     "ExecFunction",
+    "FunctionBuilder",
     "helpers",
     "LocalRuntime",
     "PipelineAPI",
     "plugin",
+    "redis_call",
     "Redis",
     "RedisAPI",
     "RedisClientAPI",
