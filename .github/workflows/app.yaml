@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python: ['3.11']
+        python: ['3.12', '3.15']
     env:
       ENV: CI
 
@@ -83,7 +83,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python: ['3.11']
+        python: ['3.12', '3.15']
         ci_node_total: [3]
         ci_node_index: [0, 1, 2]
     env:
@@ -145,7 +145,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python: ['3.11']
+        python: ['3.12', '3.15']
     env:
       ENV: CI
 
