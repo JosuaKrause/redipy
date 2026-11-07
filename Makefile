@@ -113,7 +113,7 @@ git-check:
 	@./sh/git_check.sh
 
 git-check-publish: git-check
-	@./sh/git_check.sh
+	@./sh/git_check_publish.sh
 
 pack: clean
 	./sh/pack.sh
